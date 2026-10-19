@@ -79,6 +79,16 @@ TXT_SACAR_DE_INICIO='Sacar de Inicio'
 TXT_CANCELAR='Cancelar'
 TXT_WIDGET_TITULO='Widget de Inicio'
 TXT_SACAR_WIDGET='Sacar el widget'
+TXT_CARPETAS='Carpetas'                      # en Administración
+TXT_NUEVA_CARPETA='Nueva carpeta'
+TXT_CREAR='Crear'
+TXT_BORRAR='Borrar'
+TXT_MOVER_A='Mover a '                       # el diálogo de una app: «Mover a Utilitario»
+TXT_HABILITAR='Habilitar todo por 5 minutos' # en la pantalla de la contraseña, sin contraseña
+TXT_YA_USASTE='Ya usaste las 2 de estas 12 horas'
+TXT_HABILITADO='Todo habilitado hasta las'   # el aviso de Inicio mientras dura
+CARPETA=Utilitario                           # la carpeta que se crea (en pantalla, en mayúsculas)
+APP_CARPETA=Clock                            # la que se mueve a la carpeta
 
 # ── Textos del emulador ─────────────────────────────────────────────────────
 # La imagen AOSP de Android 12 está en inglés.
@@ -1374,6 +1384,154 @@ paso_9() {
   captura sin-widget
 }
 
+# ── 9b. Carpetas ────────────────────────────────────────────────────────────
+paso_9b() {
+  titulo 9b "Carpetas: se crean en la configuración y una app se mueve manteniéndola apretada"
+  local mayus="${CARPETA^^}" sueltas=() a
+  for a in "${APPS_INICIO[@]}"; do [ "$a" = "$APP_CARPETA" ] || sueltas+=("$a"); done
+  ir_a_inicio
+
+  # Crearla: en la configuración, no en la lista (en el uso diario, menos botones).
+  if ! entrar_admin || ! tocar_desplazando texto "$TXT_CARPETAS" || ! esperar_ui 10 texto "$TXT_NUEVA_CARPETA"; then
+    mal "Administración no lleva a «$TXT_CARPETAS»"
+    ir_a_inicio
+    return
+  fi
+  tocar texto "$TXT_NUEVA_CARPETA"
+  # El diálogo enfoca su campo solo; un segundo más para que se conecte el teclado.
+  esperar 10 "$(c_teclado)"
+  sleep 1
+  adb_t 20 shell input text "$CARPETA" >/dev/null 2>&1
+  if tocar texto "$TXT_CREAR" && esperar_ui 10 texto "$mayus"; then
+    ok "«$TXT_NUEVA_CARPETA» crea $mayus en la configuración"
+  else
+    mal "no se creó la carpeta $mayus"
+    ir_a_inicio
+    return
+  fi
+  ir_a_inicio
+
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+    return
+  fi
+  if ui texto "$mayus" >/dev/null; then
+    ok "la lista de todas muestra la carpeta $mayus"
+  else
+    mal "la lista de todas no muestra la carpeta $mayus"
+  fi
+  if ! accion_en_cajon "$APP_CARPETA" "$TXT_MOVER_A$CARPETA"; then
+    mal "mantener apretada $APP_CARPETA no ofrece «$TXT_MOVER_A$CARPETA»"
+  elif esperar_apps 10 etiquetas_cajon "${sueltas[@]}"; then
+    ok "«$TXT_MOVER_A$CARPETA» saca $APP_CARPETA de la lista suelta: quedan ${sueltas[*]}"
+  else
+    mal "después de moverla, la lista suelta muestra «$LISTA»"
+  fi
+  captura carpetas
+  if tocar texto "$mayus" && esperar_apps 10 etiquetas_cajon "$APP_CARPETA"; then
+    ok "abrir $mayus muestra adentro sólo $APP_CARPETA"
+  else
+    mal "abrir $mayus muestra «$LISTA»"
+  fi
+  adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+  esperar_ui 5 campo 1 || nota "Atrás desde la carpeta no volvió a la lista"
+
+  # Buscando, aparece aunque esté en una carpeta, con la carpeta al lado.
+  tocar campo 1
+  esperar 10 "$(c_teclado)"
+  sleep 1
+  adb_t 20 shell input text "clo" >/dev/null 2>&1
+  if esperar_ui 10 contiene "$mayus" && ui texto "$APP_CARPETA" >/dev/null; then
+    ok "buscar «clo» encuentra $APP_CARPETA adentro de $mayus, y lo dice"
+  else
+    mal "buscar «clo» no muestra $APP_CARPETA con su carpeta"
+  fi
+  volver_del_cajon || { mal "Atrás no vuelve de la lista a Inicio"; ir_a_inicio; }
+
+  # Borrarla: sus apps vuelven a la lista. Deja todo como estaba.
+  if entrar_admin && tocar_desplazando texto "$TXT_CARPETAS" && esperar_ui 10 texto "$mayus" && tocar texto "$TXT_BORRAR"; then
+    ir_a_inicio
+    if abrir_cajon && esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
+      ok "borrar $mayus devuelve $APP_CARPETA a la lista"
+    else
+      mal "después de borrar la carpeta, la lista muestra «$LISTA»"
+    fi
+    volver_del_cajon || ir_a_inicio
+  else
+    mal "no pude borrar la carpeta $mayus desde la configuración"
+    ir_a_inicio
+  fi
+  afirmar_en_inicio "las carpetas no pidieron nada más que la configuración: Slowtown y LOCKED"
+}
+
+# ── 9c. «Habilitar todo por 5 minutos» ──────────────────────────────────────
+# Sin contraseña, 2 veces cada 12 horas. Para no esperar los 5 minutos, el
+# final se dispara como lo hace la alarma, con root (el receptor no se exporta).
+paso_9c() {
+  titulo 9c "«$TXT_HABILITAR»: sin contraseña, 2 veces cada 12 horas"
+  local vez quedan
+  ir_a_inicio
+  tocar_en_inicio regex "$TXT_HORA_RE" 1500 || { mal "no encuentro la hora en Inicio"; return; }
+  if esperar_ui 4 contiene "$TXT_YA_USASTE"; then
+    aviso "ya se usaron las 2 de estas 12 horas (corré con --limpio): salteo este paso"
+    ir_a_inicio
+    return
+  fi
+  ir_a_inicio
+  if ! adb_como 0; then
+    aviso "sin root no puedo terminarla antes de los 5 minutos: salteo este paso"
+    return
+  fi
+  for vez in 1 2; do
+    quedan=$((3 - vez))
+    tocar_en_inicio regex "$TXT_HORA_RE" 1500 || { mal "no encuentro la hora en Inicio"; break; }
+    if ! esperar_ui 10 texto "$TXT_HABILITAR"; then
+      mal "la pantalla de la contraseña no ofrece «$TXT_HABILITAR»"
+      ir_a_inicio
+      break
+    fi
+    if ui contiene "Te quedan $quedan de 2" >/dev/null; then
+      ok "vez $vez: el botón dice que quedan $quedan de 2"
+    else
+      mal "vez $vez: el botón no dice «Te quedan $quedan de 2»"
+    fi
+    tocar texto "$TXT_HABILITAR"
+    if esperar_ui 10 contiene "$TXT_HABILITADO"; then
+      ok "vez $vez: Inicio avisa «$TXT_HABILITADO …»"
+    else
+      mal "vez $vez: Inicio no avisa hasta cuándo está todo habilitado"
+    fi
+    captura "habilitado-$vez"
+    disp am start -a android.settings.SETTINGS >/dev/null
+    if esperar 10 "$(c_foco "$FOCO_AJUSTES")"; then
+      ok "vez $vez: con todo habilitado, Ajustes abre"
+    else
+      mal "vez $vez: con todo habilitado, Ajustes no abre ($(foco))"
+    fi
+    ir_a_inicio
+    disp am start -a android.settings.SETTINGS >/dev/null
+    if esperar 10 "$(c_foco "$FOCO_AJUSTES")"; then
+      ok "vez $vez: volver a Inicio no la corta, Ajustes sigue abriendo"
+    else
+      mal "vez $vez: volver a Inicio la cortó ($(foco))"
+    fi
+    ir_a_inicio
+    disp "am broadcast -n '$PAQUETE/.admin.FreeSession\$End'" >/dev/null
+    sleep 3
+    intento_am_start "vez $vez, después del final: Ajustes" "$FOCO_AJUSTES" -a android.settings.SETTINGS
+  done
+  tocar_en_inicio regex "$TXT_HORA_RE" 1500
+  if esperar_ui 10 contiene "$TXT_YA_USASTE"; then
+    ok "la tercera no se puede: «$TXT_YA_USASTE» y cuándo vuelve a haber"
+  else
+    mal "después de 2 veces, el botón no dice «$TXT_YA_USASTE»"
+  fi
+  captura habilitar-sin-veces
+  ir_a_inicio
+  adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
+}
+
 # ── 10. Ajustes desde la administración ─────────────────────────────────────
 paso_10() {
   titulo 10 "Ajustes desde la administración"
@@ -1636,6 +1794,8 @@ paso_6
 paso_7
 paso_8
 paso_9
+paso_9b
+paso_9c
 paso_10
 paso_11
 paso_12
