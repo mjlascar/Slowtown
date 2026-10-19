@@ -38,12 +38,15 @@ object Policies {
             DevicePolicyManager.LOCK_TASK_FEATURE_BLOCK_ACTIVITY_START_IN_TASK
 
     /**
-     * Un usuario invitado arranca sin ninguna de estas reglas. Device Owner
-     * por adb no las pone solo.
+     * Un usuario invitado arranca sin ninguna de estas reglas (Device Owner
+     * por adb no las pone solo). Y la fecha y la hora no se cambian a mano:
+     * con ellas se cuentan las veces de «Habilitar todo»; la hora automática
+     * de la red sigue andando.
      */
     private val RESTRICTIONS = listOf(
         UserManager.DISALLOW_ADD_USER,
         UserManager.DISALLOW_USER_SWITCH,
+        UserManager.DISALLOW_CONFIG_DATE_TIME,
     )
 
     fun admin(context: Context) = ComponentName(context, SlowtownAdminReceiver::class.java)
@@ -100,7 +103,11 @@ object Policies {
         // task sin pantalla de bloqueo y sacar el PIN (le pasó a otro proyecto
         // con este mismo diseño).
         if (dpm.getLockTaskFeatures(admin) != FEATURES) dpm.setLockTaskFeatures(admin, FEATURES)
-        setPackages(context, allowlist(context, packages))
+        // Con una sesión en curso (administración o «Habilitar todo»), la
+        // lista sigue abierta: rearmar la política no la puede cortar antes.
+        val session = AdminSession.isActive(context) || FreeSession.isActive(context)
+        val allowed = allowlist(context, packages)
+        setPackages(context, if (session) allowed + installed(context) else allowed)
         dpm.clearPackagePersistentPreferredActivities(admin, context.packageName)
         dpm.addPersistentPreferredActivity(
             admin,
@@ -117,14 +124,16 @@ object Policies {
      * de WhatsApp); agrandar la lista no cierra nada. Al terminar, [apply]
      * vuelve a la lista de siempre y el sistema cierra lo que quedó afuera.
      */
-    // La variante con PackageInfoFlags recién existe en API 33.
-    @Suppress("DEPRECATION")
     @Synchronized
     fun openForAdmin(context: Context, packages: Collection<String>) {
         if (!isDeviceOwner(context)) return
-        val installed = context.packageManager.getInstalledPackages(0).map { it.packageName }
-        setPackages(context, allowlist(context, packages) + installed)
+        setPackages(context, allowlist(context, packages) + installed(context))
     }
+
+    // La variante con PackageInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    private fun installed(context: Context): List<String> =
+        context.packageManager.getInstalledPackages(0).map { it.packageName }
 
     /**
      * Vacía la lista de lock task. Si el teléfono estaba cerrado, se abre (el

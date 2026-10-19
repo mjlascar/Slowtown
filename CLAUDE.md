@@ -47,6 +47,24 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   grantbind` para que Android no muestre su diálogo de permiso, que es de
   Ajustes. Para que tocarlo abra su app, esa app tiene que estar permitida.
 
+## Las dos maneras de abrir todo un rato
+
+- **Sesión de administración** (`AdminSession`, con contraseña): «Ir a
+  Ajustes» o «Ir a Play Store». Termina al volver a Inicio, al apagar la
+  pantalla o a los 10 minutos.
+- **«Habilitar todo por 5 minutos»** (`FreeSession`, sin contraseña): está en
+  la pantalla de la contraseña. Nació para actualizar Waltra, que baja su APK
+  de GitHub y necesita el instalador de Android. Hasta 2 veces cada 12 horas
+  (ventana móvil, contada con la hora del teléfono; por eso Slowtown activo
+  bloquea cambiarla a mano con `DISALLOW_CONFIG_DATE_TIME`). No se corta al
+  volver a Inicio ni al apagar la pantalla: sólo a los 5 minutos.
+
+Las dos agrandan la lista de lock task a todo lo instalado, sin salir de lock
+task (salir cerraría las demás tareas). El final lo agenda el sistema con una
+alarma, y `Policies.apply` respeta una sesión en curso: rearmar la política no
+la corta antes. En el emulador, el final se dispara a mano con root:
+`adb shell "am broadcast -n 'com.slowtown.launcher/.admin.FreeSession\$End'"`.
+
 ## Reglas que no se rompen
 
 1. **Ajustes y el launcher de fábrica nunca se deshabilitan, esconden ni

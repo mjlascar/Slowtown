@@ -43,6 +43,8 @@ fun HomeScreen(
     apps: List<LaunchableApp>?,
     hint: String,
     safeMode: Boolean,
+    /** Un aviso corto abajo de la fecha, por ejemplo «Todo habilitado hasta las 17:52». */
+    notice: String?,
     widget: (@Composable () -> Unit)?,
     onOpen: (LaunchableApp) -> Unit,
     onAdmin: () -> Unit,
@@ -64,6 +66,10 @@ fun HomeScreen(
             .padding(horizontal = 28.dp, vertical = 32.dp),
     ) {
         Clock(onLongPress = onAdmin)
+        if (notice != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+        }
         if (safeMode) {
             Spacer(Modifier.height(16.dp))
             Text(

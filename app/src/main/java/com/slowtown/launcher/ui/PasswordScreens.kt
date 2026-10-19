@@ -1,6 +1,10 @@
 package com.slowtown.launcher.ui
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -8,16 +12,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.security.Password
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Pide la contraseña para entrar a la administración. */
+/**
+ * Cuántas veces quedan de «Habilitar todo» y, si no quedan, desde cuándo
+ * vuelve a haber; null si no corresponde mostrarlo (Slowtown en pausa).
+ */
+data class FreeSessionInfo(val remaining: Int, val nextAt: String?)
+
+/**
+ * Pide la contraseña para entrar a la administración. Abajo, sin contraseña,
+ * «Habilitar todo por 5 minutos» (para actualizar Waltra), con su tope.
+ */
 @Composable
-fun UnlockScreen(onUnlocked: () -> Unit, onBack: () -> Unit) {
+fun UnlockScreen(
+    onUnlocked: () -> Unit,
+    onBack: () -> Unit,
+    freeSession: FreeSessionInfo? = null,
+    onFreeSession: () -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
@@ -50,6 +70,21 @@ fun UnlockScreen(onUnlocked: () -> Unit, onBack: () -> Unit) {
         )
         message?.let { ErrorText(it) }
         Button(onClick = ::submit, enabled = !busy && text.isNotEmpty()) { Text("Entrar") }
+        if (freeSession != null) {
+            Spacer(Modifier.height(24.dp))
+            OutlinedButton(
+                onClick = onFreeSession,
+                enabled = freeSession.remaining > 0,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Habilitar todo por 5 minutos") }
+            HintText(
+                if (freeSession.remaining > 0) {
+                    "Sin contraseña. Te quedan ${freeSession.remaining} de 2 en 12 horas."
+                } else {
+                    "Ya usaste las 2 de estas 12 horas. Vuelve a haber ${freeSession.nextAt}."
+                },
+            )
+        }
     }
 }
 

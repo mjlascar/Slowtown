@@ -45,6 +45,11 @@
             android:name=".admin.AdminSession$End"
             android:exported="false" />
 
+        <!-- El final agendado de «Habilitar todo». Tampoco se exporta. -->
+        <receiver
+            android:name=".admin.FreeSession$End"
+            android:exported="false" />
+
         <!-- Lo que `dpm set-device-owner` activa. -->
         <receiver
             android:name=".admin.SlowtownAdminReceiver"

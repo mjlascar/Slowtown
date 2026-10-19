@@ -22,7 +22,13 @@ import kotlin.concurrent.thread
 object AdminSession {
     const val LENGTH_MS = 10 * 60_000L
 
-    fun isActive(context: Context): Boolean = Prefs(context).adminSessionUntil != 0L
+    fun isActive(context: Context): Boolean = Prefs(context).adminSessionUntil > System.currentTimeMillis()
+
+    /** Si ya pasó la hora y nadie la cerró (la alarma se atrasó), la cierra. */
+    fun endIfExpired(context: Context) {
+        val until = Prefs(context).adminSessionUntil
+        if (until != 0L && until <= System.currentTimeMillis()) end(context)
+    }
 
     /** Agranda la lista y agenda el final. Hace consultas al sistema: fuera del hilo principal. */
     fun start(context: Context, allowed: Collection<String>) {

@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.admin.AdminSession
+import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.LockTaskEvents
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.apps.AppCatalog
@@ -45,6 +46,7 @@ import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
 import com.slowtown.launcher.ui.DrawerScreen
 import com.slowtown.launcher.ui.FolderScreen
+import com.slowtown.launcher.ui.FreeSessionInfo
 import com.slowtown.launcher.ui.FoldersScreen
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.SlowtownTheme
@@ -54,8 +56,13 @@ import com.slowtown.launcher.ui.WidgetPickerScreen
 import com.slowtown.launcher.ui.WidgetSlot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * La pantalla de inicio, y la única actividad. Contraseña, administración,
@@ -86,6 +93,8 @@ class HomeActivity : ComponentActivity() {
     private var openFolderId by mutableStateOf<String?>(null)
     private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var homeHint by mutableStateOf("")
+    private var notice by mutableStateOf<String?>(null)
+    private var freeInfo by mutableStateOf<FreeSessionInfo?>(null)
 
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
@@ -169,6 +178,7 @@ class HomeActivity : ComponentActivity() {
                         apps = homeApps,
                         hint = homeHint,
                         safeMode = status.safeMode,
+                        notice = notice,
                         widget = widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } },
                         onOpen = ::launch,
                         onAdmin = ::askForAdmin,
@@ -202,6 +212,8 @@ class HomeActivity : ComponentActivity() {
                     Screen.Unlock -> UnlockScreen(
                         onUnlocked = { showIfStarted(Screen.Admin) },
                         onBack = ::goHome,
+                        freeSession = freeInfo,
+                        onFreeSession = ::startFreeSession,
                     )
                     Screen.CreatePassword -> CreatePasswordScreen(
                         onCreated = { showIfStarted(Screen.Admin) },
@@ -264,6 +276,15 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Si una alarma de fin se atrasó, la sesión se cierra acá.
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                AdminSession.endIfExpired(this@HomeActivity)
+                FreeSession.endIfExpired(this@HomeActivity)
+            }
+            refreshStatus()
+            refreshApps()
+        }
         if (screen == Screen.Home && pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // Volver de Ajustes con Atrás también termina la sesión, no sólo Inicio.
             endAdminSession()
@@ -406,6 +427,23 @@ class HomeActivity : ComponentActivity() {
             }
             runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 .onFailure { Log.w(TAG, "No pude abrir $target", it) }
+        }
+    }
+
+    /**
+     * «Habilitar todo por 5 minutos», sin contraseña y con tope. No se corta
+     * al volver a Inicio: al terminar, se rearma la lista de siempre.
+     */
+    private fun startFreeSession() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { FreeSession.start(this@HomeActivity, prefs.allowedPackages) }
+            screen = Screen.Home
+            refreshStatus()
+            refreshApps()
+            // Para que el aviso se vaya y la lista se achique solos al terminar.
+            delay(FreeSession.LENGTH_MS + 1_000L)
+            refreshStatus()
+            refreshApps()
         }
     }
 
@@ -553,6 +591,25 @@ class HomeActivity : ComponentActivity() {
             locked = isLocked(),
             safeMode = CrashGuard.inSafeMode(this),
         )
+        val freeUntil = FreeSession.until(this)
+        notice = if (freeUntil > 0) "Todo habilitado hasta las ${hhmm(freeUntil)}" else null
+        // El botón sólo tiene sentido con Slowtown activo y sin una sesión en curso.
+        freeInfo = if (isLocked() && freeUntil == 0L) {
+            FreeSessionInfo(FreeSession.remaining(this), FreeSession.nextAt(this)?.let(::whenText))
+        } else {
+            null
+        }
+    }
+
+    private fun hhmm(millis: Long): String =
+        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(HHMM)
+
+    /** «a las 21:30», o «mañana a las 05:58» si cae otro día. */
+    private fun whenText(millis: Long): String {
+        val zone = ZoneId.systemDefault()
+        val at = Instant.ofEpochMilli(millis).atZone(zone)
+        val day = if (at.toLocalDate().isAfter(LocalDate.now(zone))) "mañana " else ""
+        return "${day}a las ${at.format(HHMM)}"
     }
 
     /** Leer las etiquetas de todas las apps tarda: fuera del hilo principal. */
@@ -562,7 +619,12 @@ class HomeActivity : ComponentActivity() {
             val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
             val active = shouldBeClosed()
             val allowed = prefs.allowed
-            val visible = if (active) all.filter { it.key in allowed } else all
+            // Con «Habilitar todo» en curso se ven todas, como sin Slowtown.
+            val visible = if (active && !FreeSession.isActive(this@HomeActivity)) {
+                all.filter { it.key in allowed }
+            } else {
+                all
+            }
             val chosen = prefs.favorites
             permittable = AppCatalog.permittable(all)
             openable = visible
@@ -582,5 +644,6 @@ class HomeActivity : ComponentActivity() {
         const val WIDGET_HOST_ID = 0x5107
         const val REQUEST_CONFIGURE_WIDGET = 1
         const val KEY_PENDING_WIDGET = "pending_widget"
+        val HHMM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     }
 }

@@ -48,6 +48,19 @@ class Prefs(context: Context) {
         get() = prefs.getLong(KEY_ADMIN_SESSION_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_ADMIN_SESSION_UNTIL, value).apply()
 
+    /** Cuándo termina «Habilitar todo» en curso; 0 si no hay. */
+    var freeSessionUntil: Long
+        get() = prefs.getLong(KEY_FREE_SESSION_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_FREE_SESSION_UNTIL, value).apply()
+
+    /** Cuándo se usó «Habilitar todo», separado por comas: tiene un tope cada 12 horas. */
+    var freeSessionUses: String
+        get() = prefs.getString(KEY_FREE_SESSION_USES, "").orEmpty()
+        // commit y no apply: es lo que hace cumplir el tope, no se puede perder.
+        set(value) {
+            prefs.edit().putString(KEY_FREE_SESSION_USES, value).commit()
+        }
+
     /** El widget de Inicio, o [AppWidgetManager.INVALID_APPWIDGET_ID] si no hay. */
     var widgetId: Int
         get() = prefs.getInt(KEY_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -59,6 +72,8 @@ class Prefs(context: Context) {
         const val KEY_FOLDERS = "folders"
         const val KEY_CLOSED = "closed"
         const val KEY_ADMIN_SESSION_UNTIL = "admin_session_until"
+        const val KEY_FREE_SESSION_UNTIL = "free_session_until"
+        const val KEY_FREE_SESSION_USES = "free_session_uses"
         const val KEY_WIDGET_ID = "widget_id"
     }
 }
