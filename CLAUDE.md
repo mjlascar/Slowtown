@@ -27,8 +27,8 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 
 - **Permitidas** (`Prefs.allowed`): las que se pueden abrir con Slowtown
   activo. Se eligen en la administración, con contraseña, porque aflojan las
-  reglas. La contraseña la elige y la guarda otra persona (decisión de
-  Marcos).
+  reglas. La contraseña es larga, Marcos no la memoriza y la deja anotada
+  en papel en su casa (decisión suya): aflojar algo exige estar ahí.
 - **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
   Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
   manteniendo apretada una app en la lista de todas.

@@ -82,9 +82,10 @@ fun CreatePasswordScreen(onCreated: () -> Unit, onBack: () -> Unit) {
 
     FormScaffold(title = "Elegí una contraseña", onBack = onBack) {
         HintText(
-            "Es la que va a pedir Slowtown para cambiar cualquier cosa. Funciona " +
-                "mejor si la elige y la guarda otra persona: una contraseña que " +
-                "sabés vos no frena. Si se olvida, la única salida es por cable.",
+            "Es la que va a pedir Slowtown para cambiar cualquier cosa. Conviene " +
+                "una larga, que no te sepas de memoria, anotada en un papel que " +
+                "quede en tu casa: una contraseña que sabés no frena. Si se " +
+                "pierde, la única salida es por cable.",
         )
         PasswordField(
             value = first,
