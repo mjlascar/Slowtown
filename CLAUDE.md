@@ -92,8 +92,12 @@ la corta antes. En el emulador, el final se dispara a mano con root:
    Play, y WhatsApp y el banco dejan de actualizarse.
 7. **La firma no cambia.** Un Device Owner no se desinstala: cambiar la clave
    obliga a liberarlo, desinstalar y provisionar de nuevo, y eso último exige
-   sacar todas las cuentas del teléfono. Antes del primer uso en el S10e hay
-   que fijar una clave estable, como hace `scripts/firma.sh` en Waltra.
+   sacar todas las cuentas del teléfono. La clave estable vive fuera del repo,
+   en `~/slowtown-firma/` (la creó `scripts/firma.sh` el 19/10; tiene que
+   haber una copia fuera de la compu), y `assembleDebug` firma con ella. Su
+   huella está en `scripts/firma.sha256`, y `provisionar.sh` se niega a poner
+   en un teléfono real un APK firmado con otra. Nunca regenerarla. CI compila
+   con una clave descartable: lo que sale de CI no se instala encima.
 8. El S10e tiene Waltra con datos reales: nunca instalar Waltra encima con
    otra firma.
 
@@ -118,7 +122,10 @@ memoria a mitad de un build. Compilar antes de levantarlo, o cerrar Firefox.
 `./scripts/probar-emulador.sh --limpio` corre todo el recorrido de punta a
 punta (instalar, activar, intentos de escape, llamada, SMS, Ajustes, reinicio,
 crashes, salida por cable) y termina con código 1 si algo falla. Al teléfono
-no llega nada que no haya pasado por acá.
+no llega nada que no haya pasado por acá. Corre sólo en un emulador: si el
+S10e también está conectado, lo deja de lado (todo va con `-s` y
+`ANDROID_SERIAL`). `liberar.sh` y `provisionar.sh` llaman a `adb` a secas:
+con dos dispositivos conectados, a mano, siempre con `ANDROID_SERIAL`.
 
 En el emulador se simulan llamadas y SMS: `adb emu gsm call <número>`,
 `adb emu gsm cancel <número>`, `adb emu sms send <número> <texto>`, y un crash

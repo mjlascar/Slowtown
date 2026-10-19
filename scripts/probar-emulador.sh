@@ -862,18 +862,21 @@ esperar_sin_widget() {   # esperar_sin_widget SEGUNDOS: hasta que no muestre nin
 # ── 0. El dispositivo ───────────────────────────────────────────────────────
 paso_0() {
   titulo 0 "Dispositivo"
-  local listado lineas serie estado_adb qemu sdk tam
+  local listado lineas otros serie estado_adb qemu sdk tam
   [[ $CLAVE =~ ^[A-Za-z0-9]{4,}$ ]] ||
     abortar "SLOWTOWN_CLAVE tiene que ser de letras y números, 4 o más: se tipea con «input text», que se lleva mal con espacios y símbolos"
   listado=$(adb devices 2>/dev/null) || abortar "adb devices no anda"
-  mapfile -t lineas < <(awk '/^List of devices/ {next} NF >= 2 && $1 !~ /^\*/ {print $1 "\t" $2}' <<<"$listado")
+  # Sólo emuladores locales: adb emu, con el que se simulan llamadas y SMS,
+  # llega a un emulador por su puerto de consola. Un teléfono real conectado
+  # (el S10e, mientras se lo mira) queda afuera: todo lo de acá va con -s, y
+  # liberar.sh y provisionar.sh, por ANDROID_SERIAL, al emulador elegido.
+  mapfile -t lineas < <(awk '/^List of devices/ {next} NF >= 2 && $1 ~ /^emulator-[0-9]+$/ {print $1 "\t" $2}' <<<"$listado")
+  otros=$(awk '/^List of devices/ {next} NF >= 2 && $1 !~ /^\*/ && $1 !~ /^emulator-[0-9]+$/ {print $1}' <<<"$listado" | paste -sd ' ')
   (( ${#lineas[@]} == 1 )) ||
-    abortar "tiene que haber exactamente un dispositivo conectado y hay ${#lineas[@]}: así no hay forma de equivocarse de teléfono"
+    abortar "tiene que haber exactamente un emulador conectado y hay ${#lineas[@]}: así no hay forma de equivocarse"
+  [ -z "$otros" ] || nota "también está conectado $otros: no lo toco"
   IFS=$'\t' read -r serie estado_adb <<<"${lineas[0]}"
   [ "$estado_adb" = device ] || abortar "$serie está «$estado_adb», no «device»"
-  # adb emu, con el que se simulan llamadas y SMS, sólo llega a un emulador
-  # local por su puerto de consola.
-  [[ $serie =~ ^emulator-[0-9]+$ ]] || abortar "$serie no es un emulador local (emulator-NNNN)"
   ADB=(adb -s "$serie")
   qemu=$(disp getprop ro.kernel.qemu)
   [ "$qemu" = 1 ] || abortar "$serie no dice ser un emulador (ro.kernel.qemu=$qemu)"

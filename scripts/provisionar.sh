@@ -6,13 +6,14 @@
 # dispositivo no tiene NINGUNA cuenta (Google, Samsung, WhatsApp...) ni
 # usuarios extra (Carpeta segura, Dual Messenger, invitados). Este script lo
 # verifica antes de intentar, exige una build de prueba (para que
-# scripts/liberar.sh siempre pueda deshacerlo) y en un teléfono real pide
-# confirmación.
+# scripts/liberar.sh siempre pueda deshacerlo) y en un teléfono real exige la
+# clave estable de scripts/firma.sh y pide confirmación.
 #
 #   ./scripts/provisionar.sh               # el APK de debug ya compilado
 #   ./scripts/provisionar.sh otra.apk
 set -euo pipefail
 
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PAQUETE=com.slowtown.launcher
 ADMIN="$PAQUETE/.admin.SlowtownAdminReceiver"
 APK="${1:-app/build/outputs/apk/debug/app-debug.apk}"
@@ -40,6 +41,36 @@ echo "── dispositivo ──────────────────�
 echo "modelo:  $modelo"
 echo "android: $android"
 [ "$emulador" = 1 ] && echo "es un emulador"
+
+# La firma no cambia (CLAUDE.md, regla 7): a un teléfono real sólo llega el APK
+# firmado con la clave estable. Con la clave de debug de la máquina, el día que
+# se reinstale la compu no habría cómo actualizarlo sin sacar las cuentas.
+# Antes de tocar nada del teléfono.
+if [ "$emulador" != 1 ]; then
+  echo
+  echo "── firma ─────────────────────────────────────────────"
+  esperada=$(tr -d '[:space:]' < "$RAIZ/scripts/firma.sha256" 2>/dev/null || true)
+  if [ -z "$esperada" ]; then
+    echo "🚨 No hay clave estable (falta scripts/firma.sha256): corré ./scripts/firma.sh" >&2
+    echo "   y compilá de nuevo antes de tocar un teléfono real." >&2
+    exit 1
+  fi
+  sdk="${ANDROID_HOME:-$(sed -n 's/^sdk\.dir=//p' "$RAIZ/local.properties" 2>/dev/null)}"
+  apksigner=$(ls -1 "${sdk:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+  if [ -z "$apksigner" ]; then
+    echo "🚨 No encuentro apksigner en el SDK." >&2
+    exit 1
+  fi
+  firmas=$("$apksigner" verify --print-certs "$APK" 2>/dev/null || true)
+  huella=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$firmas")
+  if [ "$huella" != "$esperada" ]; then
+    echo "🚨 $APK no está firmado con la clave estable." >&2
+    echo "   Tiene ${huella:-una firma que no pude leer}, y tendría que ser $esperada." >&2
+    echo "   ¿Falta ~/slowtown-firma? Compilá de nuevo: ./gradlew assembleDebug" >&2
+    exit 1
+  fi
+  echo "  ✅ firmado con la clave estable"
+fi
 
 echo
 echo "── salida por cable ──────────────────────────────────"

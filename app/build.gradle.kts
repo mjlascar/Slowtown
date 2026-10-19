@@ -1,7 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+/**
+ * La clave estable (`scripts/firma.sh`), fuera del repo, que es público. Un
+ * Device Owner no se desinstala: con otra firma la versión nueva no se instala
+ * encima, y hay que liberar, desinstalar y provisionar de nuevo, sin cuentas en
+ * el teléfono. Sin el archivo (CI, otra compu) la build sale con la clave de
+ * debug de la máquina: sirve para el emulador, y `provisionar.sh` no la deja
+ * llegar a un teléfono real.
+ */
+val firma: Properties? = File(
+    System.getenv("SLOWTOWN_FIRMA") ?: "${System.getProperty("user.home")}/slowtown-firma",
+    "firma.properties",
+).takeIf { it.isFile }?.let { archivo -> Properties().apply { archivo.inputStream().use { load(it) } } }
 
 android {
     namespace = "com.slowtown.launcher"
@@ -22,7 +37,22 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (firma != null) {
+            create("estable") {
+                storeFile = file(firma.getProperty("storeFile"))
+                storePassword = firma.getProperty("storePassword")
+                keyAlias = firma.getProperty("keyAlias")
+                keyPassword = firma.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        // La que va al teléfono: testOnly, para que liberar.sh la pueda sacar.
+        debug {
+            if (firma != null) signingConfig = signingConfigs.getByName("estable")
+        }
         release {
             isMinifyEnabled = false
         }
