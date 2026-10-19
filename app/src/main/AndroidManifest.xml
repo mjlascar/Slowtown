@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Desde Android 11 una app sólo ve los paquetes que declara. Slowtown
          necesita verlos todos: lista lo que se puede abrir, lee qué paquete
          dibuja la pantalla de llamada y de emergencia, y durante una sesión de
          administración habilita todo lo instalado. No va a Play, así que la
          política de Play sobre este permiso no aplica. -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:name=".SlowtownApp"
