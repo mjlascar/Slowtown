@@ -108,7 +108,7 @@ NUM_SMS=2235551111
 
 UI_REMOTO=/data/local/tmp/slowtown-ui.xml
 
-# Se completan en el paso 0.
+# Se completan al arrancar y en el paso 0.
 SERIE=''
 ADB=(adb)
 ANCHO=1080
@@ -321,10 +321,13 @@ marca_logcat() {   # la hora del dispositivo en el formato de «logcat -T»
   t=$(disp date +%s)
   echo "$t.000"
 }
-violaciones_desde() {   # cuántas veces lock task frenó un arranque desde la marca
+bloqueos_desde() {   # cuántas veces lock task frenó un arranque desde la marca
+  # Frena de dos maneras: con el error de siempre, o (con
+  # BLOCK_ACTIVITY_START_IN_TASK) cambiando la pantalla pedida por su cartel,
+  # sin ningún error en logcat. Se cuentan las dos.
   local out
   out=$(adb_t 60 logcat -d -T "$1" 2>/dev/null)
-  grep -c 'Attempted Lock Task Mode violation' <<<"$out"
+  grep -cE 'Attempted Lock Task Mode violation|BlockedAppActivity' <<<"$out"
 }
 adb_como() {   # adb_como 0|2000: root (0) o shell (2000)
   # adbd se reinicia y por un rato no hay a quién preguntarle: esta espera da
@@ -804,22 +807,20 @@ paso_3() {
   ir_a_inicio
 
   # Ajustes rápidos: con lock task, el panel tiene que abrir sin ellos (sin
-  # engranaje no hay camino a Ajustes).
+  # engranaje no hay camino a Ajustes). Abierto, el panel suele tomar el foco;
+  # se espera eso, pero se mira con uiautomator aunque no lo tome.
   adb_t 20 shell cmd statusbar expand-settings >/dev/null 2>&1
-  if esperar 5 "$(c_foco "$FOCO_PANEL")"; then
-    captura panel-ajustes-rapidos
-    if volcar_ui --windows; then
-      cp "$UI_XML" "$SALIDA/panel-ajustes-rapidos.xml"
-      if hallado=$(ui hay "$PANEL_PROHIBIDO_RE"); then
-        mal "el panel muestra ajustes rápidos o el engranaje: $(tr '\n' ';' <<<"$hallado")"
-      else
-        ok "el panel abre sin ajustes rápidos ni engranaje"
-      fi
+  esperar 5 "$(c_foco "$FOCO_PANEL")"
+  captura panel-ajustes-rapidos
+  if volcar_ui --windows; then
+    cp "$UI_XML" "$SALIDA/panel-ajustes-rapidos.xml"
+    if hallado=$(ui hay "$PANEL_PROHIBIDO_RE"); then
+      mal "el panel muestra ajustes rápidos o el engranaje: $(tr '\n' ';' <<<"$hallado")"
     else
-      mal "no pude volcar el panel con uiautomator"
+      ok "pedir los ajustes rápidos no muestra ni ajustes rápidos ni engranaje"
     fi
   else
-    ok "pedir los ajustes rápidos ni siquiera abre el panel"
+    mal "no pude volcar el panel con uiautomator"
   fi
   adb_t 20 shell cmd statusbar collapse >/dev/null 2>&1
   vigilar_escape "ajustes rápidos" "$FOCO_AJUSTES"
@@ -834,8 +835,8 @@ paso_3() {
   # notificación propia asegura que el panel tenga pie: vacío no hay botón.
   adb_t 20 shell "cmd notification post -t Slowtown slowtown-e2e 'Prueba del panel'" >/dev/null 2>&1
   adb_t 20 shell cmd statusbar expand-notifications >/dev/null 2>&1
-  if esperar 5 "$(c_foco "$FOCO_PANEL")" && volcar_ui --windows &&
-    { xy=$(ui id "$ID_GESTIONAR") || xy=$(ui texto "$TXT_GESTIONAR"); }; then
+  esperar 5 "$(c_foco "$FOCO_PANEL")"
+  if volcar_ui --windows && { xy=$(ui id "$ID_GESTIONAR") || xy=$(ui texto "$TXT_GESTIONAR"); }; then
     captura panel-manage
     read -r x y <<<"$xy"
     tocar_xy "$x" "$y"
@@ -886,6 +887,11 @@ paso_5() {
   fi
   emu gsm cancel "$NUM_CALENTAMIENTO"
   esperar 15 "$(c_sin_llamada)" || aviso "la llamada de calentamiento no terminó de cortarse"
+  # El marcador de AOSP retiene unos segundos la llamada cortada («llamada
+  # finalizada»), y si entra otra en ese rato no publica su aviso: suena pero
+  # no hay cómo atender. Pasa igual con Slowtown en pausa (probado el
+  # 19/10/2026: 1 aviso de 2 en llamadas a 1,5 s), así que no es lock task.
+  adb_t 20 shell 'sleep 8' >/dev/null 2>&1
   ir_a_inicio
 
   marca=$(marca_logcat)
@@ -922,15 +928,19 @@ paso_5() {
     mal "al atender no aparece la pantalla de llamada ($(foco))"
   fi
   if esperar 15 "$(c_llamada ACTIVE)"; then ok "la llamada queda ACTIVE"; else mal "la llamada no queda ACTIVE"; fi
-  n=$(violaciones_desde "$marca")
+  n=$(bloqueos_desde "$marca")
   if [ "$n" = 0 ]; then
     ok "lock task no frenó nada al atender"
   else
-    mal "lock task frenó $n arranques al atender (Attempted Lock Task Mode violation)"
+    mal "lock task frenó algo al atender: $n líneas de violación o de BlockedAppActivity en logcat"
   fi
   captura en-llamada
   emu gsm cancel "$NUM_LLAMADA"
   esperar 15 "$(c_sin_llamada)" || mal "la llamada no se corta"
+  # Si algo de la llamada quedó frenado, el cartel se queda arriba: cerrarlo
+  # para que la falla no arrastre a lo que sigue.
+  esperar 10 "$(c_foco "$FOCO_INICIO") || $(c_foco "$FOCO_BLOQUEO")"
+  cerrar_cartel_bloqueo
   afirmar_en_inicio "al cortar, de vuelta en Slowtown y LOCKED"
 }
 
@@ -1010,6 +1020,10 @@ paso_8() {
   local antes boot='' fin
   adb_t 60 logcat -d >"$SALIDA/logcat-antes-del-reinicio.txt" 2>/dev/null
   antes=$(disp cat /proc/sys/kernel/random/boot_id)
+  if [ -z "$antes" ]; then
+    mal "no pude leer el boot_id: sin él no sabría si de verdad reinició"
+    return
+  fi
   adb_t 30 reboot >/dev/null 2>&1
   # Mientras el emulador está apagado no hay a quién preguntarle: esta espera
   # da vueltas desde la computadora. Un boot_id distinto dice que de verdad
@@ -1084,13 +1098,15 @@ paso_10() {
   for i in 1 2 3; do
     # am crash sólo le llega a un proceso vivo que ya terminó de arrancar: se
     # espera que Slowtown tenga el foco. Un crash que no llega no se cuenta, y
-    # el modo a prueba de fallos no se activaría nunca.
-    if ! esperar 40 "pidof $PAQUETE >/dev/null && $(c_foco "$FOCO_INICIO")"; then
-      if [[ $(foco) == *"$FOCO_SELECTOR"* ]]; then
-        nota "el selector de Inicio apareció después de $crashes crashes"
-        break
-      fi
+    # el modo a prueba de fallos no se activaría nunca. Si en cambio aparece el
+    # selector de Inicio, el modo llegó antes (con crashes de una corrida
+    # anterior, de hace menos de diez minutos).
+    if ! esperar 40 "{ pidof $PAQUETE >/dev/null && $(c_foco "$FOCO_INICIO"); } || $(c_foco "$FOCO_SELECTOR")"; then
       mal "antes del crash $i, Slowtown no volvió a primer plano ($(foco))"
+      break
+    fi
+    if [[ $(foco) == *"$FOCO_SELECTOR"* ]]; then
+      nota "el selector de Inicio apareció después de $crashes crashes"
       break
     fi
     pid=$(disp pidof "$PAQUETE")

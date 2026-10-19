@@ -7,8 +7,8 @@
 #   ./scripts/emulador.sh --limpio   # borra los datos: el factory reset del emulador,
 #                                    # para cuando el kiosco te deja encerrado
 #
-# Ocupa 2 GB de RAM: con el build de Gradle corriendo a la vez, conviene
-# cerrar Firefox.
+# Ocupa unos 3 GB de RAM reales: con el build de Gradle corriendo a la vez,
+# conviene cerrar Firefox o compilar antes de levantarlo.
 set -euo pipefail
 
 SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
@@ -23,7 +23,9 @@ if ! grep -qx "$AVD" <<<"$avds"; then
     -n "$AVD" -k "$IMAGEN" -d pixel_5
 fi
 
-args=(-avd "$AVD" -memory 2048 -no-boot-anim -no-audio -gpu auto)
+# 1,5 GB y no 2: con 2 el proceso del emulador llegó a 3,4 GB y el kernel lo
+# mató por falta de memoria mientras compilaba Gradle (19/10/2026).
+args=(-avd "$AVD" -memory 1536 -no-boot-anim -no-audio -gpu auto)
 [ "${1:-}" = --limpio ] && args+=(-wipe-data)
 
 # En Wayland (Hyprland), el emulador abre su ventana por XWayland.
