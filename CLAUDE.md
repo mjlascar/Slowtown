@@ -6,13 +6,18 @@ siendo útil: llamadas, SMS, WhatsApp, banco y Mercado Pago, Maps y Uber,
 música y búsqueda de Google. Nada de entretenimiento. Kotlin + Jetpack
 Compose, una sola actividad (`HomeActivity`).
 
+Lo que se investigó antes de escribir código (Device Owner en Android 12,
+filtro de páginas, desbloqueo con fricción, cómo preparar el S10e) está en
+`docs/investigacion.md`, con fuentes.
+
 ## Cómo cierra el teléfono
 
 Sin Device Owner, Slowtown es sólo un launcher: se esquiva bajando el panel y
 tocando el engranaje. Lo que cierra de verdad es Device Owner, que se activa
 por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 
-- sólo se abren las apps de Inicio y las de llamadas (`Policies.CALLS`);
+- sólo se abren las apps de Inicio y las esenciales (`Essentials`: llamadas,
+  SMS, emergencias, alertas y las pantallas de sistema que abren las apps);
 - el panel de notificaciones queda, pero sin ajustes rápidos ni engranaje;
 - no hay Recientes, e Inicio es siempre Slowtown;
 - Ajustes y todo lo demás se alcanza sólo desde la administración, que pide
@@ -64,8 +69,14 @@ En CI corre en Temurin 21.
 ./scripts/liberar.sh         # la salida por cable
 ```
 
-La máquina tiene 6,7 GB de RAM: el emulador se lleva 2 GB y el build otros 2,
-así que con los dos corriendo conviene cerrar Firefox.
+La máquina tiene 6,7 GB de RAM. El emulador, aun con 1,5 GB asignados, ocupa
+unos 3 GB reales, y el build otros 2: el 19/10 el kernel lo mató por falta de
+memoria a mitad de un build. Compilar antes de levantarlo, o cerrar Firefox.
+
+`./scripts/probar-emulador.sh --limpio` corre todo el recorrido de punta a
+punta (instalar, activar, intentos de escape, llamada, SMS, Ajustes, reinicio,
+crashes, salida por cable) y termina con código 1 si algo falla. Al teléfono
+no llega nada que no haya pasado por acá.
 
 En el emulador se simulan llamadas y SMS: `adb emu gsm call <número>`,
 `adb emu gsm cancel <número>`, `adb emu sms send <número> <texto>`, y un crash
