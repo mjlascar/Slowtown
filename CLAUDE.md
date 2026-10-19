@@ -32,9 +32,15 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
   Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
   manteniendo apretada una app en la lista de todas.
-- **Todas las apps**: deslizando para arriba (o «↑ todas las apps»), con
-  buscador que ignora tildes; Enter abre la primera. Con Slowtown activo
-  lista sólo las permitidas.
+- **Todas las apps**: deslizando para arriba (o «↑ todas las apps»). Arriba
+  las carpetas, en dos columnas; debajo, las apps que no están en ninguna.
+  El buscador ignora tildes, busca también adentro de las carpetas y Enter
+  abre la primera; el teclado se abre recién al tocarlo (lo pidió Marcos).
+  Con Slowtown activo lista sólo las permitidas.
+- **Carpetas** (`Prefs.folders`, JSON): se crean, renombran y borran en la
+  configuración, no en la lista: Marcos quiere menos botones en el uso
+  diario. Una app se mueve a una carpeta manteniéndola apretada en la lista.
+  Son sólo orden: sin contraseña.
 - **Widget**: uno, pegado al borde de abajo (`AppWidgetHost`). Se elige en la
   administración y se arma en una sesión de administración, porque la
   configuración del widget es de su app. `provisionar.sh` corre `appwidget

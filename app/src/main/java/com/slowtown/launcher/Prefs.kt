@@ -3,6 +3,8 @@ package com.slowtown.launcher
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import com.slowtown.launcher.apps.Folder
+import com.slowtown.launcher.apps.Folders
 
 /** Lo que eligió el usuario. La contraseña vive aparte, en [com.slowtown.launcher.security.Password]. */
 class Prefs(context: Context) {
@@ -31,6 +33,11 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_FAVORITES, null)?.toSet() ?: allowed
         set(value) = prefs.edit().putStringSet(KEY_FAVORITES, value).apply()
 
+    /** Las carpetas de la lista de todas las apps. Sin contraseña: son sólo orden. */
+    var folders: List<Folder>
+        get() = Folders.parse(prefs.getString(KEY_FOLDERS, null))
+        set(value) = prefs.edit().putString(KEY_FOLDERS, Folders.serialize(value)).apply()
+
     /** Si el usuario quiere Slowtown activo (lock task). Sólo tiene efecto siendo Device Owner. */
     var closed: Boolean
         get() = prefs.getBoolean(KEY_CLOSED, false)
@@ -49,6 +56,7 @@ class Prefs(context: Context) {
     private companion object {
         const val KEY_ALLOWED = "allowed"
         const val KEY_FAVORITES = "favorites"
+        const val KEY_FOLDERS = "folders"
         const val KEY_CLOSED = "closed"
         const val KEY_ADMIN_SESSION_UNTIL = "admin_session_until"
         const val KEY_WIDGET_ID = "widget_id"

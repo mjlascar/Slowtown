@@ -31,6 +31,7 @@ fun AdminScreen(
     status: AdminStatus,
     onChooseApps: () -> Unit,
     onChooseWidget: () -> Unit,
+    onFolders: () -> Unit,
     onToggleClosed: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenPlayStore: () -> Unit,
@@ -68,6 +69,7 @@ fun AdminScreen(
 
         Button(onClick = onChooseApps, modifier = wide) { Text("Elegir las apps permitidas") }
         OutlinedButton(onClick = onChooseWidget, modifier = wide) { Text("Elegir el widget de Inicio") }
+        OutlinedButton(onClick = onFolders, modifier = wide) { Text("Carpetas") }
         Button(onClick = onToggleClosed, enabled = status.deviceOwner, modifier = wide) {
             Text(if (status.closed) "Pausar Slowtown" else "Activar Slowtown")
         }

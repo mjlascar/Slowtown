@@ -22,6 +22,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -32,14 +33,19 @@ import com.slowtown.launcher.admin.AdminSession
 import com.slowtown.launcher.admin.LockTaskEvents
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.apps.AppCatalog
+import com.slowtown.launcher.apps.Folder
+import com.slowtown.launcher.apps.Folders
 import com.slowtown.launcher.apps.LaunchableApp
 import com.slowtown.launcher.security.CrashGuard
 import com.slowtown.launcher.security.Password
 import com.slowtown.launcher.ui.AdminScreen
 import com.slowtown.launcher.ui.AdminStatus
+import com.slowtown.launcher.ui.AppActions
 import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
 import com.slowtown.launcher.ui.DrawerScreen
+import com.slowtown.launcher.ui.FolderScreen
+import com.slowtown.launcher.ui.FoldersScreen
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
@@ -63,7 +69,7 @@ import kotlinx.coroutines.withContext
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Unlock, CreatePassword, Admin, ChooseApps, WidgetPicker }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, WidgetPicker, Folders }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -76,6 +82,8 @@ class HomeActivity : ComponentActivity() {
     /** Lo que se puede abrir ahora: con Slowtown activo, sólo lo permitido. */
     private var openable by mutableStateOf<List<LaunchableApp>>(emptyList())
     private var favorites by mutableStateOf<Set<String>>(emptySet())
+    private var folders by mutableStateOf<List<Folder>>(emptyList())
+    private var openFolderId by mutableStateOf<String?>(null)
     private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var homeHint by mutableStateOf("")
 
@@ -129,8 +137,12 @@ class HomeActivity : ComponentActivity() {
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            // Atrás nunca sale del launcher: desde una pantalla interna vuelve a Inicio.
-            override fun handleOnBackPressed() = goHome()
+            // Atrás nunca sale del launcher: vuelve un paso, y de ahí a Inicio.
+            override fun handleOnBackPressed() = when (screen) {
+                Screen.Folder -> screen = Screen.Drawer
+                Screen.ChooseApps, Screen.WidgetPicker, Screen.Folders -> screen = Screen.Admin
+                else -> goHome()
+            }
         })
 
         // startLockTask y stopLockTask se aplican después de volver: el estado
@@ -145,6 +157,12 @@ class HomeActivity : ComponentActivity() {
         }
 
         setContent {
+            val appActions = AppActions(
+                folders = folders,
+                favorites = favorites,
+                onToggleFavorite = ::toggleFavorite,
+                onMoveToFolder = ::moveToFolder,
+            )
             SlowtownTheme {
                 when (screen) {
                     Screen.Home -> HomeScreen(
@@ -158,14 +176,29 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.Drawer -> DrawerScreen(
                         apps = openable,
-                        favorites = favorites,
-                        onOpen = {
-                            screen = Screen.Home
-                            launch(it)
+                        actions = appActions,
+                        onOpen = ::launchFromList,
+                        onOpenFolder = {
+                            openFolderId = it.id
+                            screen = Screen.Folder
                         },
-                        onToggleFavorite = ::toggleFavorite,
                         onBack = ::goHome,
                     )
+                    Screen.Folder -> {
+                        val folder = folders.firstOrNull { it.id == openFolderId }
+                        if (folder == null) {
+                            // La carpeta ya no existe (se borró): de vuelta a la lista.
+                            LaunchedEffect(Unit) { screen = Screen.Drawer }
+                        } else {
+                            FolderScreen(
+                                folder = folder,
+                                apps = openable,
+                                actions = appActions,
+                                onOpen = ::launchFromList,
+                                onBack = { screen = Screen.Drawer },
+                            )
+                        }
+                    }
                     Screen.Unlock -> UnlockScreen(
                         onUnlocked = { showIfStarted(Screen.Admin) },
                         onBack = ::goHome,
@@ -178,6 +211,7 @@ class HomeActivity : ComponentActivity() {
                         status = status,
                         onChooseApps = { screen = Screen.ChooseApps },
                         onChooseWidget = ::openWidgetPicker,
+                        onFolders = { screen = Screen.Folders },
                         onToggleClosed = ::toggleClosed,
                         onOpenSettings = { startAdminSession(Intent(Settings.ACTION_SETTINGS)) },
                         onOpenPlayStore = {
@@ -192,6 +226,13 @@ class HomeActivity : ComponentActivity() {
                         apps = permittable,
                         chosen = prefs.allowed,
                         onDone = ::saveChosen,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.Folders -> FoldersScreen(
+                        folders = folders,
+                        onCreate = { name -> updateFolders { Folders.create(it, name) } },
+                        onRename = { id, name -> updateFolders { Folders.rename(it, id, name) } },
+                        onDelete = { id -> updateFolders { Folders.delete(it, id) } },
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.WidgetPicker -> WidgetPickerScreen(
@@ -281,6 +322,22 @@ class HomeActivity : ComponentActivity() {
     private fun launch(app: LaunchableApp) {
         runCatching { startActivity(app.intent()) }
             .onFailure { Log.w(TAG, "No pude abrir ${app.key}", it) }
+    }
+
+    /** Desde la lista de todas o una carpeta: al volver, Inicio y no la lista. */
+    private fun launchFromList(app: LaunchableApp) {
+        screen = Screen.Home
+        launch(app)
+    }
+
+    /** Las carpetas son sólo orden: no piden contraseña. */
+    private fun moveToFolder(app: LaunchableApp, to: String?) =
+        updateFolders { Folders.move(it, app.key, to) }
+
+    private fun updateFolders(change: (List<Folder>) -> List<Folder>) {
+        val updated = change(prefs.folders)
+        prefs.folders = updated
+        folders = updated
     }
 
     /** Poner o sacar de Inicio no pide contraseña: no afloja nada. */
@@ -510,6 +567,7 @@ class HomeActivity : ComponentActivity() {
             permittable = AppCatalog.permittable(all)
             openable = visible
             favorites = chosen
+            folders = prefs.folders
             homeApps = visible.filter { it.key in chosen }
             homeHint = if (active && visible.isEmpty()) {
                 "Mantené apretada la hora para elegir las apps permitidas."
