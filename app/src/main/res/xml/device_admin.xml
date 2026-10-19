@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Las políticas de Device Owner (lock task, launcher fijo, restricciones) no
+     se declaran acá: esta lista es la de los administradores viejos. Alcanza con
+     que el receptor exista. -->
+<device-admin>
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

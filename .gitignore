@@ -1,0 +1,13 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Las claves de firma viven fuera del repo, nunca adentro.
+*.keystore
+*.jks

@@ -1,0 +1,22 @@
+[versions]
+# AGP 9.4 pide Gradle >= 9.6 (el wrapper está en 9.8.1) y trae Kotlin
+# integrado: no se aplica org.jetbrains.kotlin.android. La versión de Kotlin
+# la fija el plugin de Compose, que arrastra su KGP.
+agp = "9.4.1"
+kotlin = "2.4.21"
+# Compose 1.12 (este BOM) exige compileSdk 37 y AGP >= 9.2.
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
+
+[libraries]
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

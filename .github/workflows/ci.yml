@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Este workflow sólo lee el repo: no publica releases ni comenta en los PR.
+# Con el token de sólo lectura, nada que corra en el build puede escribir
+# aunque lo consiga.
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: APK
+    runs-on: ubuntu-latest
+    # El versionCode es el número de corrida (ver app/build.gradle.kts). Va
+    # para todo el job y no sólo para la compilación: si lint viera otro,
+    # Gradle rearmaría el manifest y repetiría trabajo.
+    env:
+      SLOWTOWN_VERSION_CODE: ${{ github.run_number }}
+    steps:
+      # Las acciones van fijadas por commit, no por etiqueta: una etiqueta se
+      # puede mover a otro código sin que cambie nada en este archivo, y un
+      # commit no. El comentario de al lado dice qué versión es, para saber
+      # qué actualizar.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Ningún paso necesita git con credenciales: así el token no queda
+          # guardado en disco mientras corre el build.
+          persist-credentials: false
+
+      # El 21, el mismo de la máquina de desarrollo. El proyecto no pide
+      # toolchain, así que Gradle compila con el JDK que lo corre.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Antes de que corra ./gradlew, compara gradle/wrapper/gradle-wrapper.jar
+      # con los checksums que publica Gradle (validate-wrappers viene
+      # activado). El jar es un binario versionado: un PR puede cambiarlo y en
+      # el diff no se ve nada. El distributionSha256Sum de
+      # gradle-wrapper.properties cuida la distribución que baja el wrapper,
+      # no al wrapper mismo.
+      #
+      # La caché es la "basic", que es MIT. Desde la v6 la que viene por
+      # defecto ("enhanced") es un componente cerrado de Gradle, y usarla es
+      # aceptar sus términos de uso. Con un solo job y un proyecto chico, la
+      # diferencia es poca.
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+
+      # El runner de ubuntu ya trae el SDK de Android. No se usa
+      # android-actions/setup-android: no es de Google, y en Waltra falló
+      # porque intenta instalar el paquete `tools`, que Google retiró del
+      # repositorio. Sólo hay que asegurarse de que estén la plataforma de
+      # compileSdk 37 y las build-tools que AGP 9.4 usa por defecto. Si la
+      # imagen ya las trae, no baja nada. No se aceptan licencias en bloque
+      # (`--licenses`): la imagen ya trae aceptada la del SDK, que es la única
+      # que piden estos dos paquetes.
+      - name: Preparar el SDK
+        run: |
+          set -euo pipefail
+          sdkmanager=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0"
+
+      # La variante debug, que es testOnly a propósito: es la salida de
+      # emergencia de Device Owner (scripts/liberar.sh) y por eso se instala
+      # con `adb install -t`.
+      - name: Compilar
+        run: ./gradlew --no-daemon assembleDebug
+
+      # Ojo con este APK: va firmado con la clave de debug que AGP genera en el
+      # runner, distinta en cada corrida. Sirve para un emulador limpio, no
+      # para actualizar: Android no instala encima de una app firmada con otra
+      # clave. Donde Slowtown es Device Owner ni siquiera se puede desinstalar:
+      # hay que liberarla y provisionar de nuevo, sin cuentas en el teléfono.
+      # La clave estable llega antes del primer uso en el S10e (CLAUDE.md, «La
+      # firma no cambia»).
+      - name: Guardar el APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: slowtown-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # Lint va después de guardar el APK y en otra corrida de Gradle: si
+      # encuentra errores, la corrida queda en rojo, pero el APK ya está subido.
+      - name: Lint
+        id: lint
+        run: ./gradlew --no-daemon lintDebug
+
+      # En la consola, lint muestra sólo el primer error. El reporte completo
+      # queda como artefacto.
+      - name: Guardar el reporte de lint
+        if: failure() && steps.lint.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: slowtown-lint
+          path: app/build/reports/lint-results-debug.*

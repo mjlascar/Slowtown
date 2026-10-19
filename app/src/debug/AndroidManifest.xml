@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- La salida de emergencia. Un Device Owner no se desinstala: sólo sale si
+         la propia app lo suelta o con un factory reset. Con testOnly, además,
+         `adb shell dpm remove-active-admin` lo saca por cable
+         (scripts/liberar.sh). Contracara: se instala sólo con `adb install -t`.
+         No sacar esto mientras la app pueda tener un bug que la cuelgue. -->
+    <application android:testOnly="true" />
+</manifest>
