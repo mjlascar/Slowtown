@@ -43,11 +43,12 @@ fun ChooseAppsScreen(
             .safeDrawingPadding()
             .padding(horizontal = 20.dp, vertical = 24.dp),
     ) {
-        Text("Apps de Inicio", style = MaterialTheme.typography.headlineMedium)
+        Text("Apps permitidas", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         HintText(
-            "Con Slowtown activo, las que no marques no se abren. " +
-                "Las llamadas y los SMS entran igual.",
+            "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
+                "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
+                "deslizando para arriba en Inicio.",
         )
         Spacer(Modifier.height(12.dp))
         LazyColumn(Modifier.weight(1f)) {

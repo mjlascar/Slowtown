@@ -23,6 +23,24 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - Ajustes y todo lo demás se alcanza sólo desde la administración, que pide
   la contraseña (mantener apretada la hora).
 
+## Inicio
+
+- **Permitidas** (`Prefs.allowed`): las que se pueden abrir con Slowtown
+  activo. Se eligen en la administración, con contraseña, porque aflojan las
+  reglas. La contraseña la elige y la guarda otra persona (decisión de
+  Marcos).
+- **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
+  Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
+  manteniendo apretada una app en la lista de todas.
+- **Todas las apps**: deslizando para arriba (o «↑ todas las apps»), con
+  buscador que ignora tildes; Enter abre la primera. Con Slowtown activo
+  lista sólo las permitidas.
+- **Widget**: uno, pegado al borde de abajo (`AppWidgetHost`). Se elige en la
+  administración y se arma en una sesión de administración, porque la
+  configuración del widget es de su app. `provisionar.sh` corre `appwidget
+  grantbind` para que Android no muestre su diálogo de permiso, que es de
+  Ajustes. Para que tocarlo abra su app, esa app tiene que estar permitida.
+
 ## Reglas que no se rompen
 
 1. **Ajustes y el launcher de fábrica nunca se deshabilitan, esconden ni

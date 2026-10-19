@@ -3,12 +3,16 @@ package com.slowtown.launcher
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.KeyguardManager
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Process
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -16,6 +20,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -33,19 +39,23 @@ import com.slowtown.launcher.ui.AdminScreen
 import com.slowtown.launcher.ui.AdminStatus
 import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
+import com.slowtown.launcher.ui.DrawerScreen
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
+import com.slowtown.launcher.ui.WidgetChoice
+import com.slowtown.launcher.ui.WidgetPickerScreen
+import com.slowtown.launcher.ui.WidgetSlot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * La pantalla de inicio, y la única actividad. Contraseña, administración y
- * elegir apps son estados de esta misma: volver a Inicio, del modo que sea,
- * cae siempre acá, cierra la sesión de administración y vuelve a activar
- * Slowtown.
+ * La pantalla de inicio, y la única actividad. Contraseña, administración,
+ * todas las apps y elegir apps o widget son estados de esta misma: volver a
+ * Inicio, del modo que sea, cae siempre acá, cierra la sesión de
+ * administración y vuelve a activar Slowtown.
  *
  * Lo que lee todos los paquetes del teléfono (armar la política, listar las
  * apps) corre fuera del hilo principal: en un teléfono con cientos de apps
@@ -53,14 +63,34 @@ import kotlinx.coroutines.withContext
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Unlock, CreatePassword, Admin, ChooseApps }
+    private enum class Screen { Home, Drawer, Unlock, CreatePassword, Admin, ChooseApps, WidgetPicker }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
-    private var catalog by mutableStateOf<List<LaunchableApp>>(emptyList())
-    private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var status by mutableStateOf(AdminStatus())
     private var appsLoad: Job? = null
+
+    /** Lo que se puede permitir, para la pantalla de elegir. */
+    private var permittable by mutableStateOf<List<LaunchableApp>>(emptyList())
+
+    /** Lo que se puede abrir ahora: con Slowtown activo, sólo lo permitido. */
+    private var openable by mutableStateOf<List<LaunchableApp>>(emptyList())
+    private var favorites by mutableStateOf<Set<String>>(emptySet())
+    private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
+    private var homeHint by mutableStateOf("")
+
+    private lateinit var widgetHost: AppWidgetHost
+    private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
+    private var widget by mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null)
+    private var widgetChoices by mutableStateOf<List<WidgetChoice>>(emptyList())
+
+    /** El widget que se está armando, hasta que lo confirme su configuración. */
+    private var pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+
+    /** Si Android no deja crear el widget sin preguntar, pregunta él (una vez, con «Permitir siempre»). */
+    private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == RESULT_OK) configureOrKeepWidget(pendingWidgetId) else discardPendingWidget()
+    }
 
     /** Apagar la pantalla termina la sesión de administración. */
     private val screenOff = object : BroadcastReceiver() {
@@ -79,16 +109,21 @@ class HomeActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         prefs = Prefs(this)
+        widgetHost = AppWidgetHost(applicationContext, WIDGET_HOST_ID)
+        pendingWidgetId = savedInstanceState?.getInt(KEY_PENDING_WIDGET, AppWidgetManager.INVALID_APPWIDGET_ID)
+            ?: AppWidgetManager.INVALID_APPWIDGET_ID
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED)
 
         // Una sesión de administración que quedó de una vida anterior de esta
-        // pantalla ya terminó. Y una vez por creación se recompone la política,
-        // por si quedó algo a medias (una actualización, un reinicio); en cada
-        // vuelta a Inicio no hace falta.
+        // pantalla ya terminó (salvo que se esté armando un widget, que
+        // vuelve acá con su resultado). Y una vez por creación se recompone la
+        // política, por si quedó algo a medias (una actualización, un
+        // reinicio); en cada vuelta a Inicio no hace falta.
+        val armingWidget = pendingWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
-                AdminSession.end(this@HomeActivity)
-                if (shouldBeClosed()) Policies.apply(this@HomeActivity, prefs.allowedPackages)
+                if (!armingWidget) AdminSession.end(this@HomeActivity)
+                if (shouldBeClosed() && !armingWidget) Policies.apply(this@HomeActivity, prefs.allowedPackages)
             }
             lockIfNeeded()
         }
@@ -102,7 +137,10 @@ class HomeActivity : ComponentActivity() {
         // que se muestra se actualiza cuando el sistema avisa.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                LockTaskEvents.changes.collect { refreshStatus() }
+                LockTaskEvents.changes.collect {
+                    refreshStatus()
+                    refreshApps()
+                }
             }
         }
 
@@ -111,9 +149,22 @@ class HomeActivity : ComponentActivity() {
                 when (screen) {
                     Screen.Home -> HomeScreen(
                         apps = homeApps,
+                        hint = homeHint,
                         safeMode = status.safeMode,
+                        widget = widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } },
                         onOpen = ::launch,
                         onAdmin = ::askForAdmin,
+                        onDrawer = { screen = Screen.Drawer },
+                    )
+                    Screen.Drawer -> DrawerScreen(
+                        apps = openable,
+                        favorites = favorites,
+                        onOpen = {
+                            screen = Screen.Home
+                            launch(it)
+                        },
+                        onToggleFavorite = ::toggleFavorite,
+                        onBack = ::goHome,
                     )
                     Screen.Unlock -> UnlockScreen(
                         onUnlocked = { showIfStarted(Screen.Admin) },
@@ -126,6 +177,7 @@ class HomeActivity : ComponentActivity() {
                     Screen.Admin -> AdminScreen(
                         status = status,
                         onChooseApps = { screen = Screen.ChooseApps },
+                        onChooseWidget = ::openWidgetPicker,
                         onToggleClosed = ::toggleClosed,
                         onOpenSettings = { startAdminSession(Intent(Settings.ACTION_SETTINGS)) },
                         onOpenPlayStore = {
@@ -137,14 +189,31 @@ class HomeActivity : ComponentActivity() {
                         onBack = ::goHome,
                     )
                     Screen.ChooseApps -> ChooseAppsScreen(
-                        apps = catalog,
+                        apps = permittable,
                         chosen = prefs.allowed,
                         onDone = ::saveChosen,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.WidgetPicker -> WidgetPickerScreen(
+                        choices = widgetChoices,
+                        hasWidget = widget != null,
+                        onPick = ::pickWidget,
+                        onRemove = ::removeWidget,
                         onBack = { screen = Screen.Admin },
                     )
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_PENDING_WIDGET, pendingWidgetId)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        widgetHost.startListening()
     }
 
     override fun onDestroy() {
@@ -154,13 +223,14 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (screen == Screen.Home) {
+        if (screen == Screen.Home && pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // Volver de Ajustes con Atrás también termina la sesión, no sólo Inicio.
             endAdminSession()
             lockIfNeeded()
         }
         refreshStatus()
         refreshApps()
+        refreshWidget()
     }
 
     /**
@@ -181,6 +251,7 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        widgetHost.stopListening()
         // Una sesión de administración no sobrevive a apagar la pantalla ni a
         // irse a otra app: al volver, contraseña de nuevo.
         screen = Screen.Home
@@ -188,6 +259,7 @@ class HomeActivity : ComponentActivity() {
 
     private fun goHome() {
         screen = Screen.Home
+        discardPendingWidget()
         endAdminSession()
         lockIfNeeded()
         refreshStatus()
@@ -209,6 +281,13 @@ class HomeActivity : ComponentActivity() {
     private fun launch(app: LaunchableApp) {
         runCatching { startActivity(app.intent()) }
             .onFailure { Log.w(TAG, "No pude abrir ${app.key}", it) }
+    }
+
+    /** Poner o sacar de Inicio no pide contraseña: no afloja nada. */
+    private fun toggleFavorite(app: LaunchableApp) {
+        val current = prefs.favorites
+        prefs.favorites = if (app.key in current) current - app.key else current + app.key
+        refreshApps()
     }
 
     private fun shouldBeClosed(): Boolean =
@@ -245,6 +324,7 @@ class HomeActivity : ComponentActivity() {
             applyPolicy {
                 lockIfNeeded()
                 refreshStatus()
+                refreshApps()
             }
         } else {
             // Salir de lock task desde la tarea raíz cierra las demás tareas: lo
@@ -252,6 +332,7 @@ class HomeActivity : ComponentActivity() {
             if (isLocked()) runCatching { stopLockTask() }
             Policies.open(this)
             refreshStatus()
+            refreshApps()
         }
     }
 
@@ -276,6 +357,108 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             withContext(Dispatchers.Default) { AdminSession.end(this@HomeActivity) }
         }
+    }
+
+    private fun openWidgetPicker() {
+        screen = Screen.WidgetPicker
+        lifecycleScope.launch { widgetChoices = withContext(Dispatchers.Default) { loadWidgetChoices() } }
+    }
+
+    // La variante con ApplicationInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    private fun loadWidgetChoices(): List<WidgetChoice> {
+        val pm = packageManager
+        return widgetManager.getInstalledProvidersForProfile(Process.myUserHandle())
+            .map { info ->
+                val app = runCatching {
+                    pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
+                }.getOrDefault(info.provider.packageName)
+                WidgetChoice(info, info.loadLabel(pm), app)
+            }
+            .sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
+    }
+
+    /**
+     * Arma el widget. Con Slowtown activo va en una sesión de administración:
+     * el diálogo de permiso es de Ajustes y la configuración del widget es de
+     * su app, y las dos quedarían bloqueadas.
+     */
+    private fun pickWidget(choice: WidgetChoice) {
+        lifecycleScope.launch {
+            if (isLocked()) {
+                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages) }
+            }
+            discardPendingWidget()
+            val id = widgetHost.allocateAppWidgetId()
+            pendingWidgetId = id
+            val info = choice.info
+            if (widgetManager.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) {
+                configureOrKeepWidget(id)
+            } else {
+                bindWidget.launch(
+                    Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile),
+                )
+            }
+        }
+    }
+
+    private fun configureOrKeepWidget(id: Int) {
+        val info = widgetManager.getAppWidgetInfo(id) ?: return discardPendingWidget()
+        if (info.configure == null) return keepWidget(id)
+        runCatching {
+            widgetHost.startAppWidgetConfigureActivityForResult(this, id, 0, REQUEST_CONFIGURE_WIDGET, null)
+        }.onFailure {
+            Log.w(TAG, "No pude abrir la configuración del widget", it)
+            discardPendingWidget()
+        }
+    }
+
+    // La configuración del widget la abre AppWidgetHost con
+    // startIntentSenderForResult, que todavía responde por acá.
+    @Deprecated("La configuración de widgets todavía responde por onActivityResult")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_CONFIGURE_WIDGET) return
+        if (resultCode == RESULT_OK) keepWidget(pendingWidgetId) else discardPendingWidget()
+    }
+
+    private fun keepWidget(id: Int) {
+        val previous = prefs.widgetId
+        if (previous != AppWidgetManager.INVALID_APPWIDGET_ID && previous != id) {
+            widgetHost.deleteAppWidgetId(previous)
+        }
+        prefs.widgetId = id
+        pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+        refreshWidget()
+        endAdminSession()
+        screen = Screen.Home
+    }
+
+    /** Un widget a medio armar (cancelado o sin permiso) se borra, y la sesión de armado termina. */
+    private fun discardPendingWidget() {
+        if (pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        widgetHost.deleteAppWidgetId(pendingWidgetId)
+        pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+        endAdminSession()
+    }
+
+    private fun removeWidget() {
+        val id = prefs.widgetId
+        if (id != AppWidgetManager.INVALID_APPWIDGET_ID) widgetHost.deleteAppWidgetId(id)
+        prefs.widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+        refreshWidget()
+        screen = Screen.Admin
+    }
+
+    /** Si la app del widget se desinstaló, el lugar queda vacío. */
+    private fun refreshWidget() {
+        val id = prefs.widgetId
+        val info = if (id != AppWidgetManager.INVALID_APPWIDGET_ID) widgetManager.getAppWidgetInfo(id) else null
+        widget = info?.let { id to it }
     }
 
     private fun saveChosen(keys: Set<String>) {
@@ -303,6 +486,7 @@ class HomeActivity : ComponentActivity() {
         Policies.release(this)
         prefs.closed = false
         refreshStatus()
+        refreshApps()
     }
 
     private fun refreshStatus() {
@@ -318,14 +502,27 @@ class HomeActivity : ComponentActivity() {
     private fun refreshApps() {
         appsLoad?.cancel()
         appsLoad = lifecycleScope.launch {
-            val apps = withContext(Dispatchers.Default) { AppCatalog.launchable(this@HomeActivity) }
+            val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
+            val active = shouldBeClosed()
             val allowed = prefs.allowed
-            catalog = apps
-            homeApps = apps.filter { it.key in allowed }
+            val visible = if (active) all.filter { it.key in allowed } else all
+            val chosen = prefs.favorites
+            permittable = AppCatalog.permittable(all)
+            openable = visible
+            favorites = chosen
+            homeApps = visible.filter { it.key in chosen }
+            homeHint = if (active && visible.isEmpty()) {
+                "Mantené apretada la hora para elegir las apps permitidas."
+            } else {
+                "Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá."
+            }
         }
     }
 
     private companion object {
         const val TAG = "Slowtown"
+        const val WIDGET_HOST_ID = 0x5107
+        const val REQUEST_CONFIGURE_WIDGET = 1
+        const val KEY_PENDING_WIDGET = "pending_widget"
     }
 }

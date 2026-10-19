@@ -2,6 +2,7 @@ package com.slowtown.launcher.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,15 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
 import kotlinx.coroutines.delay
@@ -26,22 +30,36 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Hora, fecha y la lista de apps elegidas, en texto. La administración se
- * abre manteniendo apretada la hora.
+ * Hora, fecha, las apps de Inicio en texto y, abajo de todo, el widget si hay uno.
+ * Manteniendo apretada la hora se abre la administración; deslizando para
+ * arriba, todas las apps.
  *
  * @param apps las apps de Inicio, o null mientras se cargan (para no mostrar
- *   el cartel de «elegí tus apps» un instante en cada vuelta a Inicio).
+ *   el cartel de ayuda un instante en cada vuelta a Inicio).
+ * @param hint qué decir si no hay ninguna.
  */
 @Composable
 fun HomeScreen(
     apps: List<LaunchableApp>?,
+    hint: String,
     safeMode: Boolean,
+    widget: (@Composable () -> Unit)?,
     onOpen: (LaunchableApp) -> Unit,
     onAdmin: () -> Unit,
+    onDrawer: () -> Unit,
 ) {
+    var dragged by remember { mutableFloatStateOf(0f) }
+    val threshold = with(LocalDensity.current) { 80.dp.toPx() }
+
     Column(
         Modifier
             .fillMaxSize()
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (dragged < -threshold) onDrawer() },
+                ) { _, amount -> dragged += amount }
+            }
             .safeDrawingPadding()
             .padding(horizontal = 28.dp, vertical = 32.dp),
     ) {
@@ -55,25 +73,37 @@ fun HomeScreen(
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(40.dp))
         if (apps != null && apps.isEmpty()) {
+            Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+        }
+        // Una columna común y no una lista con scroll: así deslizar para arriba
+        // en cualquier lado abre todas las apps, sin pelearse con el scroll.
+        apps.orEmpty().forEach { app ->
             Text(
-                "Mantené apretada la hora para elegir las apps.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyLarge,
+                app.label,
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpen(app) }
+                    .padding(vertical = 12.dp),
             )
         }
-        LazyColumn {
-            items(apps.orEmpty(), key = { it.key }) { app ->
-                Text(
-                    app.label,
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpen(app) }
-                        .padding(vertical = 12.dp),
-                )
-            }
+        Spacer(Modifier.weight(1f))
+        Text(
+            "↑ todas las apps",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable(onClick = onDrawer)
+                .padding(12.dp),
+        )
+        // El widget va pegado al borde de abajo (lo pidió Marcos): arriba
+        // queda la hora y las apps, como en un teléfono de teclas.
+        if (widget != null) {
+            Spacer(Modifier.height(8.dp))
+            widget()
         }
     }
 }

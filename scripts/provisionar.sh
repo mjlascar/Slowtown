@@ -17,6 +17,12 @@ PAQUETE=com.slowtown.launcher
 ADMIN="$PAQUETE/.admin.SlowtownAdminReceiver"
 APK="${1:-app/build/outputs/apk/debug/app-debug.apk}"
 
+# Permiso para poner widgets en Inicio sin el diálogo de Android, que es de
+# Ajustes y con Slowtown activo quedaría bloqueado.
+permitir_widgets() {
+  adb shell appwidget grantbind --package "$PAQUETE" --user 0 >/dev/null
+}
+
 if [ "$(adb get-state 2>/dev/null)" != device ]; then
   echo "🚨 No hay ningún dispositivo conectado y autorizado." >&2
   echo "   Conectalo por USB y aceptá el diálogo (marcá «Permitir siempre»)." >&2
@@ -56,6 +62,7 @@ if grep -q "package=$PAQUETE" <<<"$politicas"; then
   echo
   echo "Slowtown ya es Device Owner: sólo la reinstalo."
   adb install -r -t "$APK"
+  permitir_widgets
   exit 0
 fi
 
@@ -93,6 +100,7 @@ fi
 echo
 echo "── instalando ────────────────────────────────────────"
 adb install -r -t "$APK"
+permitir_widgets
 
 # Sin testOnly, liberar.sh no funciona y la única salida es la app o un reset.
 paquete=$(adb shell dumpsys package "$PAQUETE" | tr -d '\r')
