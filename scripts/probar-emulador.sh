@@ -5,11 +5,13 @@
 # probados con Slowtown activo.
 #
 # En orden: instala y provisiona, activa Slowtown con cuatro apps, intenta
-# escaparse, abre una app permitida, atiende una llamada, recibe un SMS, abre
-# Ajustes desde la administración, reinicia, cuenta las reglas de Inicio fijo,
-# fuerza tres crashes y usa la salida por cable. Cada verificación imprime ✅
-# o ❌. Después de una falla la prueba sigue, salvo que sin eso lo que viene no
-# pruebe nada; si hubo alguna ❌, termina con código 1.
+# escaparse, abre una app permitida, atiende una llamada, recibe un SMS, busca
+# y abre una app desde la lista de todas, saca y vuelve a poner una app en
+# Inicio, pone y saca un widget, abre Ajustes desde la administración,
+# reinicia, cuenta las reglas de Inicio fijo, fuerza tres crashes y usa la
+# salida por cable. Cada verificación imprime ✅ o ❌. Después de una falla la
+# prueba sigue, salvo que sin eso lo que viene no pruebe nada; si hubo alguna
+# ❌, termina con código 1.
 #
 #   ./scripts/probar-emulador.sh                   # con el APK ya compilado
 #   ./scripts/probar-emulador.sh --build           # compila antes
@@ -45,12 +47,15 @@ CAPTURAS="${SLOWTOWN_CAPTURAS:-/tmp/claude-1000/-home-imgordo-Documents-proyecto
 ATENDER_XY="${SLOWTOWN_ATENDER_XY:-542,459}"
 
 # ── Textos de Slowtown ──────────────────────────────────────────────────────
-# Copiados de app/src/main/java/com/slowtown/launcher/ui/. Si cambia la
-# redacción en la app, se cambia acá y en ningún otro lado.
+# Copiados de app/src/main/java/com/slowtown/launcher/ui/ y de HomeActivity.kt
+# (los carteles de Inicio sin apps). Si cambia la redacción en la app, se
+# cambia acá y en ningún otro lado.
 TXT_HORA_RE='^[0-9]{1,2}:[0-9]{2}$'          # la hora de Inicio, que se mantiene apretada
 TXT_FECHA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+$'   # «Lunes 19 de octubre»
-TXT_INICIO_SIN_APPS='Mantené apretada la hora para elegir las apps.'
+TXT_INICIO_SIN_APPS='Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá.'
+TXT_INICIO_SIN_PERMITIDAS='Mantené apretada la hora para elegir las apps permitidas.'   # activo y sin permitidas
 TXT_INICIO_FALLOS='se colgó varias veces seguidas y se pausó solo'   # un pedazo del aviso en Inicio
+TXT_TODAS='↑ todas las apps'                 # al pie de Inicio: abre la lista de todas las apps
 TXT_CREAR_CLAVE='Elegí una contraseña'
 TXT_GUARDAR='Guardar'
 TXT_ENTRAR='Entrar'
@@ -59,20 +64,32 @@ TXT_CLAVE_ESPERA='Demasiados intentos'
 TXT_ADMIN='Administración'
 TXT_ADMIN_FALLOS='Modo a prueba de fallos'
 TXT_SALIR_FALLOS='Ya lo revisé: salir del modo a prueba de fallos'
-TXT_ELEGIR_APPS='Elegir las apps de Inicio'
+TXT_ELEGIR_APPS='Elegir las apps permitidas'
+TXT_ELEGIR_WIDGET='Elegir el widget de Inicio'
 TXT_ACTIVAR='Activar Slowtown'
 TXT_PAUSAR='Pausar Slowtown'
 TXT_IR_AJUSTES='Ir a Ajustes'
-TXT_APPS_TITULO='Apps de Inicio'
-TXT_APPS_PISTA='Con Slowtown activo, las que no marques no se abren. Las llamadas y los SMS entran igual.'
+TXT_APPS_TITULO='Apps permitidas'
+TXT_APPS_PISTA='Con Slowtown activo, las que no marques no se abren. Las llamadas y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, deslizando para arriba en Inicio.'
 TXT_VOLVER='Volver'
 TXT_LISTO_RE='^Listo \(([0-9]+)\)$'
+TXT_EN_INICIO='en Inicio'                    # la nota de las apps de Inicio en la lista de todas
+TXT_PONER_EN_INICIO='Poner en Inicio'        # el diálogo de una app mantenida apretada en esa lista
+TXT_SACAR_DE_INICIO='Sacar de Inicio'
+TXT_CANCELAR='Cancelar'
+TXT_WIDGET_TITULO='Widget de Inicio'
+TXT_SACAR_WIDGET='Sacar el widget'
 
 # ── Textos del emulador ─────────────────────────────────────────────────────
 # La imagen AOSP de Android 12 está en inglés.
-APPS_INICIO=(Phone Messaging Camera Clock)   # las que se eligen para Inicio
+APPS_INICIO=(Phone Messaging Camera Clock)   # las que se permiten (y, sin tocar nada, las de Inicio)
 APP_RELOJ=Clock                              # la app permitida que se abre
-APP_AJUSTES=Settings                         # no puede aparecer en el selector de apps
+APP_QUITAR=Camera                            # la que se saca de Inicio y se vuelve a poner
+APP_AJUSTES=Settings                         # ni en el selector de apps ni, activo, en la lista de todas
+APP_CALENDARIO=Calendar                      # instalada y no permitida: con Slowtown activo, no se lista
+BUSQUEDA=clo                                 # lo que se escribe en el buscador: deja sólo APP_RELOJ
+WIDGET_RELOJ='Analog clock'                  # widget del Reloj de AOSP, sin pantalla de configuración
+PAQUETE_RELOJ=com.android.deskclock          # el que dibuja ese widget
 TXT_ATENDER=Answer                           # el aviso de llamada (en pantalla dice ANSWER)
 TXT_GESTIONAR=Manage                         # botón al pie del panel de notificaciones
 ID_GESTIONAR=id/manage_text                  # el mismo (dice History si el historial está prendido)
@@ -98,6 +115,7 @@ FOCO_LLAMADA=InCallActivity
 FOCO_AJUSTES=com.android.settings/
 FOCO_CALENDARIO=com.android.calendar/
 FOCO_RECIENTES=com.android.launcher3/   # en el emulador, Recientes lo dibuja Quickstep
+FOCO_PERMISO_WIDGET=AllowBindAppWidgetActivity   # el diálogo de Ajustes que pide permiso para un widget
 RELOJ_ACTIVIDAD=com.android.deskclock/.DeskClock
 CALENDARIO=com.android.calendar/.AllInOneActivity
 
@@ -120,13 +138,19 @@ PASO=0
 FALLAS=()
 N_CAPTURA=0
 CARTEL=0
+LISTA=''   # la última lista que vio esperar_apps, en una línea
 declare -A CAMBIAR=() VISTAS=()
 
 # ── Lectura de pantallas ────────────────────────────────────────────────────
 # Busca en el XML de «uiautomator dump». Modos:
 #   texto|contiene|regex|id CONSULTA   centro "x y" del primer nodo que calza
 #   campo N                            centro del N-ésimo campo de texto
-#   textos                             x, y, borde de arriba, de abajo y texto de cada nodo
+#   textos                             x, y, borde de arriba, de abajo y texto de cada nodo,
+#                                      salvo lo de un widget (su etiqueta, su hora): no son apps
+#   filas                              por cada fila que se mantiene apretada (las apps de la
+#                                      lista de todas): su primer texto, tab y los demás
+#   widgets                            por cada widget: etiqueta, paquetes de lo que dibuja y
+#                                      sus textos, separados por tab (sale 1 si no hay ninguno)
 #   hay REGEX                          los nodos cuyo id o texto calzan (sale 1 si ninguno)
 #   libre TIPO CONSULTA PAQUETE        como texto/regex, pero sólo en ese paquete y sale 4
 #                                      si otra ventana (un aviso) tapa ese punto
@@ -136,11 +160,28 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
+# Así se presenta cualquier widget para accesibilidad: AppWidgetHostView fija
+# ese nombre de clase, y de descripción pone la etiqueta del widget. Lo de
+# adentro lo dibuja la app del widget, y sus nodos traen el paquete de esa app
+# aunque estén en la ventana de Slowtown.
+WIDGET = 'android.appwidget.AppWidgetHostView'
 
-def nodos(archivo):
-    for n in ET.parse(archivo).getroot().iter('node'):
-        b = [int(v) for v in re.findall(r'-?\d+', n.get('bounds', ''))]
-        if len(b) == 4 and b[2] > b[0] and b[3] > b[1]:
+
+def caja(n):
+    b = [int(v) for v in re.findall(r'-?\d+', n.get('bounds', ''))]
+    return b if len(b) == 4 and b[2] > b[0] and b[3] > b[1] else None
+
+
+def nodos(archivo, sin_widgets=False):
+    raiz = ET.parse(archivo).getroot()
+    fuera = set()
+    if sin_widgets:
+        for w in raiz.iter('node'):
+            if w.get('class') == WIDGET:
+                fuera.update(w.iter('node'))
+    for n in raiz.iter('node'):
+        b = caja(n)
+        if b and n not in fuera:
             yield n, b
 
 
@@ -150,6 +191,11 @@ def centro(b):
 
 def textos(n):
     return [' '.join(t.split()) for t in (n.get('text'), n.get('content-desc')) if t and t.strip()]
+
+
+def adentro(n):
+    """Los nodos visibles de adentro de n, sin n."""
+    return [m for m in n.iter('node') if m is not n and caja(m)]
 
 
 def criterio(tipo, consulta):
@@ -169,13 +215,38 @@ def main(modo, archivo, *args):
     if modo == 'valido':
         ET.parse(archivo)
         return 0
-    lista = list(nodos(archivo))
+    lista = list(nodos(archivo, sin_widgets=(modo == 'textos')))
     if modo == 'textos':
         for n, b in lista:
             x, y = centro(b)
             for t in textos(n):
                 print(f'{x}\t{y}\t{b[1]}\t{b[3]}\t{t}')
         return 0
+    if modo == 'filas':
+        # Las carpetas y los botones sólo se tocan; el buscador, que también
+        # se puede mantener apretado, es el campo de texto.
+        for n, b in lista:
+            if n.get('long-clickable') != 'true' or (n.get('class') or '').endswith('EditText'):
+                continue
+            dichos = textos(n) + [t for m in adentro(n) for t in textos(m)]
+            if dichos:
+                print(dichos[0] + '\t' + (' · '.join(dichos[1:]) or '-'))
+        return 0
+    if modo == 'widgets':
+        hallados = []
+        for w, b in lista:
+            if w.get('class') != WIDGET:
+                continue
+            de = adentro(w)
+            paquetes = sorted({m.get('package') for m in de if m.get('package')})
+            # Con «-» en los vacíos, para que bash no corra las columnas.
+            hallados.append('\t'.join([
+                ' '.join(textos(w)) or '-',
+                ','.join(paquetes) or '-',
+                ' / '.join(t for m in de for t in textos(m)) or '-',
+            ]))
+        print('\n'.join(hallados))
+        return 0 if hallados else 1
     if modo == 'campo':
         campos = [centro(b) for n, b in lista if (n.get('class') or '').endswith('EditText')]
         i = int(args[0]) - 1
@@ -290,6 +361,10 @@ c_foco()  { echo "dumpsys window displays | grep -q 'mCurrentFocus=.*$1'"; }
 c_lock()  { echo "dumpsys activity activities | grep -q 'mLockTaskModeState=$1'"; }
 c_llamada() { echo "dumpsys telecom | grep -q 'state=$1'"; }
 c_sin_llamada() { echo "! dumpsys telecom | grep -qE 'state=(RINGING|DIALING|ANSWERED|ACTIVE|ON_HOLD|DISCONNECTING)'"; }
+c_teclado() { echo "dumpsys input_method | grep -q 'mInputShown=true'"; }
+# Una sesión de administración agranda la lista de lock task a todo lo
+# instalado: con Ajustes adentro («u0:[..., com.android.settings, ...]»), hay sesión.
+c_sesion() { echo "dumpsys activity activities | grep -q 'u0:\[.*com\.android\.settings[],]'"; }
 
 foco() {      # la ventana con foco, p. ej. Window{1a2b u0 com.slowtown.launcher/...HomeActivity}
   local out
@@ -360,7 +435,10 @@ ui() { python3 -I -c "$PY_UI" "$1" "$UI_XML" "${@:2}"; }
 
 volcar_ui() {   # volcar_ui [--windows]: lo que hay en pantalla, a $UI_XML
   # Sin --windows, uiautomator ve sólo la ventana activa (la app o un diálogo);
-  # con --windows ve también las del sistema, como los avisos de llamada.
+  # con --windows ve también las del sistema, como los avisos de llamada. Si
+  # la pantalla no se aquieta (un cursor titilando en un campo de texto),
+  # uiautomator no escribe nada y no avisa: por eso se borra el archivo antes,
+  # y si falta es que no estaba quieta y se prueba otra vez.
   local intento
   for intento in 1 2 3; do
     rm -f "$UI_XML"
@@ -419,7 +497,8 @@ esperar_ui() {  # esperar_ui SEGUNDOS TIPO CONSULTA [--windows]: deja el volcado
 }
 tocar_en_inicio() {   # tocar_en_inicio TIPO CONSULTA [MS]: toca (o mantiene MS) algo de Inicio
   # Un aviso del sistema (el del SMS, una llamada perdida) se dibuja encima de
-  # la hora y se llevaría el toque: se espera a que se vaya solo.
+  # la hora y se llevaría el toque: se espera a que se vaya solo. Sirve igual
+  # en la lista de todas las apps, que es la misma ventana.
   local tipo=$1 consulta=$2 ms=${3:-} fin=$((SECONDS + 25)) xy='' r x y
   while :; do
     if volcar_ui --windows; then
@@ -508,20 +587,23 @@ activar_slowtown() {   # en Administración: deja Slowtown activo pasando siempr
 }
 
 etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una por línea
+  # «ui textos» ya deja afuera lo de un widget.
   local x y arriba abajo t
   while IFS=$'\t' read -r x y arriba abajo t; do
     [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE ]] && continue
-    [[ $t == "$TXT_INICIO_SIN_APPS" || $t == *"$TXT_INICIO_FALLOS"* ]] && continue
+    [[ $t == "$TXT_INICIO_SIN_APPS" || $t == "$TXT_INICIO_SIN_PERMITIDAS" || $t == "$TXT_TODAS" ]] && continue
+    [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
   done < <(ui textos)
 }
 
-esperar_lista_inicio() {   # hasta que Inicio muestre sus apps o el cartel de «elegir las apps»
+esperar_lista_inicio() {   # hasta que Inicio muestre sus apps o el cartel de ayuda
   # La lista carga en segundo plano: recién vuelto a Inicio puede estar vacía
   # sin que falte nada.
   local fin=$((SECONDS + 15))
   while (( SECONDS < fin )); do
-    if volcar_ui && { [ -n "$(etiquetas_inicio)" ] || ui texto "$TXT_INICIO_SIN_APPS" >/dev/null; }; then
+    if volcar_ui && { [ -n "$(etiquetas_inicio)" ] || ui texto "$TXT_INICIO_SIN_APPS" >/dev/null ||
+      ui texto "$TXT_INICIO_SIN_PERMITIDAS" >/dev/null; }; then
       return 0
     fi
     sleep 0.5
@@ -663,6 +745,110 @@ elegir_slowtown_en_selector() {   # en el selector de Inicio de Android: Slowtow
   esperar 10 "$(c_foco "$FOCO_INICIO")"
 }
 
+en_una_linea() { sort -u | awk 'NR > 1 { printf ", " } { printf "%s", $0 }'; }   # «a, b, c»
+
+esperar_apps() {   # esperar_apps SEGUNDOS FUNCIÓN APP...: hasta que FUNCIÓN liste justo esas apps
+  # FUNCIÓN lee el último volcado (etiquetas_inicio, etiquetas_cajon...). En
+  # LISTA queda lo último que listó. Sale 1 si nunca fue eso, y 2 si
+  # uiautomator no pudo volcar la pantalla ni una vez.
+  local seg=$1 fn=$2 fin esperadas vista volco=0
+  shift 2
+  esperadas=$(printf '%s\n' "$@" | sort -u)
+  fin=$((SECONDS + seg))
+  LISTA='(uiautomator no pudo volcar la pantalla)'
+  while :; do
+    if volcar_ui; then
+      volco=1
+      vista=$("$fn" | sort -u)
+      LISTA=$(en_una_linea <<<"$vista")
+      [ "$vista" = "$esperadas" ] && return 0
+    fi
+    (( SECONDS < fin )) || break
+    sleep 0.5
+  done
+  (( volco )) && return 1
+  return 2
+}
+
+# La lista de todas las apps es otra pantalla de la misma actividad: el foco
+# no cambia, se la reconoce por lo que muestra. Arriba pueden ir carpetas
+# (cajas con el nombre en mayúsculas), que sólo se tocan; las apps son las
+# filas que se mantienen apretadas.
+abrir_cajon() {   # desde Inicio, con «↑ todas las apps», hasta la lista de todas las apps
+  tocar_en_inicio texto "$TXT_TODAS" || return 1
+  # No tiene título: la delata el buscador, el único campo de texto.
+  esperar_ui 10 campo 1
+}
+
+etiquetas_cajon() { ui filas | cut -f1; }   # las apps de la lista en el último volcado
+
+favoritas_en_cajon() {   # las que la lista marca «en Inicio» en el último volcado
+  # Buscando, la nota lleva antes la carpeta: «BILLETERAS · en Inicio».
+  local nombre nota
+  while IFS=$'\t' read -r nombre nota; do
+    [[ $nota == *"$TXT_EN_INICIO" ]] && printf '%s\n' "$nombre"
+  done < <(ui filas)
+}
+
+accion_en_cajon() {   # accion_en_cajon APP ACCIÓN: mantiene apretada APP en la lista y elige ACCIÓN
+  tocar_en_inicio texto "$1" 1500 || return 1
+  # El diálogo lleva de título el nombre de la app. Si no ofrece ACCIÓN, se
+  # cierra con «Cancelar» para que no quede tapando la lista.
+  if esperar_ui 10 texto "$2" && ui texto "$1" >/dev/null && tocar texto "$2"; then
+    return 0
+  fi
+  tocar texto "$TXT_CANCELAR"
+  return 1
+}
+
+volver_del_cajon() {   # Atrás hasta Inicio
+  # Con el teclado abierto, el primer Atrás sólo lo cierra; con el diálogo de
+  # una app, lo mismo.
+  local vuelta
+  for vuelta in 1 2 3; do
+    adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+    esperar_ui 5 texto "$TXT_TODAS" && return 0
+  done
+  return 1
+}
+
+# «dumpsys appwidget» termina con «Widgets:», «Hosts:» y «Grants:». Cada
+# widget trae «host=HostId{..., pkg:PAQUETE}» y, si está armado,
+# «provider=ProviderId{..., cmp:ComponentInfo{paquete/clase}}»; cada permiso
+# de «appwidget grantbind», una línea «[0] user=0 package=PAQUETE».
+puede_armar_widgets() {   # si Android deja a Slowtown armar widgets sin preguntar
+  local out
+  out=$(disp dumpsys appwidget)
+  awk -v p="package=$PAQUETE" '/^Grants:/ { g = 1; next } g && $NF == p { hay = 1 } END { exit !hay }' <<<"$out"
+}
+widgets_armados() {   # los widgets que Android tiene armados para Slowtown, como paquete/clase
+  local out
+  out=$(disp dumpsys appwidget)
+  awk -v host="pkg:$PAQUETE}" '
+    /^Widgets:/ { dentro = 1; next }
+    /^[^ ]/ { dentro = 0 }
+    !dentro { next }
+    /^  \[[0-9]+\] id=/ { mio = 0 }
+    /^    host=/ { mio = (index($0, host) > 0) }
+    /^    provider=/ && mio { sub(/.*ComponentInfo[{]/, ""); sub(/[}].*/, ""); print }' <<<"$out"
+}
+
+esperar_widget() {   # esperar_widget SEGUNDOS: hasta que la pantalla muestre un widget, y qué muestra
+  local fin=$((SECONDS + $1)) w
+  until volcar_ui && w=$(ui widgets); do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+  printf '%s\n' "$w"
+}
+esperar_sin_widget() {   # esperar_sin_widget SEGUNDOS: hasta que no muestre ninguno
+  local fin=$((SECONDS + $1))
+  until volcar_ui && ! ui widgets >/dev/null; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+
 # ── 0. El dispositivo ───────────────────────────────────────────────────────
 paso_0() {
   titulo 0 "Dispositivo"
@@ -740,7 +926,8 @@ paso_2() {
   ir_a_inicio || abortar "Inicio no lleva a Slowtown ($(foco))"
   esperar_lista_inicio || abortar "Inicio de Slowtown no termina de cargar"
   # Lo que ya está en Inicio (de una corrida anterior) dice qué tocar en el
-  # selector para que queden marcadas justo las cuatro.
+  # selector para que queden marcadas justo las cuatro: Inicio muestra las
+  # permitidas mientras nadie elija otras, y el paso 8 deja todo como estaba.
   while IFS= read -r l; do
     [ -n "$l" ] && en_inicio[$l]=1
   done < <(etiquetas_inicio)
@@ -777,7 +964,7 @@ paso_2() {
   if [ "$n" = "${#APPS_INICIO[@]}" ]; then
     ok "quedan marcadas ${#APPS_INICIO[@]}"
   else
-    abortar "el selector dice «Listo (${n:-?})» y tendrían que ser ${#APPS_INICIO[@]}"
+    abortar "el selector dice «Listo (${n:-?})» y tendrían que ser ${#APPS_INICIO[@]} (si quedó otro Inicio de una corrida que falló, probá con --limpio)"
   fi
   { tocar regex "$TXT_LISTO_RE" && esperar_ui 10 texto "$TXT_ADMIN"; } ||
     abortar "«Listo» no vuelve a la administración"
@@ -969,9 +1156,227 @@ paso_6() {
   afirmar_en_inicio "con el aviso del SMS, sigue en Slowtown y LOCKED"
 }
 
-# ── 7. Ajustes desde la administración ──────────────────────────────────────
+# ── 7. Todas las apps ───────────────────────────────────────────────────────
 paso_7() {
-  titulo 7 "Ajustes desde la administración"
+  titulo 7 "Todas las apps, con Slowtown activo"
+  local esperadas
+  esperadas=$(printf '%s\n' "${APPS_INICIO[@]}" | sort -u)
+  ir_a_inicio
+  # Con «↑ todas las apps» y no deslizando: un toque no depende de la
+  # velocidad del dedo.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+    return
+  fi
+  ok "«$TXT_TODAS» abre la lista de todas las apps"
+  if esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
+    ok "lista justo las permitidas, ${APPS_INICIO[*]}: ni $APP_CALENDARIO ni $APP_AJUSTES"
+  else
+    mal "lista «$LISTA» y tendrían que ser justo ${APPS_INICIO[*]}"
+  fi
+  # Mientras nadie elija, las de Inicio son las permitidas.
+  if [ "$(favoritas_en_cajon | sort -u)" = "$esperadas" ]; then
+    ok "las ${#APPS_INICIO[@]} llevan la nota «$TXT_EN_INICIO»"
+  else
+    mal "llevan la nota «$TXT_EN_INICIO» sólo: $(favoritas_en_cajon | en_una_linea)"
+  fi
+  captura todas-las-apps
+
+  # El teclado se abre recién al tocar el buscador, y tarda en conectarse: lo
+  # que se escribe enseguida se pierde.
+  if tocar campo 1 && esperar 5 "$(c_teclado)"; then
+    ok "tocar el buscador abre el teclado"
+  else
+    mal "tocar el buscador no abre el teclado"
+  fi
+  sleep 1
+  adb_t 20 shell input text "$BUSQUEDA" >/dev/null 2>&1
+  esperar_apps 20 etiquetas_cajon "$APP_RELOJ"
+  case $? in
+    0) ok "escribir «$BUSQUEDA» deja sólo $APP_RELOJ" ;;
+    1) mal "con «$BUSQUEDA» en el buscador, la lista dice «$LISTA» y tendría que ser sólo $APP_RELOJ" ;;
+    # Lo cubre Enter: sin el filtro abriría la primera de la lista
+    # (en orden alfabético, Camera, que va antes que Clock).
+    *) aviso "con el cursor titilando, uiautomator no pudo volcar la lista: lo dice Enter" ;;
+  esac
+  captura busqueda
+  adb_t 20 shell input keyevent KEYCODE_ENTER >/dev/null 2>&1
+  if esperar 10 "$(c_foco "$FOCO_RELOJ")"; then
+    ok "Enter abre la primera que coincide: $APP_RELOJ"
+  else
+    mal "Enter no abre $APP_RELOJ ($(foco))"
+  fi
+  if [ "$(estado)" = LOCKED ]; then
+    ok "con el Reloj abierto desde la lista, Slowtown sigue activo (LOCKED)"
+  else
+    mal "con el Reloj abierto desde la lista, lock task está en $(estado)"
+  fi
+  ir_a_inicio
+  afirmar_en_inicio "Inicio vuelve a Slowtown"
+}
+
+# ── 8. Apps de Inicio ───────────────────────────────────────────────────────
+paso_8() {
+  titulo 8 "Sacar y volver a poner $APP_QUITAR en Inicio, sin contraseña"
+  local sin=() a marcadas puestas=0
+  for a in "${APPS_INICIO[@]}"; do [ "$a" = "$APP_QUITAR" ] || sin+=("$a"); done
+  ir_a_inicio
+
+  # Sacarla: mantenerla apretada en la lista abre un diálogo con su nombre.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+    return
+  fi
+  if ! accion_en_cajon "$APP_QUITAR" "$TXT_SACAR_DE_INICIO"; then
+    mal "mantener apretada $APP_QUITAR en la lista no ofrece «$TXT_SACAR_DE_INICIO»"
+  elif esperar_apps 10 favoritas_en_cajon "${sin[@]}"; then
+    ok "mantener apretada $APP_QUITAR y «$TXT_SACAR_DE_INICIO» le sacan la nota «$TXT_EN_INICIO»"
+  else
+    mal "después de «$TXT_SACAR_DE_INICIO», llevan la nota «$TXT_EN_INICIO»: $LISTA"
+  fi
+  volver_del_cajon || { mal "Atrás no vuelve de la lista a Inicio"; ir_a_inicio; }
+  if esperar_apps 10 etiquetas_inicio "${sin[@]}"; then
+    ok "de vuelta en Inicio, muestra ${sin[*]}: sin $APP_QUITAR"
+  else
+    mal "Inicio muestra «$LISTA» y tendría que ser ${sin[*]}"
+  fi
+  captura inicio-sin-camara
+
+  # Volver a ponerla. Se repasan todas las de Inicio, para que una falla de
+  # arriba no le deje otro Inicio a lo que sigue ni a la corrida siguiente;
+  # las que ya llevan la nota no se tocan (mantenerlas apretadas las sacaría).
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+    return
+  fi
+  volcar_ui
+  marcadas=$(favoritas_en_cajon)
+  for a in "${APPS_INICIO[@]}"; do
+    grep -qxF "$a" <<<"$marcadas" && continue
+    [ "$a" = "$APP_QUITAR" ] || nota "$a tampoco estaba en Inicio: la vuelvo a poner"
+    if accion_en_cajon "$a" "$TXT_PONER_EN_INICIO"; then
+      puestas=$((puestas + 1))
+    else
+      mal "mantener apretada $a en la lista no ofrece «$TXT_PONER_EN_INICIO»"
+    fi
+  done
+  if esperar_apps 10 favoritas_en_cajon "${APPS_INICIO[@]}"; then
+    if (( puestas )); then
+      ok "«$TXT_PONER_EN_INICIO» le devuelve la nota: la llevan las ${#APPS_INICIO[@]}"
+    else
+      nota "las ${#APPS_INICIO[@]} ya llevaban la nota: no hubo nada que volver a poner"
+    fi
+  else
+    mal "llevan la nota «$TXT_EN_INICIO»: $LISTA, y tendrían que ser las ${#APPS_INICIO[@]}"
+  fi
+  volver_del_cajon || { mal "Atrás no vuelve de la lista a Inicio"; ir_a_inicio; }
+  if esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}"; then
+    ok "Inicio vuelve a mostrar ${APPS_INICIO[*]}"
+  else
+    mal "Inicio muestra «$LISTA» y tendría que ser ${APPS_INICIO[*]}"
+  fi
+  afirmar_en_inicio "nada de esto pidió la contraseña: sigue en Slowtown y LOCKED"
+}
+
+# ── 9. Widget de Inicio ─────────────────────────────────────────────────────
+paso_9() {
+  titulo 9 "Widget de Inicio: $WIDGET_RELOJ"
+  local w etiqueta paquetes dichos armados
+  ir_a_inicio
+  # provisionar.sh corre «appwidget grantbind»: sin ese permiso, Android
+  # pregunta con un diálogo de Ajustes antes de armar el widget.
+  if puede_armar_widgets; then
+    ok "Android deja a Slowtown poner widgets sin preguntar (appwidget grantbind, de provisionar.sh)"
+  else
+    mal "Slowtown no tiene permiso para poner widgets sin preguntar: ¿provisionar.sh no corrió appwidget grantbind?"
+  fi
+  if ! entrar_admin; then
+    mal "no pude entrar a la administración"
+    ir_a_inicio
+    return
+  fi
+  if ! { tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_WIDGET_TITULO"; }; then
+    mal "«$TXT_ELEGIR_WIDGET» no abre la lista de widgets"
+    ir_a_inicio
+    return
+  fi
+  # La lista carga en segundo plano: primero se la espera, después se toca.
+  esperar_ui 10 texto "$WIDGET_RELOJ"
+  captura lista-de-widgets
+  if ! tocar_desplazando texto "$WIDGET_RELOJ"; then
+    mal "no encuentro «$WIDGET_RELOJ» en la lista de widgets"
+    ir_a_inicio
+    return
+  fi
+  # Inicio y la lista de widgets son la misma actividad: la vuelta se ve en
+  # la pantalla, no en el foco.
+  if ! esperar_ui 15 texto "$TXT_TODAS"; then
+    if [[ $(foco) == *"$FOCO_PERMISO_WIDGET"* ]]; then
+      mal "Android pidió permiso con su diálogo: falta appwidget grantbind (provisionar.sh)"
+      adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+    else
+      mal "elegir «$WIDGET_RELOJ» no vuelve a Inicio ($(foco))"
+    fi
+    ir_a_inicio
+    return
+  fi
+  afirmar_en_inicio "elegir «$WIDGET_RELOJ» vuelve a Inicio: Slowtown y LOCKED"
+  # Se busca por clase y por paquete, no por posición ni por cómo se ve: el
+  # widget es un AppWidgetHostView, y lo de adentro lo dibuja el Reloj con su
+  # propio paquete. Con el foco en Slowtown, un nodo de com.android.deskclock
+  # en su ventana sólo puede ser el widget, y que esté dice que se dibujó (si
+  # falla, Android pone ahí un cartel de error suyo, con el paquete de Slowtown).
+  if w=$(esperar_widget 15); then
+    IFS=$'\t' read -r etiqueta paquetes dichos <<<"$w"
+    if [[ $etiqueta == "$WIDGET_RELOJ" && ,$paquetes, == *",$PAQUETE_RELOJ,"* ]]; then
+      ok "Inicio muestra el widget «$WIDGET_RELOJ», dibujado por $PAQUETE_RELOJ"
+    else
+      mal "Inicio muestra el widget «$etiqueta», con nodos de $paquetes ($dichos): tendría que ser «$WIDGET_RELOJ», de $PAQUETE_RELOJ"
+    fi
+  else
+    armados=$(widgets_armados | en_una_linea)
+    mal "Inicio no muestra ningún widget (Android lo tiene armado para Slowtown: ${armados:-no})"
+  fi
+  captura widget
+  # El armado fue una sesión de administración. Termina en segundo plano al
+  # quedar el widget: se espera a que la lista de lock task vuelva a ser la de
+  # siempre, y Ajustes tiene que estar bloqueado otra vez.
+  esperar 10 "! $(c_sesion)" || nota "la lista de lock task todavía tiene a Ajustes, como en una sesión"
+  intento_am_start "Ajustes con am start después de elegir el widget" "$FOCO_AJUSTES" -a android.settings.SETTINGS
+
+  if ! entrar_admin; then
+    mal "no pude entrar a la administración para sacar el widget"
+    ir_a_inicio
+    return
+  fi
+  if tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_SACAR_WIDGET" &&
+    tocar_desplazando texto "$TXT_SACAR_WIDGET" && esperar_ui 10 texto "$TXT_ADMIN"; then
+    nota "«$TXT_SACAR_WIDGET» vuelve a la administración"
+  else
+    mal "no pude usar «$TXT_SACAR_WIDGET» ($(foco))"
+  fi
+  ir_a_inicio
+  afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
+  if esperar_sin_widget 10; then
+    ok "Inicio ya no muestra el widget"
+  else
+    mal "Inicio sigue mostrando un widget: $(ui widgets | tr '\t' ' ')"
+  fi
+  armados=$(widgets_armados | en_una_linea)
+  if [ -z "$armados" ]; then
+    ok "y Android ya no tiene ningún widget armado para Slowtown"
+  else
+    mal "Android sigue con widgets armados para Slowtown: $armados"
+  fi
+  captura sin-widget
+}
+
+# ── 10. Ajustes desde la administración ─────────────────────────────────────
+paso_10() {
+  titulo 10 "Ajustes desde la administración"
   local out
   ir_a_inicio
   # Una app abierta de antes: la sesión de Ajustes no la tiene que cerrar
@@ -1014,9 +1419,9 @@ paso_7() {
   intento_am_start "Ajustes con am start después de la sesión" "$FOCO_AJUSTES" -a android.settings.SETTINGS
 }
 
-# ── 8. Reinicio ─────────────────────────────────────────────────────────────
-paso_8() {
-  titulo 8 "Reinicio"
+# ── 11. Reinicio ────────────────────────────────────────────────────────────
+paso_11() {
+  titulo 11 "Reinicio"
   local antes boot='' fin
   adb_t 60 logcat -d >"$SALIDA/logcat-antes-del-reinicio.txt" 2>/dev/null
   antes=$(disp cat /proc/sys/kernel/random/boot_id)
@@ -1050,9 +1455,9 @@ paso_8() {
   captura tras-reinicio
 }
 
-# ── 9. Inicio fijo sin duplicados ───────────────────────────────────────────
-paso_9() {
-  titulo 9 "Inicio fijo sin duplicados"
+# ── 12. Inicio fijo sin duplicados ──────────────────────────────────────────
+paso_12() {
+  titulo 12 "Inicio fijo sin duplicados"
   local i xml n
   ir_a_inicio
   for i in 1 2 3 4 5; do
@@ -1090,9 +1495,9 @@ paso_9() {
   fi
 }
 
-# ── 10. Guardia de crashes ──────────────────────────────────────────────────
-paso_10() {
-  titulo 10 "Guardia de crashes"
+# ── 13. Guardia de crashes ──────────────────────────────────────────────────
+paso_13() {
+  titulo 13 "Guardia de crashes"
   local i pid crashes=0 solo=1
   ir_a_inicio
   for i in 1 2 3; do
@@ -1176,9 +1581,9 @@ paso_10() {
   afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
 }
 
-# ── 11. La salida por cable ─────────────────────────────────────────────────
-paso_11() {
-  titulo 11 "Salida por cable"
+# ── 14. La salida por cable ─────────────────────────────────────────────────
+paso_14() {
+  titulo 14 "Salida por cable"
   if (cd "$RAIZ" && ./scripts/liberar.sh </dev/null); then ok "liberar.sh termina bien"; else mal "liberar.sh falló"; fi
   if esperar 15 "$(c_lock NONE)"; then ok "lock task en NONE"; else mal "lock task sigue en $(estado)"; fi
   if es_device_owner; then mal "Slowtown sigue siendo Device Owner"; else ok "Slowtown ya no es Device Owner"; fi
@@ -1233,5 +1638,8 @@ paso_8
 paso_9
 paso_10
 paso_11
+paso_12
+paso_13
+paso_14
 resumen
 (( ${#FALLAS[@]} == 0 ))
