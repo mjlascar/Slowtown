@@ -59,6 +59,7 @@ object Policies {
      * guardar apps, SMS y ajustes) y muestra «pertenece a tu organización».
      * Corre en cada arranque porque es una consulta barata.
      */
+    @Synchronized
     fun restoreDefaults(context: Context) {
         if (!isDeviceOwner(context)) return
         val dpm = dpm(context)
@@ -89,6 +90,7 @@ object Policies {
      * nunca en cada vuelta a Inicio: el sistema no deduplica el Inicio fijo, y
      * cada llamada sumaba una regla más en disco (en el emulador llegó a 30).
      */
+    @Synchronized
     fun apply(context: Context, packages: Collection<String>) {
         if (!isDeviceOwner(context)) return
         val dpm = dpm(context)
@@ -117,6 +119,7 @@ object Policies {
      */
     // La variante con PackageInfoFlags recién existe en API 33.
     @Suppress("DEPRECATION")
+    @Synchronized
     fun openForAdmin(context: Context, packages: Collection<String>) {
         if (!isDeviceOwner(context)) return
         val installed = context.packageManager.getInstalledPackages(0).map { it.packageName }
@@ -128,6 +131,7 @@ object Policies {
      * sistema saca del modo a cualquier tarea que ya no esté en la lista, y la
      * cierra). Vuelven los usuarios y el cambio de usuario.
      */
+    @Synchronized
     fun open(context: Context) {
         if (!isDeviceOwner(context)) return
         val dpm = dpm(context)
@@ -137,6 +141,7 @@ object Policies {
     }
 
     /** Lo que hace la guardia de crashes: abrir y soltar el Inicio fijo, sin dejar de ser Device Owner. */
+    @Synchronized
     fun relax(context: Context) {
         if (!isDeviceOwner(context)) return
         open(context)
@@ -150,6 +155,7 @@ object Policies {
     // Obsoleto desde API 26, pero sigue siendo la única forma de que el propio
     // Device Owner se suelte, y anda de Android 12 a 17.
     @Suppress("DEPRECATION")
+    @Synchronized
     fun release(context: Context) {
         if (!isDeviceOwner(context)) return
         relax(context)

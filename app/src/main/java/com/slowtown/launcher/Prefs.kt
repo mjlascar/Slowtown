@@ -25,8 +25,14 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(KEY_CLOSED, false)
         set(value) = prefs.edit().putBoolean(KEY_CLOSED, value).apply()
 
+    /** Cuándo termina la sesión de administración en curso; 0 si no hay. */
+    var adminSessionUntil: Long
+        get() = prefs.getLong(KEY_ADMIN_SESSION_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_ADMIN_SESSION_UNTIL, value).apply()
+
     private companion object {
         const val KEY_ALLOWED = "allowed"
         const val KEY_CLOSED = "closed"
+        const val KEY_ADMIN_SESSION_UNTIL = "admin_session_until"
     }
 }

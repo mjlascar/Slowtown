@@ -36,6 +36,12 @@
             </intent-filter>
         </activity>
 
+        <!-- El final agendado de una sesión de administración. Sólo lo dispara
+             la alarma de Slowtown: no se exporta. -->
+        <receiver
+            android:name=".admin.AdminSession$End"
+            android:exported="false" />
+
         <!-- Lo que `dpm set-device-owner` activa. -->
         <receiver
             android:name=".admin.SlowtownAdminReceiver"

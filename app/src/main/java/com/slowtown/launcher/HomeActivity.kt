@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.slowtown.launcher.admin.AdminSession
 import com.slowtown.launcher.admin.LockTaskEvents
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.apps.AppCatalog
@@ -37,15 +38,18 @@ import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * La pantalla de inicio, y la única actividad. Contraseña, administración y
  * elegir apps son estados de esta misma: volver a Inicio, del modo que sea,
- * cae siempre acá, cierra la sesión de administración y vuelve a cerrar el
- * teléfono.
+ * cae siempre acá, cierra la sesión de administración y vuelve a activar
+ * Slowtown.
+ *
+ * Lo que lee todos los paquetes del teléfono (armar la política, listar las
+ * apps) corre fuera del hilo principal: en un teléfono con cientos de apps
+ * traba el arranque, y un ANR acá alimentaría la guardia de crashes.
  */
 class HomeActivity : ComponentActivity() {
 
@@ -56,10 +60,7 @@ class HomeActivity : ComponentActivity() {
     private var catalog by mutableStateOf<List<LaunchableApp>>(emptyList())
     private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var status by mutableStateOf(AdminStatus())
-
-    /** Ajustes o la Play Store abiertos desde la administración. */
-    private var adminSession = false
-    private var adminSessionEnd: Job? = null
+    private var appsLoad: Job? = null
 
     /** Apagar la pantalla termina la sesión de administración. */
     private val screenOff = object : BroadcastReceiver() {
@@ -78,10 +79,19 @@ class HomeActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         prefs = Prefs(this)
-        // Una vez por creación, para recomponer lo que haya quedado a medias
-        // (una actualización, un reinicio). En cada vuelta a Inicio no hace falta.
-        if (shouldBeClosed()) Policies.apply(this, prefs.allowedPackages)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED)
+
+        // Una sesión de administración que quedó de una vida anterior de esta
+        // pantalla ya terminó. Y una vez por creación se recompone la política,
+        // por si quedó algo a medias (una actualización, un reinicio); en cada
+        // vuelta a Inicio no hace falta.
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                AdminSession.end(this@HomeActivity)
+                if (shouldBeClosed()) Policies.apply(this@HomeActivity, prefs.allowedPackages)
+            }
+            lockIfNeeded()
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             // Atrás nunca sale del launcher: desde una pantalla interna vuelve a Inicio.
@@ -156,7 +166,7 @@ class HomeActivity : ComponentActivity() {
     /**
      * Si al reanudar la pantalla de bloqueo todavía figuraba como visible (el
      * desbloqueo mismo reanuda la actividad), el foco llega recién cuando se
-     * va: es el segundo intento de cerrar.
+     * va: es el segundo intento de activar.
      */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -204,12 +214,20 @@ class HomeActivity : ComponentActivity() {
     private fun shouldBeClosed(): Boolean =
         prefs.closed && !CrashGuard.inSafeMode(this) && Policies.isDeviceOwner(this)
 
+    /** Arma la política fuera del hilo principal y después sigue con [then]. */
+    private fun applyPolicy(then: () -> Unit = {}) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { Policies.apply(this@HomeActivity, prefs.allowedPackages) }
+            then()
+        }
+    }
+
     /**
      * Entra en lock task si corresponde. Sólo eso: la política se arma en
      * [Policies.apply] cuando algo cambia, no en cada vuelta a Inicio.
      */
     private fun lockIfNeeded() {
-        if (adminSession || isLocked() || !shouldBeClosed()) return
+        if (AdminSession.isActive(this) || isLocked() || !shouldBeClosed()) return
         // Entrar en lock task con la pantalla bloqueada deja al sistema en un
         // estado raro; se reintenta al recuperar el foco.
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
@@ -224,49 +242,46 @@ class HomeActivity : ComponentActivity() {
     private fun toggleClosed() {
         prefs.closed = !prefs.closed
         if (prefs.closed) {
-            Policies.apply(this, prefs.allowedPackages)
-            lockIfNeeded()
+            applyPolicy {
+                lockIfNeeded()
+                refreshStatus()
+            }
         } else {
             // Salir de lock task desde la tarea raíz cierra las demás tareas: lo
             // avisa la pantalla de administración.
             if (isLocked()) runCatching { stopLockTask() }
             Policies.open(this)
+            refreshStatus()
         }
-        refreshStatus()
     }
 
     /**
      * Ajustes y la Play Store: todo el teléfono queda a mano hasta volver a
-     * Inicio, apagar la pantalla o pasar [ADMIN_SESSION_MS].
+     * Inicio, apagar la pantalla o pasar [AdminSession.LENGTH_MS].
      */
     private fun startAdminSession(target: Intent?) {
         if (target == null) return
-        if (isLocked()) {
-            Policies.openForAdmin(this, prefs.allowedPackages)
-            adminSession = true
-            adminSessionEnd?.cancel()
-            adminSessionEnd = lifecycleScope.launch {
-                delay(ADMIN_SESSION_MS)
-                endAdminSession()
-            }
-        }
         screen = Screen.Home
-        runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            .onFailure { Log.w(TAG, "No pude abrir $target", it) }
+        lifecycleScope.launch {
+            if (isLocked()) {
+                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages) }
+            }
+            runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                .onFailure { Log.w(TAG, "No pude abrir $target", it) }
+        }
     }
 
-    /** Vuelve a la lista de siempre; el sistema cierra lo que quedó afuera. */
     private fun endAdminSession() {
-        if (!adminSession) return
-        adminSession = false
-        adminSessionEnd?.cancel()
-        if (shouldBeClosed()) Policies.apply(this, prefs.allowedPackages)
+        if (!AdminSession.isActive(this)) return
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { AdminSession.end(this@HomeActivity) }
+        }
     }
 
     private fun saveChosen(keys: Set<String>) {
         prefs.allowed = keys
         // Con Slowtown activo, la lista nueva rige desde ya.
-        if (shouldBeClosed()) Policies.apply(this, prefs.allowedPackages)
+        if (shouldBeClosed()) applyPolicy()
         screen = Screen.Admin
         refreshApps()
     }
@@ -274,10 +289,13 @@ class HomeActivity : ComponentActivity() {
     private fun leaveSafeMode() {
         CrashGuard.leaveSafeMode(this)
         if (shouldBeClosed()) {
-            Policies.apply(this, prefs.allowedPackages)
-            lockIfNeeded()
+            applyPolicy {
+                lockIfNeeded()
+                refreshStatus()
+            }
+        } else {
+            refreshStatus()
         }
-        refreshStatus()
     }
 
     private fun release() {
@@ -298,7 +316,8 @@ class HomeActivity : ComponentActivity() {
 
     /** Leer las etiquetas de todas las apps tarda: fuera del hilo principal. */
     private fun refreshApps() {
-        lifecycleScope.launch {
+        appsLoad?.cancel()
+        appsLoad = lifecycleScope.launch {
             val apps = withContext(Dispatchers.Default) { AppCatalog.launchable(this@HomeActivity) }
             val allowed = prefs.allowed
             catalog = apps
@@ -308,6 +327,5 @@ class HomeActivity : ComponentActivity() {
 
     private companion object {
         const val TAG = "Slowtown"
-        const val ADMIN_SESSION_MS = 10 * 60_000L
     }
 }

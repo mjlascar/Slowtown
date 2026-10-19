@@ -39,6 +39,15 @@ object Essentials {
      * el selector de archivos y el inicio de sesión de Google. Con
      * BLOCK_ACTIVITY_START_IN_TASK, lo que no está en la lista se bloquea
      * también adentro de una app permitida.
+     *
+     * Contracara: la lista es por paquete, así que cualquier pantalla de estos
+     * paquetes se puede abrir, también como tarea nueva (por ejemplo, desde un
+     * link `intent://` en Chrome). El que más expone es
+     * `com.google.android.gms`, con pantallas de cuenta y de ayuda que tienen
+     * vistas web. Se deja porque sin él se bloquean el diálogo de ubicación de
+     * Maps y Uber, «Continuar con Google» y el autocompletado de códigos por
+     * SMS. Probar en el S10e si alguna lleva a un navegador; el filtro de DNS
+     * es la red de abajo.
      */
     private val HELPERS = setOf(
         "android",
