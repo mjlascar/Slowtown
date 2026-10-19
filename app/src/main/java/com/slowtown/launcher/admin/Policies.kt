@@ -54,6 +54,24 @@ object Policies {
     fun isDeviceOwner(context: Context): Boolean = dpm(context).isDeviceOwnerApp(context.packageName)
 
     /**
+     * Lo que Device Owner cambia del teléfono sin que nadie lo pida, devuelto
+     * a como estaba: Android apaga la copia de seguridad (Google One deja de
+     * guardar apps, SMS y ajustes) y muestra «pertenece a tu organización».
+     * Corre en cada arranque porque es una consulta barata.
+     */
+    fun restoreDefaults(context: Context) {
+        if (!isDeviceOwner(context)) return
+        val dpm = dpm(context)
+        val admin = admin(context)
+        if (!dpm.isBackupServiceEnabled(admin)) dpm.setBackupServiceEnabled(admin, true)
+        // Sin leerlo antes: en Android 12 getOrganizationName sólo anda dentro
+        // de un perfil de trabajo, y siendo Device Owner tira SecurityException.
+        dpm.setOrganizationName(admin, ORGANIZATION)
+    }
+
+    private const val ORGANIZATION = "Slowtown"
+
+    /**
      * Si `startLockTask()` cierra el teléfono sin peligro: Slowtown está en la
      * lista (si no, mostraría el cartel de fijar pantalla) y las funciones ya
      * están puestas (sin KEYGUARD, entrar en lock task saca el PIN).

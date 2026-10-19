@@ -12,5 +12,7 @@ class SlowtownApp : Application() {
         // colgarse varias veces seguidas, el teléfono queda abierto.
         runCatching { if (CrashGuard.check(this)) Policies.relax(this) }
             .onFailure { Log.e("Slowtown", "La guardia de crashes falló", it) }
+        runCatching { Policies.restoreDefaults(this) }
+            .onFailure { Log.e("Slowtown", "No pude restaurar la copia de seguridad", it) }
     }
 }
