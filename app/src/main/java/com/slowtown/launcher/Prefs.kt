@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
+import com.slowtown.launcher.apps.Habit
 
 /** Lo que eligió el usuario. La contraseña vive aparte, en [com.slowtown.launcher.security.Password]. */
 class Prefs(context: Context) {
@@ -81,6 +82,22 @@ class Prefs(context: Context) {
             prefs.edit().putString(KEY_FREE_SESSION_USES, value).commit()
         }
 
+    /**
+     * Si Inicio muestra los hábitos de Slowtown en el lugar del widget. De
+     * entrada sí, salvo que ya haya un widget de otra app.
+     */
+    var habitsWidget: Boolean
+        get() = prefs.getBoolean(KEY_HABITS_WIDGET, widgetId == AppWidgetManager.INVALID_APPWIDGET_ID)
+        set(value) = prefs.edit().putBoolean(KEY_HABITS_WIDGET, value).apply()
+
+    /** Los días marcados de un hábito, como fechas ISO («2026-10-19»). Sin contraseña: no afloja nada. */
+    fun habitDays(habit: Habit): Set<String> =
+        prefs.getStringSet(KEY_HABIT_PREFIX + habit.key, null)?.toSet() ?: emptySet()
+
+    fun setHabitDays(habit: Habit, days: Set<String>) {
+        prefs.edit().putStringSet(KEY_HABIT_PREFIX + habit.key, days).apply()
+    }
+
     /** El widget de Inicio, o [AppWidgetManager.INVALID_APPWIDGET_ID] si no hay. */
     var widgetId: Int
         get() = prefs.getInt(KEY_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -97,5 +114,7 @@ class Prefs(context: Context) {
         const val KEY_FREE_SESSION_UNTIL = "free_session_until"
         const val KEY_FREE_SESSION_USES = "free_session_uses"
         const val KEY_WIDGET_ID = "widget_id"
+        const val KEY_HABITS_WIDGET = "habits_widget"
+        const val KEY_HABIT_PREFIX = "habit_"
     }
 }

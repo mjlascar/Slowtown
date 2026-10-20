@@ -47,6 +47,24 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   grantbind` para que Android no muestre su diálogo de permiso, que es de
   Ajustes. Para que tocarlo abra su app, esa app tiene que estar permitida.
 
+## Hábitos y tiempo de pantalla
+
+- **Hábitos** (`apps/Habits.kt`, `ui/Habits.kt`): Marcos quiere meditar 2
+  veces por semana y hacer ejercicio 3, sin app aparte. Van en el lugar del
+  widget, y vienen puestos (`Prefs.habitsWidget`, salvo que ya haya un widget
+  de otra app); en el selector de widget son «Hábitos de Slowtown». Dos filas
+  con los últimos 7 días, como los cuadraditos de GitHub, hoy a la derecha;
+  cuánto lleva contra la meta en esos 7 días; y a la derecha, pegado al día de
+  hoy, el botón que lo marca (yin y yang, pesa: dibujados con Canvas, sin
+  emojis). Tocar los cuadraditos abre «Hábitos», el resumen por semanas, donde
+  se puede marcar un día pasado. Sin contraseña: no afloja nada. Los días se
+  guardan como fechas ISO (`habit_meditar`, `habit_ejercicio`).
+- **Tiempo de pantalla** (`apps/ScreenTime.kt`): «Hoy: 1 h 5 min de pantalla»
+  abajo de la fecha. Bienestar digital no comparte sus números, así que se
+  calcula igual que él, con los datos de uso de Android (sin contar Inicio).
+  Necesita el acceso a los datos de uso, que da `provisionar.sh` por adb
+  (`appops set … GET_USAGE_STATS allow`); sin eso, la línea no aparece.
+
 ## Las dos maneras de abrir todo un rato
 
 - **Sesión de administración** (`AdminSession`, con contraseña): «Ir a
@@ -60,7 +78,10 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   volver a Inicio ni al apagar la pantalla: sólo a los 5 minutos.
 
 Las dos agrandan la lista de lock task a todo lo instalado, sin salir de lock
-task (salir cerraría las demás tareas). El final lo agenda el sistema con una
+task (salir cerraría las demás tareas). «Habilitar todo» incluye Ajustes a
+propósito: desde Ajustes hay herramientas de desarrollador con las que se
+podría saltear el nivel 2, y Marcos lo sabe y lo acepta (19/10). No sacar
+Ajustes de ahí ni apagar la depuración inalámbrica sin preguntarle. El final lo agenda el sistema con una
 alarma, y `Policies.apply` respeta una sesión en curso: rearmar la política no
 la corta antes. En el emulador, el final se dispara a mano con root:
 `adb shell "am broadcast -n 'com.slowtown.launcher/.admin.FreeSession\$End'"`.
@@ -76,17 +97,19 @@ un cajón de su casa se termina sacando.
 - **Nivel 2, el código** (`Fixed`): no se cambia desde el teléfono, ni con la
   contraseña; sólo con una versión nueva, compilada e instalada por cable con
   la clave estable. Son las políticas de Chrome (`Chrome`: sin incógnito,
-  SafeSearch, el filtro propio de Chrome para sitios de adultos, sin DNS propio
-  de Chrome, sin noticias en la pestaña nueva, y `URLBlocklist`) y las apps
+  SafeSearch y el filtro de sitios de Chrome, sin DNS propio de Chrome, sin
+  noticias en la pestaña nueva, y `URLBlocklist`) y las apps
   pausadas (`Vetoed`: `Fixed.APPS` y
   cualquier navegador que no sea Chrome, también los deshabilitados). Nunca se
   pausa nada de `Vetoed.NEVER`, de `Essentials`, un launcher ni un teclado.
 - **Las páginas del nivel 2**: Chrome lee hasta 1.000. Primero
   `Fixed.CORE_SITES` (a mano: YouTube, TikTok, Instagram, el streaming),
   después las del nivel 1 y al final la base, `res/raw/paginas_fijas.txt`:
-  dominios enteros (`.xxx`, `.bet`, `bet.ar`…) y las más visitadas de cada
-  categoría de las listas UT1 de la Universidad Toulouse Capitole (CC BY-SA
-  4.0), ordenadas con el ranking Tranco. La arma `scripts/paginas-fijas.py`,
+  la lista de bloqueo por defecto de la Universidad Toulouse Capitole (UT1,
+  CC BY-SA 4.0). De cada categoría (redes sociales, video y streaming, juegos
+  online, apuestas, citas, contenido para adultos, entre otras) van las más
+  visitadas según el ranking Tranco, más algunos dominios enteros como
+  `bet.ar`. La arma `scripts/paginas-fijas.py`,
   que también explica lo que se saca a propósito (`NUNCA`): ajedrez online
   (lo pidió Marcos), música, podcasts y radio, ayuda para dejar el juego,
   dominios compartidos y lo técnico. Las listas completas, que son millones,
@@ -126,14 +149,17 @@ quiere mostrar su aviso de administrador, que es de Ajustes.
 3. **Siempre hay una salida por cable.** `scripts/liberar.sh` le pide a
    Slowtown, con `adb shell content call` (`CableProvider`, que sólo atiende a
    shell y root), que deshaga el nivel 2, abra el teléfono y deje de ser
-   Device Owner, y queda en pausa. Si Slowtown no contesta, se instala una
+   Device Owner, y queda en pausa (con un candado: una revisión del nivel 2
+   no se puede cruzar con la salida). Si Slowtown no contesta, se instala una
    versión que ande y se vuelve a correr. El último recurso, `liberar.sh
    --forzar`, usa `dpm remove-active-admin`, que anda porque el build de debug
    es `testOnly` (`app/src/debug/AndroidManifest.xml`). Después saca la pausa a
-   las apps de sistema (lee la lista con `run-as`, y las desinstala para el
-   usuario y las vuelve a poner, con sus datos); las de Play quedan pausadas
-   hasta reinstalarlas. Se instala con `adb install -t`. `provisionar.sh` se
-   niega a provisionar un APK sin testOnly.
+   las apps de sistema (las que tienen la pausa de `android` según `dumpsys
+   package`: las desinstala para el usuario y las vuelve a poner, con sus
+   datos); las de Play quedan pausadas hasta reinstalarlas. Se instala con
+   `adb install -t`. `provisionar.sh` mira testOnly en el APK antes de
+   instalarlo, y antes de provisionar muestra qué va a pausar el nivel 2
+   (`content call … --method mostrar`): en un teléfono real, antes del «SI».
 4. **Primero el emulador** (Android 12, API 31, sin cuentas). Al teléfono sólo
    llega lo que ya anduvo ahí, con llamadas y SMS probados con el teléfono
    cerrado.

@@ -11,6 +11,13 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- El tiempo de pantalla de Inicio, lo mismo que muestra Bienestar
+         digital. Lo da provisionar.sh por adb (appops GET_USAGE_STATS): con
+         Slowtown activo, la pantalla de Ajustes para darlo no se alcanza. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:name=".SlowtownApp"
         android:allowBackup="false"

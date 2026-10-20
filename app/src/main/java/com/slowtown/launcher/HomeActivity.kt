@@ -30,7 +30,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.admin.AdminSession
-import com.slowtown.launcher.admin.Chrome
 import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.LockTaskEvents
@@ -38,7 +37,10 @@ import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.apps.AppCatalog
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
+import com.slowtown.launcher.apps.Habit
+import com.slowtown.launcher.apps.Habits
 import com.slowtown.launcher.apps.LaunchableApp
+import com.slowtown.launcher.apps.ScreenTime
 import com.slowtown.launcher.security.CrashGuard
 import com.slowtown.launcher.security.Password
 import com.slowtown.launcher.ui.AdminScreen
@@ -50,6 +52,8 @@ import com.slowtown.launcher.ui.DrawerScreen
 import com.slowtown.launcher.ui.FolderScreen
 import com.slowtown.launcher.ui.FreeSessionInfo
 import com.slowtown.launcher.ui.FoldersScreen
+import com.slowtown.launcher.ui.HabitsScreen
+import com.slowtown.launcher.ui.HabitsWidget
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.SitesScreen
 import com.slowtown.launcher.ui.SlowtownTheme
@@ -62,8 +66,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -79,7 +85,7 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -103,6 +109,14 @@ class HomeActivity : ComponentActivity() {
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
     private var widget by mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null)
+
+    /** Los hábitos de Slowtown en el lugar del widget, en vez del de una app. */
+    private var showHabits by mutableStateOf(false)
+    private var habitMarks by mutableStateOf<Map<Habit, Set<LocalDate>>>(emptyMap())
+
+    /** Lo mismo que muestra Bienestar digital, calculado con los datos de uso de Android. */
+    private var screenTime by mutableStateOf<String?>(null)
+    private var today by mutableStateOf(LocalDate.now())
     private var widgetChoices by mutableStateOf<List<WidgetChoice>>(emptyList())
 
     /** El widget que se está armando, hasta que lo confirme su configuración. */
@@ -158,6 +172,16 @@ class HomeActivity : ComponentActivity() {
             }
         })
 
+        // Los últimos 7 días corren a la medianoche aunque Inicio quede abierto.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    refreshHabits()
+                    delay(untilMidnight())
+                }
+            }
+        }
+
         // startLockTask y stopLockTask se aplican después de volver: el estado
         // que se muestra se actualiza cuando el sistema avisa.
         lifecycleScope.launch {
@@ -183,7 +207,19 @@ class HomeActivity : ComponentActivity() {
                         hint = homeHint,
                         safeMode = status.safeMode,
                         notice = notice,
-                        widget = widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } },
+                        screenTime = screenTime,
+                        widget = if (showHabits) {
+                            @Composable {
+                                HabitsWidget(
+                                    marks = habitMarks,
+                                    today = today,
+                                    onToggleToday = { toggleHabit(it, today) },
+                                    onOpen = { screen = Screen.Habits },
+                                )
+                            }
+                        } else {
+                            widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } }
+                        },
                         onOpen = ::launch,
                         onAdmin = ::askForAdmin,
                         onDrawer = { screen = Screen.Drawer },
@@ -262,10 +298,17 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.WidgetPicker -> WidgetPickerScreen(
                         choices = widgetChoices,
-                        hasWidget = widget != null,
+                        hasWidget = widget != null || showHabits,
+                        onPickHabits = ::pickHabits,
                         onPick = ::pickWidget,
                         onRemove = ::removeWidget,
                         onBack = { screen = Screen.Admin },
+                    )
+                    Screen.Habits -> HabitsScreen(
+                        marks = habitMarks,
+                        today = today,
+                        onToggle = ::toggleHabit,
+                        onBack = ::goHome,
                     )
                 }
             }
@@ -297,6 +340,11 @@ class HomeActivity : ComponentActivity() {
             }
             refreshStatus()
             refreshApps()
+        }
+        // Al volver a Inicio: mientras se mira Inicio, el tiempo no corre.
+        lifecycleScope.launch {
+            val millis = withContext(Dispatchers.Default) { ScreenTime.today(this@HomeActivity) }
+            screenTime = millis?.let { "Hoy: ${ScreenTime.format(it)} de pantalla" }
         }
         if (screen == Screen.Home && pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // Volver de Ajustes con Atrás también termina la sesión, no sólo Inicio.
@@ -540,6 +588,7 @@ class HomeActivity : ComponentActivity() {
             widgetHost.deleteAppWidgetId(previous)
         }
         prefs.widgetId = id
+        prefs.habitsWidget = false
         pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
         refreshWidget()
         endAdminSession()
@@ -558,12 +607,42 @@ class HomeActivity : ComponentActivity() {
         val id = prefs.widgetId
         if (id != AppWidgetManager.INVALID_APPWIDGET_ID) widgetHost.deleteAppWidgetId(id)
         prefs.widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+        prefs.habitsWidget = false
         refreshWidget()
         screen = Screen.Admin
     }
 
+    /** Los hábitos en el lugar del widget: el de otra app, si había, se suelta. */
+    private fun pickHabits() {
+        val id = prefs.widgetId
+        if (id != AppWidgetManager.INVALID_APPWIDGET_ID) widgetHost.deleteAppWidgetId(id)
+        prefs.widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+        prefs.habitsWidget = true
+        refreshWidget()
+        screen = Screen.Home
+    }
+
+    /** Marcar o desmarcar un día no pide contraseña: no afloja nada. Los días que no llegaron, no. */
+    private fun toggleHabit(habit: Habit, date: LocalDate) {
+        if (date.isAfter(LocalDate.now())) return
+        val current = Habits.parse(prefs.habitDays(habit))
+        val updated = if (date in current) current - date else current + date
+        prefs.setHabitDays(habit, updated.mapTo(mutableSetOf()) { it.toString() })
+        habitMarks = habitMarks + (habit to updated)
+    }
+
+    private fun refreshHabits() {
+        today = LocalDate.now()
+        habitMarks = Habit.entries.associateWith { Habits.parse(prefs.habitDays(it)) }
+    }
+
+    /** Hasta un segundo después de la medianoche, para no despertar un instante antes. */
+    private fun untilMidnight(): Long =
+        Duration.between(LocalDateTime.now(), LocalDate.now().plusDays(1).atStartOfDay()).toMillis() + 1_000L
+
     /** Si la app del widget se desinstaló, el lugar queda vacío. */
     private fun refreshWidget() {
+        showHabits = prefs.habitsWidget
         val id = prefs.widgetId
         val info = if (id != AppWidgetManager.INVALID_APPWIDGET_ID) widgetManager.getAppWidgetInfo(id) else null
         widget = info?.let { id to it }
@@ -594,7 +673,10 @@ class HomeActivity : ComponentActivity() {
         prefs.blockedSites = sites
         blockedSites = sites
         lifecycleScope.launch {
-            withContext(Dispatchers.Default) { Chrome.apply(this@HomeActivity, sites) }
+            withContext(Dispatchers.Default) {
+                runCatching { Fixed.applySites(this@HomeActivity) }
+                    .onFailure { Log.e(TAG, "No pude poner las páginas en Chrome", it) }
+            }
         }
     }
 
@@ -630,8 +712,9 @@ class HomeActivity : ComponentActivity() {
     private fun refreshApps() {
         appsLoad?.cancel()
         appsLoad = lifecycleScope.launch {
-            // Lo del nivel 2 no aparece en ningún lado: no se abre, ni se puede permitir.
-            val vetoed = prefs.vetoed + Fixed.APPS
+            // Lo del nivel 2 no aparece en ningún lado: no se abre, ni se puede
+            // permitir. Sin Device Owner (después de liberar) no hay nivel 2.
+            val vetoed = if (Policies.isDeviceOwner(this@HomeActivity)) prefs.vetoed + Fixed.APPS else emptySet()
             val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
                 .filterNot { it.packageName in vetoed }
             val active = shouldBeClosed()

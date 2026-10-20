@@ -45,6 +45,8 @@ fun HomeScreen(
     safeMode: Boolean,
     /** Un aviso corto abajo de la fecha, por ejemplo «Todo habilitado hasta las 17:52». */
     notice: String?,
+    /** «Hoy: 1 h 5 min de pantalla», o null sin acceso a los datos de uso. */
+    screenTime: String?,
     widget: (@Composable () -> Unit)?,
     onOpen: (LaunchableApp) -> Unit,
     onAdmin: () -> Unit,
@@ -66,6 +68,10 @@ fun HomeScreen(
             .padding(horizontal = 28.dp, vertical = 32.dp),
     ) {
         Clock(onLongPress = onAdmin)
+        if (screenTime != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(screenTime, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+        }
         if (notice != null) {
             Spacer(Modifier.height(12.dp))
             Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)

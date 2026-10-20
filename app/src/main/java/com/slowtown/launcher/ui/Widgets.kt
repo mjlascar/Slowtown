@@ -56,6 +56,7 @@ fun WidgetSlot(host: AppWidgetHost, id: Int, info: AppWidgetProviderInfo) {
 fun WidgetPickerScreen(
     choices: List<WidgetChoice>,
     hasWidget: Boolean,
+    onPickHabits: () -> Unit,
     onPick: (WidgetChoice) -> Unit,
     onRemove: () -> Unit,
     onBack: () -> Unit,
@@ -67,6 +68,20 @@ fun WidgetPickerScreen(
         )
         if (hasWidget) {
             OutlinedButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text("Sacar el widget") }
+        }
+        // El de Slowtown primero: es el que viene puesto.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onPickHabits)
+                .padding(vertical = 10.dp),
+        ) {
+            Text("Hábitos de Slowtown", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Meditar y ejercicio",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (choices.isEmpty()) HintText("Ninguna app instalada ofrece widgets.")
         choices.forEach { choice ->

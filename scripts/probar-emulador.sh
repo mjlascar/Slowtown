@@ -5,12 +5,15 @@
 # probados con Slowtown activo.
 #
 # En orden: instala y provisiona, activa Slowtown con cuatro apps, intenta
-# escaparse, abre una app permitida, atiende una llamada, recibe un SMS, busca
-# y abre una app desde la lista de todas, saca y vuelve a poner una app en
-# Inicio, pone y saca un widget, arma y borra una carpeta, usa las dos veces
-# de «Habilitar todo», prueba el nivel 2, abre Ajustes desde la
-# administración, reinicia, cuenta las reglas de Inicio fijo, fuerza tres
-# crashes y usa la salida por cable.
+# escaparse, abre una app permitida, mira el tiempo de pantalla de Inicio
+# (sube con un rato en el Reloj, y sin el acceso al uso no está), atiende una
+# llamada, recibe un SMS, busca y abre una app desde la lista de todas, saca
+# y vuelve a poner una app en Inicio, marca hábitos (los botones de hoy y un
+# día en el resumen), cambia el pie de Inicio entre el widget del Reloj y los
+# hábitos, arma y borra una carpeta, usa las dos veces de «Habilitar todo»,
+# prueba el nivel 2, abre Ajustes desde la administración, reinicia (y los
+# hábitos siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes y
+# usa la salida por cable.
 #
 # El nivel 2: el navegador del emulador (WebView Browser Tester) pausado por
 # el Device Owner, sin abrirse, sin aparecer en ninguna lista y sin poder
@@ -117,6 +120,23 @@ TXT_YA_FIJA='Ésa ya está bloqueada siempre.'
 TXT_SOLTAR='Dejar de ser Device Owner'       # el botón que ya no está en la administración
 TXT_SOLO_CABLE='sólo por cable'              # un pedazo de lo que dice ahora, al pie de la administración
 TXT_SIN_COINCIDENCIAS='No hay ninguna app con ese nombre.'   # el buscador de la lista de todas
+TXT_PANTALLA_RE='^Hoy: (.+) de pantalla$'    # bajo la fecha, con acceso al uso: «Hoy: 1 h 5 min de pantalla»
+TXT_MENOS_DE_UN_MINUTO='menos de un minuto'  # el tiempo de pantalla, antes del primer minuto
+TXT_HOY_MEDITAR='Meditación de hoy'          # los botones de hoy de los hábitos, por su descripción
+TXT_HOY_EJERCICIO='Ejercicio de hoy'
+TXT_FILA_HABITO=', últimos 7 días: '         # «Meditar, últimos 7 días: 1 de 2. Ver el resumen»
+TXT_VER_RESUMEN='. Ver el resumen'
+TXT_HABITOS_TITULO='Hábitos'                 # el resumen
+TXT_HABITOS_PISTA='Tocá un día para marcarlo o desmarcarlo.'
+TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
+TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
+INICIALES=LMXJVSD                            # los días del widget de hábitos, de lunes a domingo
+DIAS_ES=(lunes martes miércoles jueves viernes sábado domingo)   # las celdas del resumen:
+MESES_ES=(enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre)   # «Meditar, domingo 18 de octubre: no»
+HABITOS=(meditar ejercicio)                  # como los guarda Slowtown: habit_meditar y habit_ejercicio
+declare -A HABITO_NOMBRE=([meditar]=Meditar [ejercicio]=Ejercicio)
+declare -A HABITO_META=([meditar]=2 [ejercicio]=3)
+declare -A HABITO_BOTON=([meditar]="$TXT_HOY_MEDITAR" [ejercicio]="$TXT_HOY_EJERCICIO")
 CARPETA=Utilitario                           # la carpeta que se crea (en pantalla, en mayúsculas)
 APP_CARPETA=Clock                            # la que se mueve a la carpeta
 PAGINA=ejemplo.com                           # la que se suma y se saca en «Páginas bloqueadas»
@@ -208,6 +228,8 @@ CARTEL=0
 LISTA=''   # la última lista que vio esperar_apps, en una línea
 RESTRICCIONES=''   # las últimas políticas de Chrome que leyó politicas_chrome
 N_POLITICAS=0
+HABITO_HOY=''      # lo que marca el paso 8b: ejercicio hoy y meditar ayer (fechas ISO)
+HABITO_AYER=''
 declare -A CAMBIAR=() VISTAS=()
 
 # ── Lectura de pantallas ────────────────────────────────────────────────────
@@ -223,6 +245,8 @@ declare -A CAMBIAR=() VISTAS=()
 #   hay REGEX                          los nodos cuyo id o texto calzan (sale 1 si ninguno)
 #   libre TIPO CONSULTA PAQUETE        como texto/regex, pero sólo en ese paquete y sale 4
 #                                      si otra ventana (un aviso) tapa ese punto
+#   marcado CONSULTA                   «checkable checked» del primer nodo con ese texto o
+#                                      descripción, p. ej. «true false» (sale 1 si no está)
 #   valido                             si el XML se puede leer
 PY_UI=$(cat <<'PY'
 import re
@@ -330,6 +354,13 @@ def main(modo, archivo, *args):
                     if r.search(n.get('resource-id') or '') or any(r.search(t) for t in textos(n))]
         print('\n'.join(hallados))
         return 0 if hallados else 1
+    if modo == 'marcado':
+        cumple = criterio('texto', args[0])
+        for n, b in lista:
+            if cumple(n):
+                print(n.get('checkable') or 'false', n.get('checked') or 'false')
+                return 0
+        return 1
     if modo == 'libre':
         tipo, consulta, paquete = args
         cumple = criterio(tipo, consulta)
@@ -775,10 +806,13 @@ activar_slowtown() {   # en Administración: deja Slowtown activo pasando siempr
 }
 
 etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una por línea
-  # «ui textos» ya deja afuera lo de un widget.
-  local x y arriba abajo t
+  # «ui textos» ya deja afuera lo de un widget de otra app; lo que va al pie,
+  # debajo de «↑ todas las apps» (ese widget o los hábitos), tampoco son apps.
+  local x y arriba abajo t pie
+  pie=$(ui textos | awk -F'\t' -v t="$TXT_TODAS" '$5 == t { print $3; exit }')
   while IFS=$'\t' read -r x y arriba abajo t; do
-    [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE ]] && continue
+    [[ -n $pie ]] && (( arriba >= pie )) && continue
+    [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE ]] && continue
     [[ $t == "$TXT_INICIO_SIN_APPS" || $t == "$TXT_INICIO_SIN_PERMITIDAS" || $t == "$TXT_TODAS" ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
@@ -1104,6 +1138,152 @@ cerrar_teclado() {   # Atrás sólo si el teclado está abierto: si no, Atrás c
   esperar 5 "! $(c_teclado)"
 }
 
+esperar_que_no() {   # esperar_que_no SEGUNDOS TIPO CONSULTA: hasta que la pantalla ya no muestre eso
+  local fin=$((SECONDS + $1))
+  until volcar_ui && ! ui "$2" "$3" >/dev/null; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+
+# ── Hábitos y tiempo de pantalla ────────────────────────────────────────────
+# Los hábitos van por día, el del emulador: LocalDate.now() de Slowtown, con
+# la zona del emulador. Las cuentas de fechas se hacen de este lado, con
+# fechas ISO (date -u: sin horas, no hay husos que se metan).
+hoy_en_el_emulador() { disp date +%F; }
+dia_mas() { date -u -d "$1 $2 day" +%F; }   # dia_mas FECHA N: N días después (antes, si N es negativo)
+lunes_de() { dia_mas "$1" $((1 - $(date -u -d "$1" +%u))); }   # el lunes de la semana de esa fecha
+contar_entre() {   # contar_entre DESDE HASTA: cuántas de las fechas de stdin caen entre las dos
+  awk -v a="$1" -v b="$2" '$0 != "" && $0 >= a && $0 <= b { n++ } END { print n + 0 }'
+}
+racha_de() {   # racha_de META HOY: semanas seguidas, de lunes a domingo, con la meta cumplida (fechas en stdin)
+  # Como Habits.streak: la semana de ahora cuenta si ya está cumplida; si no,
+  # todavía hay tiempo y se cuenta desde la anterior.
+  local meta=$1 fechas lunes n=0
+  fechas=$(cat)
+  lunes=$(lunes_de "$2")
+  (( $(contar_entre "$lunes" "$(dia_mas "$lunes" 6)" <<<"$fechas") < meta )) && lunes=$(dia_mas "$lunes" -7)
+  while (( $(contar_entre "$lunes" "$(dia_mas "$lunes" 6)" <<<"$fechas") >= meta )); do
+    n=$((n + 1))
+    lunes=$(dia_mas "$lunes" -7)
+  done
+  echo "$n"
+}
+iniciales_de() {   # iniciales_de HOY: las de los últimos 7 días, hoy a la derecha («MXJVSDL» un lunes)
+  local i u s=''
+  for i in 6 5 4 3 2 1 0; do
+    u=$(date -u -d "$1 -$i day" +%u)
+    s+=${INICIALES:u-1:1}
+  done
+  echo "$s"
+}
+iniciales_vistas() {   # las iniciales del widget de hábitos, de izquierda a derecha, en el último volcado
+  ui textos | awk -F'\t' -v l="$INICIALES" 'length($5) == 1 && index(l, $5) { print $1 "\t" $5 }' |
+    sort -n | cut -f2 | tr -d '\n'
+}
+celda_re() {   # celda_re NOMBRE FECHA: el comienzo de la descripción de esa celda del resumen, como regex
+  # «Meditar, domingo 18 de octubre: », como lo escribe Java en castellano;
+  # septiembre va con las dos formas, por si es «setiembre».
+  local u d m mes
+  u=$(date -u -d "$2" +%u)
+  d=$(date -u -d "$2" +%-d)
+  m=$(date -u -d "$2" +%-m)
+  mes=${MESES_ES[m - 1]}
+  (( m == 9 )) && mes='(septiembre|setiembre)'
+  echo "^$1, ${DIAS_ES[u - 1]} $d de $mes: "
+}
+dias_de_habito() {   # dias_de_habito HÁBITO: las fechas que tiene guardadas (meditar o ejercicio), una por línea
+  # Un conjunto vacío Android lo escribe «<set name="..." />».
+  local prefs
+  prefs=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml)
+  awk -v k="habit_$1" '
+    index($0, "<set name=\"" k "\"") { if ($0 ~ /\/>/) exit; dentro = 1; next }
+    dentro && /<\/set>/ { exit }
+    dentro { gsub(/.*<string>|<\/string>.*/, ""); print }' <<<"$prefs" | sort
+}
+esperar_dia() {   # esperar_dia HÁBITO FECHA si|no: hasta que esté (o no) entre las guardadas
+  # Slowtown guarda con apply(): llega al disco un momento después.
+  local fin=$((SECONDS + 10)) esta
+  while :; do
+    if grep -qxF "$2" <<<"$(dias_de_habito "$1")"; then esta=si; else esta=no; fi
+    [ "$esta" = "$3" ] && return 0
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+esperar_marcado() {   # esperar_marcado DESCRIPCIÓN true|false: hasta que ese botón esté (o no) marcado
+  local fin=$((SECONDS + 10)) e
+  until volcar_ui && e=$(ui marcado "$1") && [ "$e" = "true $2" ]; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+esperar_lejos_de_medianoche() {   # si falta poco para la medianoche del emulador, espera que pase
+  # Los hábitos van por día: que no cambie en el medio de las verificaciones.
+  local h m s falta
+  IFS=: read -r h m s <<<"$(disp date +%H:%M:%S)"
+  [[ $h =~ ^[0-9]+$ && $m =~ ^[0-9]+$ && $s =~ ^[0-9]+$ ]] || return 0
+  falta=$((86400 - 10#$h * 3600 - 10#$m * 60 - 10#$s))
+  if (( falta < 240 )); then
+    nota "faltan $falta s para la medianoche del emulador: espero, para que el día no cambie en el medio"
+    adb_t $((falta + 40)) shell "sleep $((falta + 5))" >/dev/null 2>&1
+  fi
+}
+afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos como están guardados
+  # Por hábito: «N/meta» con N de los últimos 7 días, la fila con la misma
+  # cuenta, y el botón de hoy marcado si hoy está guardado. Más las iniciales.
+  local que=$1 hoy h dias n esperado e marcado mal_=() dice=()
+  hoy=$(hoy_en_el_emulador)
+  if ! esperar_ui 10 texto "$TXT_HOY_MEDITAR"; then
+    mal "$que: Inicio no muestra los hábitos"
+    return 1
+  fi
+  for h in "${HABITOS[@]}"; do
+    dias=$(dias_de_habito "$h")
+    n=$(contar_entre "$(dia_mas "$hoy" -6)" "$hoy" <<<"$dias")
+    esperado="$n/${HABITO_META[$h]}"
+    ui texto "$esperado" >/dev/null || mal_+=("no dice $esperado para $h")
+    ui texto "${HABITO_NOMBRE[$h]}$TXT_FILA_HABITO$n de ${HABITO_META[$h]}$TXT_VER_RESUMEN" >/dev/null ||
+      mal_+=("la fila de $h no dice «$n de ${HABITO_META[$h]}»")
+    if grep -qxF "$hoy" <<<"$dias"; then marcado=true; else marcado=false; fi
+    e=$(ui marcado "${HABITO_BOTON[$h]}")
+    [ "$e" = "true $marcado" ] || mal_+=("«${HABITO_BOTON[$h]}» está «${e:-?}» y tendría que ser «true $marcado»")
+    dice+=("$h $esperado$( [ "$marcado" = true ] && echo ', hoy sí')")
+  done
+  e=$(iniciales_vistas)
+  [ "$e" = "$(iniciales_de "$hoy")" ] || mal_+=("los días dicen «$e» y tendrían que ser «$(iniciales_de "$hoy")»")
+  if (( ${#mal_[@]} )); then
+    mal "$que: $(printf '%s; ' "${mal_[@]}")"
+  else
+    ok "$que: Inicio muestra los hábitos como están guardados ($(printf '%s; ' "${dice[@]}" | sed 's/; $//'))"
+  fi
+}
+
+texto_pantalla() {   # lo que dice el tiempo de pantalla en el último volcado, sin «Hoy: » ni « de pantalla»
+  local x y arriba abajo t
+  while IFS=$'\t' read -r x y arriba abajo t; do
+    if [[ $t =~ $TXT_PANTALLA_RE ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done < <(ui textos)
+  return 1
+}
+minutos_de() {   # minutos_de TIEMPO: «1 h 5 min» → 65, «45 min» → 45, «menos de un minuto» → 0
+  local h m
+  if [ "$1" = "$TXT_MENOS_DE_UN_MINUTO" ]; then echo 0; return 0; fi
+  [[ $1 =~ ^(([0-9]+) h)?( ?([0-9]+) min)?$ ]] || return 1
+  h=${BASH_REMATCH[2]}
+  m=${BASH_REMATCH[4]}
+  [[ -n $h || -n $m ]] || return 1
+  echo $(( ${h:-0} * 60 + ${m:-0} ))
+}
+volver_desde_el_reloj() {   # abre el Reloj (permitido) y vuelve a Inicio: así Inicio se reanuda
+  disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+  esperar 10 "$(c_foco "$FOCO_RELOJ")"
+  ir_a_inicio
+}
+
 # ── 0. El dispositivo ───────────────────────────────────────────────────────
 paso_0() {
   titulo 0 "Dispositivo"
@@ -1320,6 +1500,75 @@ paso_4() {
   captura reloj
   ir_a_inicio
   afirmar_en_inicio "Inicio vuelve a Slowtown"
+}
+
+# ── 4b. Tiempo de pantalla ──────────────────────────────────────────────────
+# Bajo la fecha, «Hoy: 1 h 5 min de pantalla»: la misma cuenta que Bienestar
+# digital, con UsageStatsManager. Necesita el acceso al uso, que da
+# provisionar.sh (appops GET_USAGE_STATS); sin él, la línea no está.
+paso_4b() {
+  titulo 4b "Tiempo de pantalla en Inicio"
+  local out t1 t2 m1 m2 quieta
+  out=$(disp appops get "$PAQUETE" GET_USAGE_STATS)
+  if grep -q 'GET_USAGE_STATS: allow' <<<"$out"; then
+    ok "provisionar.sh le dio a Slowtown el acceso al uso (appops GET_USAGE_STATS allow)"
+  else
+    mal "Slowtown no tiene el acceso al uso: $(head -n 1 <<<"$out")"
+  fi
+  ir_a_inicio
+  if ! esperar_ui 10 regex "$TXT_PANTALLA_RE"; then
+    mal "Inicio no muestra «Hoy: … de pantalla» bajo la fecha"
+    return
+  fi
+  t1=$(texto_pantalla)
+  if ! m1=$(minutos_de "$t1"); then
+    mal "no entiendo el tiempo de pantalla «$t1»"
+    return
+  fi
+  ok "bajo la fecha, Inicio muestra «Hoy: $t1 de pantalla»"
+
+  # Un rato en una app permitida, con la pantalla prendida aunque nadie la toque.
+  quieta=$(disp settings get global stay_on_while_plugged_in)
+  [[ $quieta =~ ^[0-9]+$ ]] || quieta=0
+  disp svc power stayon true >/dev/null
+  disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+  if esperar 10 "$(c_foco "$FOCO_RELOJ")"; then
+    nota "70 segundos en el Reloj"
+    adb_t 100 shell 'sleep 70' >/dev/null 2>&1
+    [[ $(foco) == *"$FOCO_RELOJ"* ]] || nota "a los 70 segundos el Reloj ya no estaba al frente ($(foco))"
+  else
+    mal "no se abre el Reloj ($(foco))"
+  fi
+  ir_a_inicio
+  disp settings put global stay_on_while_plugged_in "$quieta" >/dev/null
+  if esperar_ui 10 regex "$TXT_PANTALLA_RE" && t2=$(texto_pantalla) && m2=$(minutos_de "$t2"); then
+    if (( m2 >= m1 + 1 )); then
+      ok "70 segundos en el Reloj suman al menos un minuto: de «$t1» a «$t2»"
+    else
+      mal "después de 70 segundos en el Reloj dice «$t2», y antes decía «$t1»"
+    fi
+  else
+    mal "después del Reloj, el tiempo de pantalla no está o no se entiende («${t2:-}»)"
+  fi
+  captura tiempo-de-pantalla
+
+  # Sin el acceso al uso, la línea no está; con el acceso, vuelve. Inicio la
+  # recalcula al reanudarse: se sale al Reloj y se vuelve.
+  disp appops set "$PAQUETE" GET_USAGE_STATS deny >/dev/null
+  volver_desde_el_reloj
+  if esperar_que_no 10 regex "$TXT_PANTALLA_RE"; then
+    ok "sin el acceso al uso (appops deny), Inicio no muestra el tiempo de pantalla"
+  else
+    mal "sin el acceso al uso, Inicio sigue mostrando «Hoy: $(texto_pantalla) de pantalla»"
+  fi
+  disp appops set "$PAQUETE" GET_USAGE_STATS allow >/dev/null
+  volver_desde_el_reloj
+  if esperar_ui 10 regex "$TXT_PANTALLA_RE"; then
+    ok "con el acceso de vuelta (allow), vuelve: «Hoy: $(texto_pantalla) de pantalla»"
+  else
+    mal "con el acceso de vuelta, Inicio no muestra el tiempo de pantalla"
+  fi
+  afirmar_en_inicio "nada de esto toca el cierre: Slowtown y LOCKED"
 }
 
 # ── 5. Llamada entrante ─────────────────────────────────────────────────────
@@ -1547,10 +1796,146 @@ paso_8() {
   afirmar_en_inicio "nada de esto pidió la contraseña: sigue en Slowtown y LOCKED"
 }
 
+# ── 8b. Hábitos ─────────────────────────────────────────────────────────────
+# Meditar 2 veces por semana y ejercicio 3, marcados desde Inicio: sin widget
+# de otra app, van al pie, en su lugar. Los botones marcan hoy; el resumen,
+# cualquier día que ya pasó. Slowtown los guarda en sus preferencias, como
+# fechas ISO (se leen con run-as: la build es depurable). Sin contraseña.
+paso_8b() {
+  titulo 8b "Hábitos en Inicio: meditar 2 veces por semana y ejercicio 3"
+  local hoy ayer h e celda esperado dias xy_b xy_t limpios=1
+  ir_a_inicio
+  esperar_lejos_de_medianoche
+  hoy=$(hoy_en_el_emulador)
+  ayer=$(dia_mas "$hoy" -1)
+  if ! esperar_ui 10 texto "$TXT_HOY_MEDITAR"; then
+    mal "Inicio no muestra los hábitos al pie (no encuentro «$TXT_HOY_MEDITAR»)"
+    return
+  fi
+  e=$(iniciales_vistas)
+  xy_b=$(ui texto "$TXT_HOY_MEDITAR")
+  xy_t=$(ui texto "$TXT_TODAS") || xy_t='0 99999'
+  if [ "$e" != "$(iniciales_de "$hoy")" ]; then
+    mal "los días del widget de hábitos dicen «$e» y tendrían que ser «$(iniciales_de "$hoy")»"
+  elif (( ${xy_b#* } < ${xy_t#* } )); then
+    mal "los hábitos no están al pie: quedan arriba de «$TXT_TODAS»"
+  else
+    ok "sin widget elegido, Inicio muestra los hábitos al pie, con los últimos 7 días: $e (hoy a la derecha)"
+  fi
+  # De entrada, hoy sin marcar. Lo que quedó de una corrida anterior se desmarca.
+  for h in "${HABITOS[@]}"; do
+    volcar_ui
+    e=$(ui marcado "${HABITO_BOTON[$h]}")
+    case $e in
+      'true false') ;;
+      'true true')
+        limpios=0
+        nota "«${HABITO_BOTON[$h]}» quedó marcado de una corrida anterior: lo desmarco"
+        tocar_en_inicio texto "${HABITO_BOTON[$h]}"
+        esperar_marcado "${HABITO_BOTON[$h]}" false || mal "no pude desmarcar «${HABITO_BOTON[$h]}»"
+        ;;
+      *)
+        limpios=0
+        mal "«${HABITO_BOTON[$h]}» no es un botón que se marca (checkable/checked: ${e:-no está})"
+        ;;
+    esac
+  done
+  (( limpios )) && ok "los dos botones de hoy, «$TXT_HOY_MEDITAR» y «$TXT_HOY_EJERCICIO», empiezan sin marcar"
+
+  # Meditar hoy: se marca y se desmarca. Ejercicio hoy queda marcado.
+  if tocar_en_inicio texto "$TXT_HOY_MEDITAR" && esperar_marcado "$TXT_HOY_MEDITAR" true &&
+    esperar_dia meditar "$hoy" si; then
+    ok "tocar «$TXT_HOY_MEDITAR» lo marca, y Slowtown guarda $hoy en habit_meditar"
+  else
+    mal "tocar «$TXT_HOY_MEDITAR» no lo marca o no guarda $hoy (guardadas: $(dias_de_habito meditar | en_una_linea))"
+  fi
+  if tocar_en_inicio texto "$TXT_HOY_MEDITAR" && esperar_marcado "$TXT_HOY_MEDITAR" false &&
+    esperar_dia meditar "$hoy" no; then
+    ok "tocarlo otra vez lo desmarca, y $hoy sale de habit_meditar"
+  else
+    mal "tocar otra vez «$TXT_HOY_MEDITAR» no lo desmarca (guardadas: $(dias_de_habito meditar | en_una_linea))"
+  fi
+  if tocar_en_inicio texto "$TXT_HOY_EJERCICIO" && esperar_marcado "$TXT_HOY_EJERCICIO" true &&
+    esperar_dia ejercicio "$hoy" si; then
+    ok "tocar «$TXT_HOY_EJERCICIO» lo marca, y Slowtown guarda $hoy en habit_ejercicio"
+  else
+    mal "tocar «$TXT_HOY_EJERCICIO» no lo marca o no guarda $hoy (guardadas: $(dias_de_habito ejercicio | en_una_linea))"
+  fi
+  captura habitos-inicio
+
+  # El resumen, tocando los cuadraditos de meditar.
+  if ! { tocar_en_inicio contiene "${HABITO_NOMBRE[meditar]}$TXT_FILA_HABITO" &&
+    esperar_ui 10 texto "$TXT_HABITOS_PISTA"; }; then
+    mal "tocar los días de meditar no abre el resumen ($(foco))"
+    ir_a_inicio
+    return
+  fi
+  if ui texto "$TXT_HABITOS_TITULO" >/dev/null && ui texto "${HABITO_NOMBRE[meditar]}" >/dev/null &&
+    ui texto "${HABITO_META[meditar]} por semana" >/dev/null; then
+    ok "tocar los días de meditar abre el resumen «$TXT_HABITOS_TITULO»: «$TXT_HABITOS_PISTA»"
+  else
+    mal "el resumen no tiene el título «$TXT_HABITOS_TITULO» o «${HABITO_NOMBRE[meditar]}, ${HABITO_META[meditar]} por semana»"
+  fi
+  # Ayer, para el que se olvidó de marcarlo. Los días que vienen no tienen celda.
+  celda=$(celda_re "${HABITO_NOMBRE[meditar]}" "$ayer")
+  if ui regex "${celda}sí\$" >/dev/null; then
+    nota "ayer ya estaba marcado (de una corrida anterior): lo desmarco primero"
+    tocar regex "${celda}sí\$"
+    esperar_ui 10 regex "${celda}no\$" || mal "no pude desmarcar ayer en el resumen"
+  fi
+  if tocar regex "${celda}no\$" && esperar_ui 10 regex "${celda}sí\$" && esperar_dia meditar "$ayer" si; then
+    ok "en el resumen, tocar ayer (${celda#^}no) lo pasa a «sí», y Slowtown guarda $ayer"
+  else
+    mal "en el resumen no pude marcar ayer: busqué «${celda}no» (guardadas: $(dias_de_habito meditar | en_una_linea))"
+  fi
+  if ui regex "$(celda_re "${HABITO_NOMBRE[meditar]}" "$(dia_mas "$hoy" 1)")" >/dev/null; then
+    mal "el resumen tiene una celda para mañana"
+  fi
+  # La línea de cuentas de cada hábito, contra lo guardado.
+  for h in "${HABITOS[@]}"; do
+    dias=$(dias_de_habito "$h")
+    esperado="Esta semana: $(contar_entre "$(lunes_de "$hoy")" "$(dia_mas "$(lunes_de "$hoy")" 6)" <<<"$dias") de ${HABITO_META[$h]}"
+    esperado+=" · Semanas cumplidas seguidas: $(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")"
+    esperado+=" · Días en total: $(contar_entre 0000-00-00 "$hoy" <<<"$dias")"
+    volcar_ui
+    if ! ui texto "$esperado" >/dev/null; then
+      arrastrar 70 45
+      volcar_ui
+    fi
+    if ui texto "$esperado" >/dev/null; then
+      ok "${HABITO_NOMBRE[$h]}: «$esperado»"
+    else
+      mal "${HABITO_NOMBRE[$h]}: no encuentro «$esperado» (dice: $(ui textos | cut -f5 | grep 'Esta semana' | en_una_linea))"
+    fi
+  done
+  captura habitos-resumen
+  # «Volver» vuelve a Inicio.
+  if tocar_desplazando texto "$TXT_VOLVER" && esperar_ui 10 texto "$TXT_TODAS"; then
+    ok "«$TXT_VOLVER» vuelve a Inicio"
+  else
+    mal "«$TXT_VOLVER» no vuelve del resumen a Inicio ($(foco))"
+    ir_a_inicio
+  fi
+  afirmar_habitos "de vuelta en Inicio"
+  HABITO_HOY=$hoy
+  HABITO_AYER=$ayer
+  afirmar_en_inicio "los hábitos no piden contraseña: Slowtown sigue activo (LOCKED)"
+}
+
 # ── 9. Widget de Inicio ─────────────────────────────────────────────────────
+# El lugar del pie es de un widget: el de una app (el Reloj) o los hábitos de
+# Slowtown, que vienen puestos. Elegir uno saca al otro, y «Sacar el widget»
+# saca el que esté.
+abrir_lista_de_widgets() {   # desde Inicio hasta la lista de widgets de la administración
+  entrar_admin || { nota "no pude entrar a la administración"; return 1; }
+  tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_WIDGET_TITULO"
+}
+elegir_habitos_en_la_lista() {   # en la lista de widgets: «Hábitos de Slowtown», y de vuelta en Inicio
+  tocar_desplazando texto "$TXT_HABITOS_WIDGET" && esperar_ui 15 texto "$TXT_TODAS"
+}
 paso_9() {
-  titulo 9 "Widget de Inicio: $WIDGET_RELOJ"
-  local w etiqueta paquetes dichos armados
+  titulo 9 "Widget de Inicio: $WIDGET_RELOJ y los hábitos"
+  local w etiqueta paquetes dichos armados xy_h xy_r
   ir_a_inicio
   # provisionar.sh corre «appwidget grantbind»: sin ese permiso, Android
   # pregunta con un diálogo de Ajustes antes de armar el widget.
@@ -1559,18 +1944,19 @@ paso_9() {
   else
     mal "Slowtown no tiene permiso para poner widgets sin preguntar: ¿provisionar.sh no corrió appwidget grantbind?"
   fi
-  if ! entrar_admin; then
-    mal "no pude entrar a la administración"
-    ir_a_inicio
-    return
-  fi
-  if ! { tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_WIDGET_TITULO"; }; then
+  if ! abrir_lista_de_widgets; then
     mal "«$TXT_ELEGIR_WIDGET» no abre la lista de widgets"
     ir_a_inicio
     return
   fi
   # La lista carga en segundo plano: primero se la espera, después se toca.
   esperar_ui 10 texto "$WIDGET_RELOJ"
+  if xy_h=$(ui texto "$TXT_HABITOS_WIDGET") && xy_r=$(ui texto "$WIDGET_RELOJ") &&
+    ui texto "$TXT_HABITOS_WIDGET_SUB" >/dev/null && (( ${xy_h#* } < ${xy_r#* } )); then
+    ok "la lista ofrece primero «$TXT_HABITOS_WIDGET» («$TXT_HABITOS_WIDGET_SUB»), antes que los widgets de las apps"
+  else
+    mal "la lista de widgets no ofrece primero «$TXT_HABITOS_WIDGET» con «$TXT_HABITOS_WIDGET_SUB»"
+  fi
   captura lista-de-widgets
   if ! tocar_desplazando texto "$WIDGET_RELOJ"; then
     mal "no encuentro «$WIDGET_RELOJ» en la lista de widgets"
@@ -1602,6 +1988,11 @@ paso_9() {
     else
       mal "Inicio muestra el widget «$etiqueta», con nodos de $paquetes ($dichos): tendría que ser «$WIDGET_RELOJ», de $PAQUETE_RELOJ"
     fi
+    if ui texto "$TXT_HOY_MEDITAR" >/dev/null; then
+      mal "con el widget del Reloj, Inicio sigue mostrando los hábitos"
+    else
+      ok "y en su lugar: los hábitos ya no están"
+    fi
   else
     armados=$(widgets_armados | en_una_linea)
     mal "Inicio no muestra ningún widget (Android lo tiene armado para Slowtown: ${armados:-no})"
@@ -1613,31 +2004,50 @@ paso_9() {
   esperar 10 "! $(c_sesion)" || nota "la lista de lock task todavía tiene a Ajustes, como en una sesión"
   intento_am_start "Ajustes con am start después de elegir el widget" "$FOCO_AJUSTES" -a android.settings.SETTINGS
 
-  if ! entrar_admin; then
-    mal "no pude entrar a la administración para sacar el widget"
+  # Los hábitos de vuelta: sacan al Reloj, y con las marcas de antes.
+  if abrir_lista_de_widgets && elegir_habitos_en_la_lista; then
+    afirmar_en_inicio "elegir «$TXT_HABITOS_WIDGET» vuelve a Inicio: Slowtown y LOCKED"
+    afirmar_habitos "con «$TXT_HABITOS_WIDGET» elegido otra vez"
+    if esperar_sin_widget 10; then
+      ok "y el widget del Reloj ya no está"
+    else
+      mal "con los hábitos elegidos, Inicio sigue mostrando un widget: $(ui widgets | tr '\t' ' ')"
+    fi
+    armados=$(widgets_armados | en_una_linea)
+    if [ -z "$armados" ]; then
+      ok "Android ya no tiene ningún widget armado para Slowtown"
+    else
+      mal "Android sigue con widgets armados para Slowtown: $armados"
+    fi
+  else
+    mal "no pude volver a elegir «$TXT_HABITOS_WIDGET» ($(foco))"
     ir_a_inicio
-    return
   fi
-  if tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_SACAR_WIDGET" &&
+
+  # «Sacar el widget» saca el que esté, también los hábitos.
+  if abrir_lista_de_widgets && esperar_ui 10 texto "$TXT_SACAR_WIDGET" &&
     tocar_desplazando texto "$TXT_SACAR_WIDGET" && esperar_ui 10 texto "$TXT_ADMIN"; then
     nota "«$TXT_SACAR_WIDGET» vuelve a la administración"
   else
-    mal "no pude usar «$TXT_SACAR_WIDGET» ($(foco))"
+    mal "con los hábitos puestos, no pude usar «$TXT_SACAR_WIDGET» ($(foco))"
   fi
   ir_a_inicio
   afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
-  if esperar_sin_widget 10; then
-    ok "Inicio ya no muestra el widget"
+  if esperar_que_no 10 texto "$TXT_HOY_MEDITAR" && ! ui widgets >/dev/null; then
+    ok "«$TXT_SACAR_WIDGET» saca los hábitos: el pie de Inicio queda vacío"
   else
-    mal "Inicio sigue mostrando un widget: $(ui widgets | tr '\t' ' ')"
-  fi
-  armados=$(widgets_armados | en_una_linea)
-  if [ -z "$armados" ]; then
-    ok "y Android ya no tiene ningún widget armado para Slowtown"
-  else
-    mal "Android sigue con widgets armados para Slowtown: $armados"
+    mal "después de «$TXT_SACAR_WIDGET», Inicio sigue mostrando los hábitos o un widget"
   fi
   captura sin-widget
+
+  # Y se dejan puestos, como vienen, para lo que sigue.
+  if abrir_lista_de_widgets && elegir_habitos_en_la_lista && esperar_ui 10 texto "$TXT_HOY_MEDITAR"; then
+    ok "«$TXT_HABITOS_WIDGET» los vuelve a poner"
+  else
+    mal "no pude volver a poner los hábitos ($(foco))"
+    ir_a_inicio
+  fi
+  afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
 }
 
 # ── 9b. Carpetas ────────────────────────────────────────────────────────────
@@ -2140,6 +2550,17 @@ paso_11() {
   fi
   # La pausa la guarda Android: no depende de que Slowtown llegue a arrancar.
   afirmar_pausada "después de reiniciar"
+  # Los hábitos, Slowtown en sus preferencias: tienen que seguir ahí.
+  if [ -n "$HABITO_HOY" ]; then
+    if grep -qxF "$HABITO_HOY" <<<"$(dias_de_habito ejercicio)" &&
+      grep -qxF "$HABITO_AYER" <<<"$(dias_de_habito meditar)"; then
+      ok "después de reiniciar siguen guardados ejercicio $HABITO_HOY y meditar $HABITO_AYER"
+    else
+      mal "después de reiniciar faltan hábitos: ejercicio $(dias_de_habito ejercicio | en_una_linea); meditar $(dias_de_habito meditar | en_una_linea)"
+    fi
+    ir_a_inicio
+    afirmar_habitos "después de reiniciar"
+  fi
   captura tras-reinicio
 }
 
@@ -2487,10 +2908,12 @@ paso_1
 paso_2
 paso_3
 paso_4
+paso_4b
 paso_5
 paso_6
 paso_7
 paso_8
+paso_8b
 paso_9
 paso_9b
 paso_9c
