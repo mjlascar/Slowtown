@@ -7,11 +7,26 @@
 # En orden: instala y provisiona, activa Slowtown con cuatro apps, intenta
 # escaparse, abre una app permitida, atiende una llamada, recibe un SMS, busca
 # y abre una app desde la lista de todas, saca y vuelve a poner una app en
-# Inicio, pone y saca un widget, abre Ajustes desde la administración,
-# reinicia, cuenta las reglas de Inicio fijo, fuerza tres crashes y usa la
-# salida por cable. Cada verificación imprime ✅ o ❌. Después de una falla la
-# prueba sigue, salvo que sin eso lo que viene no pruebe nada; si hubo alguna
-# ❌, termina con código 1.
+# Inicio, pone y saca un widget, arma y borra una carpeta, usa las dos veces
+# de «Habilitar todo», prueba el nivel 2, abre Ajustes desde la
+# administración, reinicia, cuenta las reglas de Inicio fijo, fuerza tres
+# crashes y usa la salida por cable.
+#
+# El nivel 2: el navegador del emulador (WebView Browser Tester) pausado por
+# el Device Owner, sin abrirse, sin aparecer en ninguna lista y sin poder
+# desinstalarse; las políticas de Chrome guardadas; «Páginas bloqueadas» suma
+# y saca una página, y no suma una de las fijas; dos apps de prueba que la
+# corrida arma con aapt2 (un navegador y una «NewPipe») quedan pausadas apenas
+# se instalan; y no hay «Dejar de ser Device Owner». Se mira también con
+# Slowtown en pausa, con todo habilitado, después de reiniciar y con la
+# guardia de crashes abierta. La salida por cable tiene que rechazar a
+# cualquiera que no sea adb, sacar el nivel 2, el bloqueo y el Inicio fijo y
+# dejar a Slowtown en pausa; después se prueba también liberar.sh --forzar.
+# Después de cada salida se vuelve a provisionar, y el nivel 2 vuelve solo.
+#
+# Cada verificación imprime ✅ o ❌. Después de una falla la prueba sigue, salvo
+# que sin eso lo que viene no pruebe nada; si hubo alguna ❌, termina con
+# código 1.
 #
 #   ./scripts/probar-emulador.sh                   # con el APK ya compilado
 #   ./scripts/probar-emulador.sh --build           # compila antes
@@ -27,9 +42,12 @@
 #   SLOWTOWN_ATENDER_XY  dónde tocar «Answer» si uiautomator no ve el aviso de
 #                        llamada (por defecto 542,459: un Pixel 5 de 1080x2340).
 #
-# Sólo corre contra un emulador, y sólo si es lo único conectado: libera y
-# vuelve a provisionar Device Owner, reinicia y fuerza crashes. Mientras
-# corre, no tocar el emulador: la prueba maneja la pantalla.
+# Sólo corre contra un emulador, y sólo si hay uno solo: libera y vuelve a
+# provisionar Device Owner, reinicia, fuerza crashes, instala apps de prueba
+# y desinstala y vuelve a instalar el navegador del emulador. Un teléfono
+# conectado queda de lado: todo va con -s y ANDROID_SERIAL.
+#
+# Mientras corre, no tocar el emulador: la prueba maneja la pantalla.
 
 # Sin -e a propósito: una verificación que falla se anota y la prueba sigue.
 set -uo pipefail
@@ -39,6 +57,8 @@ PAQUETE=com.slowtown.launcher
 INICIO_COMPONENTE="$PAQUETE/.HomeActivity"
 # Gradle corre en el JDK 26 del sistema: de Java 21 sólo está el runtime (CLAUDE.md).
 JAVA_HOME_GRADLE=/usr/lib/jvm/java-26-openjdk
+SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
+LLAVE_DEBUG="$HOME/.android/debug.keystore"   # firma las apps de prueba (clave «android», alias androiddebugkey)
 
 CLAVE="${SLOWTOWN_CLAVE:-prueba1234}"
 # Por defecto, el directorio de trabajo de la sesión en que se escribió esta
@@ -87,8 +107,24 @@ TXT_MOVER_A='Mover a '                       # el diálogo de una app: «Mover a
 TXT_HABILITAR='Habilitar todo por 5 minutos' # en la pantalla de la contraseña, sin contraseña
 TXT_YA_USASTE='Ya usaste las 2 de estas 12 horas'
 TXT_HABILITADO='Todo habilitado hasta las'   # el aviso de Inicio mientras dura
+TXT_PAGINAS='Páginas bloqueadas'             # en Administración, y el título de su pantalla
+TXT_LAS_TUYAS='Las tuyas'                    # las páginas del nivel 1 van entre este título...
+TXT_SIEMPRE_BLOQUEADAS='Siempre bloqueadas'  # ...y éste, el de las del nivel 2
+TXT_SIN_PAGINAS='Todavía no sumaste ninguna.'
+TXT_AGREGAR=Agregar
+TXT_SACAR=Sacar
+TXT_YA_FIJA='Ésa ya está bloqueada siempre.'
+TXT_SOLTAR='Dejar de ser Device Owner'       # el botón que ya no está en la administración
+TXT_SOLO_CABLE='sólo por cable'              # un pedazo de lo que dice ahora, al pie de la administración
+TXT_SIN_COINCIDENCIAS='No hay ninguna app con ese nombre.'   # el buscador de la lista de todas
 CARPETA=Utilitario                           # la carpeta que se crea (en pantalla, en mayúsculas)
 APP_CARPETA=Clock                            # la que se mueve a la carpeta
+PAGINA=ejemplo.com                           # la que se suma y se saca en «Páginas bloqueadas»
+PAGINA_FIJA='https://www.youtube.com/watch?v=x'   # cae en youtube.com, del nivel 2: no se suma
+
+# ── Textos de scripts/liberar.sh ────────────────────────────────────────────
+TXT_SOLTADA_VUELVEN='Se pueden abrir otra vez:'   # soltada por Slowtown: las que despausó, en una línea
+TXT_FORZADA_VUELVE='ya se puede abrir:'           # con --forzar: una línea por cada una
 
 # ── Textos del emulador ─────────────────────────────────────────────────────
 # La imagen AOSP de Android 12 está en inglés.
@@ -100,10 +136,26 @@ APP_CALENDARIO=Calendar                      # instalada y no permitida: con Slo
 BUSQUEDA=clo                                 # lo que se escribe en el buscador: deja sólo APP_RELOJ
 WIDGET_RELOJ='Analog clock'                  # widget del Reloj de AOSP, sin pantalla de configuración
 PAQUETE_RELOJ=com.android.deskclock          # el que dibuja ese widget
+# El nivel 2 pausa todo navegador que no sea Chrome, y esta imagen no trae
+# Chrome: el único es éste, el que trae AOSP para probar WebView.
+NAVEGADOR=org.chromium.webview_shell
+NAVEGADOR_ACTIVIDAD=$NAVEGADOR/.WebViewBrowserActivity
+APP_NAVEGADOR='WebView Browser Tester'
+BUSQUEDA_NAVEGADOR=webview                   # lo que lo encontraría en el buscador si se listara
+# Las políticas de Chrome las guarda Android y no Chrome: están aunque Chrome
+# no esté instalado. Es de system: se lee con root.
+RESTRICCIONES_CHROME=/data/system/users/0/res_com.android.chrome.xml
+CHROME=com.android.chrome                    # no está en esta imagen
+# Dos apps de prueba que la corrida arma e instala (armar_apks_de_prueba): un
+# navegador cualquiera y una de Fixed.APPS, con su paquete.
+NAVEGADOR_PRUEBA=com.slowtown.prueba.navegador
+APP_VETADA=org.schabi.newpipe
+APP_VETADA_NOMBRE='NewPipe de prueba'
+BUSQUEDA_VETADA=newpipe
 TXT_ATENDER=Answer                           # el aviso de llamada (en pantalla dice ANSWER)
 TXT_GESTIONAR=Manage                         # botón al pie del panel de notificaciones
 ID_GESTIONAR=id/manage_text                  # el mismo (dice History si el historial está prendido)
-TXT_OK=OK                                    # cartel «App is not available»
+TXT_OK=OK                                    # cartel «App is not available» y aviso «Can't open this app»
 ID_OK=id/button1
 TXT_CERRAR_APP='Close app'                   # diálogo «Slowtown keeps stopping»
 ID_CERRAR_APP=id/aerr_close
@@ -126,6 +178,10 @@ FOCO_AJUSTES=com.android.settings/
 FOCO_CALENDARIO=com.android.calendar/
 FOCO_RECIENTES=com.android.launcher3/   # en el emulador, Recientes lo dibuja Quickstep
 FOCO_PERMISO_WIDGET=AllowBindAppWidgetActivity   # el diálogo de Ajustes que pide permiso para un widget
+FOCO_NAVEGADOR=$NAVEGADOR/
+# «Can't open this app», de Ajustes: así frena Android una app que pausó el
+# Device Owner, con Slowtown activo o no.
+FOCO_APP_PAUSADA=ActionDisabledByAdminDialog
 RELOJ_ACTIVIDAD=com.android.deskclock/.DeskClock
 CALENDARIO=com.android.calendar/.AllInOneActivity
 
@@ -146,9 +202,12 @@ UI_XML=''
 
 PASO=0
 FALLAS=()
+N_OK=0     # las ✅; con las de FALLAS, el total de verificaciones del resumen
 N_CAPTURA=0
 CARTEL=0
 LISTA=''   # la última lista que vio esperar_apps, en una línea
+RESTRICCIONES=''   # las últimas políticas de Chrome que leyó politicas_chrome
+N_POLITICAS=0
 declare -A CAMBIAR=() VISTAS=()
 
 # ── Lectura de pantallas ────────────────────────────────────────────────────
@@ -299,7 +358,7 @@ PY
 )
 
 # ── Resultados ──────────────────────────────────────────────────────────────
-ok()    { echo "  ✅ $*"; }
+ok()    { N_OK=$((N_OK + 1)); echo "  ✅ $*"; }
 nota()  { echo "  · $*"; }
 aviso() { echo "  ⚠️  $*"; }
 mal() {
@@ -322,10 +381,10 @@ resumen() {
   if [ -n "$SERIE" ]; then adb_t 60 logcat -d >"$SALIDA/logcat.txt" 2>/dev/null; fi
   echo "Capturas, volcados y logcat: $SALIDA"
   if (( ${#FALLAS[@]} )); then
-    echo "❌ Fallaron ${#FALLAS[@]}:"
+    echo "❌ Fallaron ${#FALLAS[@]} de $((N_OK + ${#FALLAS[@]})) verificaciones:"
     printf '   %s\n' "${FALLAS[@]}"
   else
-    echo "✅ Todo anduvo."
+    echo "✅ Todo anduvo: $N_OK verificaciones."
   fi
 }
 abortar() {
@@ -372,6 +431,8 @@ c_lock()  { echo "dumpsys activity activities | grep -q 'mLockTaskModeState=$1'"
 c_llamada() { echo "dumpsys telecom | grep -q 'state=$1'"; }
 c_sin_llamada() { echo "! dumpsys telecom | grep -qE 'state=(RINGING|DIALING|ANSWERED|ACTIVE|ON_HOLD|DISCONNECTING)'"; }
 c_teclado() { echo "dumpsys input_method | grep -q 'mInputShown=true'"; }
+c_resumida() { echo "dumpsys activity activities | grep -q 'ResumedActivity.*$1'"; }   # una pantalla de ese paquete en primer plano
+c_pausada() { echo "dumpsys package $1 | grep -q 'User 0: .*suspended=true'"; }
 # Una sesión de administración agranda la lista de lock task a todo lo
 # instalado: con Ajustes adentro («u0:[..., com.android.settings, ...]»), hay sesión.
 c_sesion() { echo "dumpsys activity activities | grep -q 'u0:\[.*com\.android\.settings[],]'"; }
@@ -426,6 +487,123 @@ adb_como() {   # adb_como 0|2000: root (0) o shell (2000)
     sleep 1
   done
   return 1
+}
+uid_adb() { adb_t 10 shell id -u 2>/dev/null | tr -d '\r'; }   # 0 si adbd es root, 2000 si no
+
+# Lo que guarda Android en /data/system es XML binario: abx2xml lo pasa a
+# texto. Hace falta root.
+package_restrictions() {   # package-restrictions.xml, donde están las reglas de Inicio fijo
+  disp "f=/data/local/tmp/slowtown-pr.xml; abx2xml /data/system/users/0/package-restrictions.xml \$f 2>/dev/null || cp /data/system/users/0/package-restrictions.xml \$f; cat \$f; rm -f \$f"
+}
+reglas_inicio_fijo() {   # cuántas reglas de Inicio fijo tiene Slowtown en el package-restrictions.xml de stdin
+  awk '
+    /<persistent-preferred-activities[^>]*\/>/ { next }
+    /<persistent-preferred-activities/ { dentro = 1; next }
+    /<\/persistent-preferred-activities>/ { dentro = 0 }
+    dentro && /<item / && /com\.slowtown\.launcher\// { n++ }
+    END { print n + 0 }'
+}
+politicas_chrome() {   # deja en RESTRICCIONES las políticas de Chrome que guarda Android (sale 1 sin root)
+  # Sin archivo, RESTRICCIONES queda vacío: Android lo borra cuando no queda
+  # ninguna. Cada lectura queda también en $SALIDA.
+  RESTRICCIONES=$(disp "ls /data/system/users/0 >/dev/null 2>&1 || exit 3; [ -e $RESTRICCIONES_CHROME ] || exit 0; f=/data/local/tmp/slowtown-res.xml; abx2xml $RESTRICCIONES_CHROME \$f 2>/dev/null || cp $RESTRICCIONES_CHROME \$f; cat \$f; rm -f \$f") || return 1
+  N_POLITICAS=$((N_POLITICAS + 1))
+  printf '%s\n' "$RESTRICCIONES" >"$SALIDA/politicas-chrome-$PASO-$N_POLITICAS.xml"
+}
+politica_chrome() {   # politica_chrome CLAVE: su valor en RESTRICCIONES, o sus valores, uno por línea
+  # Un valor va en la misma línea que la clave («<entry key="X" type="i">1</entry>»);
+  # una lista, en líneas «<value>...</value>» hasta «</entry>».
+  awk -v k="$1" '
+    /<entry key="/ {
+      clave = $0
+      sub(/.*<entry key="/, "", clave)
+      sub(/".*/, "", clave)
+      if (clave == k && /<\/entry>/) { v = $0; sub(/^.*<entry [^>]*>/, "", v); sub(/<\/entry>.*/, "", v); print v }
+      next
+    }
+    /<value>/ && clave == k { v = $0; sub(/.*<value>/, "", v); sub(/<\/value>.*/, "", v); print v }
+    /<\/entry>/ { clave = "" }' <<<"$RESTRICCIONES"
+}
+
+# Las apps que pausa el nivel 2 quedan suspendidas a nombre de «android», que
+# es como suspende el Device Owner: adb no lo puede sacar.
+pausa_de() {   # pausa_de PAQUETE: a nombre de quién está pausada («android»), «no», o «?» si no está
+  # «dumpsys package» trae una línea «User 0: ... suspended=...» y, si está
+  # pausada, otra con «suspendingPackage=».
+  local out
+  out=$(disp dumpsys package "$1")
+  awk '
+    /^ *User 0: .*suspended=/ && !visto { visto = 1; pausada = / suspended=true/; next }
+    visto && pausada && /suspendingPackage=/ { sub(/.*suspendingPackage=/, ""); sub(/[ ,}].*/, ""); print; dicho = 1; exit }
+    END { if (!dicho) print (!visto ? "?" : pausada ? "alguien" : "no") }' <<<"$out"
+}
+hay_paquete() {   # hay_paquete PAQUETE: si está instalado para el usuario 0
+  local out
+  out=$(disp pm path "$1")
+  grep -q '^package:' <<<"$out"
+}
+
+# Las apps de prueba no tienen código (hasCode=false) y su pantalla es
+# android.app.Activity, que trae Android: alcanza con el manifiesto. aapt2 lo
+# empaqueta, zipalign lo alinea y apksigner lo firma con la clave de debug de
+# la máquina. Sin firma v4, así adb instala de la manera común.
+armar_apks_de_prueba() {   # arma $SALIDA/apk/navegador.apk y vetada.apk (sale 1 si falta algo)
+  local dir="$SALIDA/apk" bt jar nombre
+  bt=$(ls -d "$SDK"/build-tools/*/ 2>/dev/null | sort -V | tail -n 1)
+  jar=$(ls -1 "$SDK"/platforms/*/android.jar 2>/dev/null | sort -V | tail -n 1)
+  if [[ ! -x ${bt}aapt2 || ! -x ${bt}zipalign || ! -x ${bt}apksigner || ! -f $jar || ! -f $LLAVE_DEBUG ]]; then
+    nota "faltan las build-tools, un android.jar o $LLAVE_DEBUG"
+    return 1
+  fi
+  mkdir -p "$dir"
+  cat >"$dir/navegador.xml" <<EOF
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$NAVEGADOR_PRUEBA">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="31" />
+    <application android:label="Navegador de prueba" android:hasCode="false">
+        <activity android:name="android.app.Activity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+  cat >"$dir/vetada.xml" <<EOF
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$APP_VETADA">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="31" />
+    <application android:label="$APP_VETADA_NOMBRE" android:hasCode="false">
+        <activity android:name="android.app.Activity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+  for nombre in navegador vetada; do
+    "${bt}aapt2" link -o "$dir/$nombre-sin-alinear.apk" -I "$jar" --manifest "$dir/$nombre.xml" \
+      --version-code 1 --version-name 1 &&
+      "${bt}zipalign" -f 4 "$dir/$nombre-sin-alinear.apk" "$dir/$nombre-alineado.apk" &&
+      "${bt}apksigner" sign --ks "$LLAVE_DEBUG" --ks-pass pass:android --ks-key-alias androiddebugkey \
+        --key-pass pass:android --v4-signing-enabled false --out "$dir/$nombre.apk" "$dir/$nombre-alineado.apk" ||
+      return 1
+  done >>"$dir/armado.log" 2>&1 </dev/null
+}
+
+afirmar_pausada() {   # afirmar_pausada QUÉ: que el navegador siga pausado por el Device Owner
+  local p
+  p=$(pausa_de "$NAVEGADOR")
+  case $p in
+    android) ok "$1: $APP_NAVEGADOR sigue pausado por el Device Owner" ;;
+    no) mal "$1: $APP_NAVEGADOR no está pausado" ;;
+    '?') mal "$1: no encuentro $NAVEGADOR en este emulador; actualizá la constante" ;;
+    *) mal "$1: $APP_NAVEGADOR está pausado por «$p», no por el Device Owner" ;;
+  esac
 }
 
 captura() {   # captura NOMBRE: la pantalla a $SALIDA/NN-NOMBRE.png
@@ -534,12 +712,12 @@ ir_a_inicio() {   # aprieta Inicio y espera a Slowtown en primer plano
   esperar 15 "$(c_foco "$FOCO_INICIO")"
 }
 
-afirmar_en_inicio() {   # afirmar_en_inicio QUÉ: foco en Slowtown y lock task en LOCKED
-  local que=$1 f e
+afirmar_en_inicio() {   # afirmar_en_inicio QUÉ [ESTADO]: foco en Slowtown y lock task en ESTADO (LOCKED si no se dice)
+  local que=$1 esperado=${2:-LOCKED} f e
   esperar 15 "$(c_foco "$FOCO_INICIO")"
   f=$(foco)
   e=$(estado)
-  if [[ $f == *"$FOCO_INICIO"* && $e == LOCKED ]]; then
+  if [[ $f == *"$FOCO_INICIO"* && $e == "$esperado" ]]; then
     ok "$que"
   else
     mal "$que (foco: ${f:-?}; lock task: ${e:-?})"
@@ -727,6 +905,41 @@ intento_am_start() {   # intento_am_start QUÉ FOCO_PROHIBIDO ARGUMENTOS_DE_AM_S
   vigilar_escape "$que" "$prohibido"
 }
 
+intento_navegador() {   # intento_navegador QUÉ [ESTADO]: intenta abrir el navegador pausado y vuelve a Inicio
+  # Pausado no es lo mismo que fuera de la lista de lock task: antes de que
+  # lock task mire, Android cambia el pedido por su aviso «Can't open this
+  # app», que es de Ajustes. Con Slowtown activo lock task frena después el
+  # aviso; en pausa o con todo habilitado, el aviso se ve y se cierra con OK.
+  # Que haya aparecido el aviso (en logcat) dice que lo frenó la pausa.
+  local que=$1 esperado=${2:-LOCKED} marca salida log abierto=0 visto=' (no llega a verse: lock task frena también el aviso)'
+  marca=$(marca_logcat)
+  salida=$(disp am start -a android.intent.action.VIEW -d http://example.com -n "$NAVEGADOR_ACTIVIDAD")
+  if grep -qE 'unable to resolve|does not exist' <<<"$salida"; then
+    mal "$que: $NAVEGADOR no existe en este emulador; actualizá la constante"
+    return 1
+  fi
+  # Que no llegue a mostrarse nunca, no sólo que al final no esté.
+  sostener 4 "! $(c_foco "$FOCO_NAVEGADOR") && ! $(c_resumida "$NAVEGADOR")" || abierto=1
+  if [[ $(foco) == *"$FOCO_APP_PAUSADA"* ]]; then
+    visto=": se ve el aviso «Can't open this app» y se cierra con OK"
+    captura aviso-app-pausada
+    tocar_boton "$ID_OK" "$TXT_OK" || adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+    esperar 5 "! $(c_foco "$FOCO_APP_PAUSADA")"
+  fi
+  # Si algo quedó frenado por lock task, el cartel mantiene viva la tarea: se cierra igual.
+  cerrar_cartel_bloqueo
+  log=$(adb_t 60 logcat -d -T "$marca" 2>/dev/null)
+  ir_a_inicio
+  if (( abierto )); then
+    mal "$que: $APP_NAVEGADOR se abrió igual"
+  elif grep -q "$FOCO_APP_PAUSADA" <<<"$log"; then
+    ok "$que: $APP_NAVEGADOR no se abre, Android lo cambia por su aviso de app pausada$visto"
+  else
+    mal "$que: $APP_NAVEGADOR no se abrió, pero no lo frenó la pausa (no apareció el aviso de Android)"
+  fi
+  afirmar_en_inicio "$que: de vuelta en Slowtown y $esperado" "$esperado"
+}
+
 cerrar_dialogo_crash() {   # si quedó «Slowtown keeps stopping», lo cierra
   # Mientras el diálogo está abierto, el proceso que se colgó sigue vivo
   # esperando la respuesta: sin cerrarlo, el crash no termina de contarse.
@@ -857,6 +1070,38 @@ esperar_sin_widget() {   # esperar_sin_widget SEGUNDOS: hasta que no muestre nin
     (( SECONDS < fin )) || return 1
     sleep 0.5
   done
+}
+
+# En «Páginas bloqueadas», las que se suman (el nivel 1) van en filas con su
+# botón «Sacar», entre «Las tuyas» y «Siempre bloqueadas». Las del nivel 2 son
+# un solo texto, todas juntas, y el campo de texto está arriba de todo.
+paginas_tuyas() {   # las páginas sumadas en el último volcado, una por línea
+  local x y arriba abajo t lo='' hi=''
+  while IFS=$'\t' read -r x y arriba abajo t; do
+    [ "$t" = "$TXT_LAS_TUYAS" ] && lo=$abajo
+    [ "$t" = "$TXT_SIEMPRE_BLOQUEADAS" ] && hi=$arriba
+  done < <(ui textos)
+  [[ -n $lo && -n $hi ]] || return 1
+  while IFS=$'\t' read -r x y arriba abajo t; do
+    (( arriba >= lo && abajo <= hi )) || continue
+    [[ $t == "$TXT_SACAR" || $t == "$TXT_SIN_PAGINAS" ]] && continue
+    printf '%s\n' "$t"
+  done < <(ui textos)
+}
+escribir_pagina() {   # escribir_pagina TEXTO: lo escribe en el campo de «Páginas bloqueadas» y toca «Agregar»
+  # Comillas simples para el shell del dispositivo: la URL trae «?» y «=».
+  tocar campo 1 || return 1
+  esperar 5 "$(c_teclado)"
+  sleep 1
+  adb_t 20 shell "input text '$1'" >/dev/null 2>&1
+  tocar texto "$TXT_AGREGAR" || return 1
+  # El teclado queda abierto y taparía la lista.
+  cerrar_teclado
+}
+cerrar_teclado() {   # Atrás sólo si el teclado está abierto: si no, Atrás cambiaría de pantalla
+  esperar 1 "$(c_teclado)" || return 0
+  adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+  esperar 5 "! $(c_teclado)"
 }
 
 # ── 0. El dispositivo ───────────────────────────────────────────────────────
@@ -1003,7 +1248,7 @@ paso_2() {
 # ── 3. Intentos de escape ───────────────────────────────────────────────────
 paso_3() {
   titulo 3 "Intentos de escape"
-  local hallado xy x y
+  local hallado xy x y fin
   ir_a_inicio
 
   # Ajustes rápidos: con lock task, el panel tiene que abrir sin ellos (sin
@@ -1036,7 +1281,15 @@ paso_3() {
   adb_t 20 shell "cmd notification post -t Slowtown slowtown-e2e 'Prueba del panel'" >/dev/null 2>&1
   adb_t 20 shell cmd statusbar expand-notifications >/dev/null 2>&1
   esperar 5 "$(c_foco "$FOCO_PANEL")"
-  if volcar_ui --windows && { xy=$(ui id "$ID_GESTIONAR") || xy=$(ui texto "$TXT_GESTIONAR"); }; then
+  # El foco llega antes de que el panel termine de abrirse, y el pie aparece
+  # al final (con muchas notificaciones, un volcado al toque no lo vio): se espera.
+  xy=''
+  fin=$((SECONDS + 8))
+  until [ -n "$xy" ] || (( SECONDS >= fin )); do
+    volcar_ui --windows && { xy=$(ui id "$ID_GESTIONAR") || xy=$(ui texto "$TXT_GESTIONAR"); }
+    [ -n "$xy" ] || sleep 0.5
+  done
+  if [ -n "$xy" ]; then
     captura panel-manage
     read -r x y <<<"$xy"
     tocar_xy "$x" "$y"
@@ -1520,6 +1773,8 @@ paso_9c() {
       mal "vez $vez: volver a Inicio la cortó ($(foco))"
     fi
     ir_a_inicio
+    # Todo es todo menos el nivel 2: el navegador pausado sigue sin abrirse.
+    (( vez == 1 )) && intento_navegador "vez 1, con todo habilitado"
     disp "am broadcast -n '$PAQUETE/.admin.FreeSession\$End'" >/dev/null
     sleep 3
     intento_am_start "vez $vez, después del final: Ajustes" "$FOCO_AJUSTES" -a android.settings.SETTINGS
@@ -1533,6 +1788,276 @@ paso_9c() {
   captura habilitar-sin-veces
   ir_a_inicio
   adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
+}
+
+# ── 9d. Nivel 2 ─────────────────────────────────────────────────────────────
+# Lo que Slowtown bloquea siempre, también con la contraseña: el navegador
+# pausado y las políticas de Chrome. Con root, para leer las políticas que
+# guarda Android; al final, adb queda como estaba.
+paso_9d() {
+  titulo 9d "Nivel 2: lo que se bloquea siempre, también con la contraseña"
+  local uid root=0 p out bloqueadas n apk instaladas=0
+  ir_a_inicio
+  # Si una corrida anterior se cortó entre desinstalarlo y volver a instalarlo.
+  out=$(disp pm path "$NAVEGADOR")
+  if ! grep -q '^package:' <<<"$out"; then
+    nota "$NAVEGADOR estaba desinstalado para el usuario 0 (¿una corrida cortada?): lo vuelvo a instalar"
+    disp cmd package install-existing "$NAVEGADOR" >/dev/null
+    esperar 15 "$(c_pausada "$NAVEGADOR")"
+  fi
+  p=$(pausa_de "$NAVEGADOR")
+  case $p in
+    android) ok "$APP_NAVEGADOR, el único navegador del emulador, está pausado a nombre de android: lo pausó el Device Owner" ;;
+    no) mal "$APP_NAVEGADOR no está pausado: el nivel 2 no lo agarró" ;;
+    '?') mal "no encuentro $NAVEGADOR en este emulador; actualizá la constante" ;;
+    *) mal "$APP_NAVEGADOR está pausado por «$p», no por el Device Owner" ;;
+  esac
+  intento_navegador "con Slowtown activo"
+
+  uid=$(uid_adb)
+  if [ "$uid" = 0 ] || adb_como 0; then
+    root=1
+  else
+    mal "no pude pasar adb a root: sin eso no leo las políticas de Chrome"
+  fi
+  if (( root )) && politicas_chrome; then
+    bloqueadas=$(politica_chrome URLBlocklist)
+    n=$(grep -c . <<<"$bloqueadas")
+    if ! grep -qxF youtube.com <<<"$bloqueadas" || ! grep -qxF translate.goog <<<"$bloqueadas"; then
+      mal "URLBlocklist de Chrome no tiene youtube.com y translate.goog ($n páginas: $(head -n 5 <<<"$bloqueadas" | en_una_linea)…)"
+    elif (( n > 1000 )); then
+      mal "URLBlocklist de Chrome tiene $n páginas, y Chrome no lee más de 1000"
+    else
+      ok "Android guarda para Chrome URLBlocklist con $n páginas (Chrome lee hasta 1000), youtube.com y translate.goog entre ellas"
+    fi
+    if grep -qxF accounts.youtube.com <<<"$(politica_chrome URLAllowlist)"; then
+      ok "URLAllowlist deja pasar accounts.youtube.com (el ingreso a Google)"
+    else
+      mal "URLAllowlist de Chrome no tiene accounts.youtube.com: $(politica_chrome URLAllowlist | en_una_linea)"
+    fi
+    out=''
+    [ "$(politica_chrome IncognitoModeAvailability)" = 1 ] || out+=" IncognitoModeAvailability=$(politica_chrome IncognitoModeAvailability)"
+    [ "$(politica_chrome ForceGoogleSafeSearch)" = true ] || out+=" ForceGoogleSafeSearch=$(politica_chrome ForceGoogleSafeSearch)"
+    [ "$(politica_chrome SafeSitesFilterBehavior)" = 1 ] || out+=" SafeSitesFilterBehavior=$(politica_chrome SafeSitesFilterBehavior)"
+    [ "$(politica_chrome DnsOverHttpsMode)" = off ] || out+=" DnsOverHttpsMode=$(politica_chrome DnsOverHttpsMode)"
+    [ "$(politica_chrome NTPContentSuggestionsEnabled)" = false ] || out+=" NTPContentSuggestionsEnabled=$(politica_chrome NTPContentSuggestionsEnabled)"
+    # Chrome en Android no la lee: no tiene que estar.
+    grep -q 'key="AllowDinosaurEasterEgg"' <<<"$RESTRICCIONES" && out+=" AllowDinosaurEasterEgg (no tendría que estar)"
+    if [ -z "$out" ]; then
+      ok "y sin incógnito, con SafeSearch y el filtro de sitios para adultos, sin DNS propio ni noticias en la pestaña nueva (y sin AllowDinosaurEasterEgg, que en Android no anda)"
+    else
+      mal "políticas de Chrome que no son las de Chrome.policies:$out"
+    fi
+  elif (( root )); then
+    mal "no pude leer las políticas de Chrome ($RESTRICCIONES_CHROME)"
+  fi
+
+  # Desinstalar para el usuario (o las actualizaciones) rearma de cero una app
+  # de sistema, sin la pausa: a las de sistema, Slowtown se lo bloquea.
+  out=$(disp pm uninstall -k --user 0 "$NAVEGADOR")
+  p=$(pausa_de "$NAVEGADOR")
+  if grep -q DELETE_FAILED_OWNER_BLOCKED <<<"$out" && [ "$p" = android ]; then
+    ok "desinstalarlo para el usuario no se puede ($(grep -o 'Failure.*' <<<"$out" | head -n 1)), y sigue pausado"
+  else
+    mal "pm uninstall -k --user 0 $NAVEGADOR dijo «$(head -n 1 <<<"$out")» y quedó pausado: $p (tendría que estar bloqueado)"
+    # Para que lo que sigue lo encuentre.
+    hay_paquete "$NAVEGADOR" || disp cmd package install-existing "$NAVEGADOR" >/dev/null
+  fi
+
+  # Lo que se instala lo agarra el aviso de PACKAGE_ADDED, sin esperar al
+  # próximo arranque: un navegador cualquiera y una de Fixed.APPS, de prueba.
+  if ! armar_apks_de_prueba; then
+    mal "no pude armar las apps de prueba (ver $SALIDA/apk/armado.log)"
+  else
+    for p in "$NAVEGADOR_PRUEBA" "$APP_VETADA"; do
+      if hay_paquete "$p"; then
+        nota "$p estaba instalada de una corrida anterior: la saco para instalarla de cero"
+        adb_t 60 uninstall "$p" >/dev/null 2>&1
+      fi
+    done
+    for apk in navegador vetada; do
+      out=$(adb_t 120 install "$SALIDA/apk/$apk.apk" 2>&1)
+      if grep -q Success <<<"$out"; then instaladas=$((instaladas + 1))
+      else mal "no pude instalar $apk.apk: $(tail -n 1 <<<"$out")"; fi
+    done
+    if (( instaladas == 2 )); then
+      if esperar 15 "$(c_pausada "$NAVEGADOR_PRUEBA") && $(c_pausada "$APP_VETADA")" &&
+        [ "$(pausa_de "$NAVEGADOR_PRUEBA")" = android ] && [ "$(pausa_de "$APP_VETADA")" = android ]; then
+        ok "recién instalados, un navegador de prueba y «$APP_VETADA_NOMBRE» ($APP_VETADA, de Fixed.APPS) quedan pausados enseguida"
+      else
+        mal "recién instalados y sin pausar: $NAVEGADOR_PRUEBA $(pausa_de "$NAVEGADOR_PRUEBA"), $APP_VETADA $(pausa_de "$APP_VETADA")"
+      fi
+    fi
+  fi
+
+  if ! entrar_admin; then
+    mal "no pude entrar a la administración"
+    ir_a_inicio
+  else
+    nivel2_administracion "$root"
+  fi
+
+  # Las de prueba se van, para que lo que sigue no las vea. No son de sistema:
+  # pausadas y todo, desinstalarlas no está bloqueado.
+  if (( instaladas )); then
+    out=''
+    for p in "$NAVEGADOR_PRUEBA" "$APP_VETADA"; do
+      hay_paquete "$p" || continue
+      grep -q Success <<<"$(adb_t 60 uninstall "$p" 2>&1)" || out+=" $p"
+    done
+    if [ -z "$out" ]; then ok "las de prueba se desinstalan sin problema: el bloqueo es sólo para las de sistema"
+    else mal "no pude desinstalar:$out"; fi
+  fi
+  if (( root )) && [ "$uid" != 0 ]; then adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"; fi
+}
+
+nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se ve desde la administración
+  local root=$1 vistos='' vuelta busqueda
+  # La lista de apps permitidas: ni se puede permitir. Se recorre sin tocar
+  # nada y se sale con «Volver».
+  if tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; then
+    CAMBIAR=()
+    if ! recorrer_selector; then
+      mal "no pude recorrer el selector de apps"
+    elif [[ -n ${VISTAS[$APP_NAVEGADOR]+x} || -n ${VISTAS[$APP_VETADA_NOMBRE]+x} ]]; then
+      mal "«$TXT_ELEGIR_APPS» ofrece lo del nivel 2: $(printf '%s\n' "${!VISTAS[@]}" | grep -xF -e "$APP_NAVEGADOR" -e "$APP_VETADA_NOMBRE" | en_una_linea)"
+    elif [[ -z ${VISTAS[$APP_CALENDARIO]+x} ]]; then
+      mal "el selector no lista ni $APP_CALENDARIO: así no prueba nada ($(printf '%s\n' "${!VISTAS[@]}" | en_una_linea))"
+    else
+      ok "ni «$APP_NAVEGADOR» ni «$APP_VETADA_NOMBRE» aparecen en «$TXT_ELEGIR_APPS» (que lista ${#VISTAS[@]} apps)"
+    fi
+    tocar texto "$TXT_VOLVER"
+  else
+    mal "«$TXT_ELEGIR_APPS» no abre el selector"
+  fi
+  esperar_ui 10 texto "$TXT_ADMIN" || { mal "no vuelvo a la administración ($(foco))"; ir_a_inicio; return; }
+
+  # Las páginas del nivel 1: rigen en Chrome desde que se suman.
+  if ! { tocar_desplazando texto "$TXT_PAGINAS" && esperar_ui 10 texto "$TXT_LAS_TUYAS"; }; then
+    mal "«$TXT_PAGINAS» no abre su pantalla"
+    ir_a_inicio
+    return
+  fi
+  ok "la administración tiene «$TXT_PAGINAS»"
+  if esperar_ui 5 texto "$TXT_SIN_PAGINAS"; then
+    nota "todavía no hay ninguna sumada"
+  else
+    aviso "ya había páginas sumadas de antes: $(paginas_tuyas | en_una_linea)"
+  fi
+  escribir_pagina "$PAGINA"
+  if esperar_apps 10 paginas_tuyas "$PAGINA"; then
+    ok "«$TXT_AGREGAR» suma $PAGINA a la lista, con «$TXT_SACAR»"
+  else
+    mal "después de «$TXT_AGREGAR», la lista dice «$LISTA» y tendría que ser $PAGINA"
+  fi
+  if (( root )); then
+    if esperar 10 "grep -aq '$PAGINA' $RESTRICCIONES_CHROME" && politicas_chrome &&
+      grep -qxF "$PAGINA" <<<"$(politica_chrome URLBlocklist)"; then
+      ok "y Chrome la tiene en URLBlocklist enseguida"
+    else
+      mal "$PAGINA no llegó a URLBlocklist de Chrome"
+    fi
+  fi
+  captura pagina-sumada
+  escribir_pagina "$PAGINA_FIJA"
+  if esperar_ui 10 texto "$TXT_YA_FIJA"; then
+    if esperar_apps 3 paginas_tuyas "$PAGINA"; then
+      ok "$PAGINA_FIJA: «$TXT_YA_FIJA», y no se suma"
+    else
+      mal "$PAGINA_FIJA: avisa, pero la lista dice «$LISTA»"
+    fi
+  else
+    mal "$PAGINA_FIJA no avisa «$TXT_YA_FIJA» ($(paginas_tuyas | en_una_linea))"
+  fi
+  captura pagina-fija
+  if tocar texto "$TXT_SACAR" && esperar_ui 10 texto "$TXT_SIN_PAGINAS"; then
+    ok "«$TXT_SACAR» la saca de la lista"
+  else
+    mal "«$TXT_SACAR» no deja la lista vacía ($(paginas_tuyas | en_una_linea))"
+  fi
+  if (( root )); then
+    if esperar 10 "! grep -aq '$PAGINA' $RESTRICCIONES_CHROME" && politicas_chrome &&
+      ! grep -qxF "$PAGINA" <<<"$(politica_chrome URLBlocklist)" &&
+      grep -qxF youtube.com <<<"$(politica_chrome URLBlocklist)"; then
+      ok "y sale de URLBlocklist de Chrome, que sigue con las del nivel 2"
+    else
+      mal "después de «$TXT_SACAR», URLBlocklist de Chrome no quedó como antes: $(politica_chrome URLBlocklist | en_una_linea)"
+    fi
+  fi
+  # Atrás vuelve a la administración (si quedó el teclado, el primero sólo lo cierra).
+  for vuelta in 1 2 3; do
+    adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+    esperar_ui 5 texto "$TXT_ADMIN" && break
+  done
+  if ! ui texto "$TXT_ADMIN" >/dev/null; then
+    mal "Atrás no vuelve de «$TXT_PAGINAS» a la administración ($(foco))"
+    ir_a_inicio
+    return
+  fi
+
+  # Soltar Device Owner ya no está: sólo por cable. Se baja hasta el pie.
+  for vuelta in 1 2 3 4; do
+    volcar_ui || break
+    vistos+=$(ui textos | cut -f5)$'\n'
+    ui contiene "$TXT_SOLO_CABLE" >/dev/null && break
+    arrastrar 70 30
+  done
+  if grep -qiF "$TXT_SOLTAR" <<<"$vistos"; then
+    mal "la administración todavía ofrece «$TXT_SOLTAR»"
+  elif ! grep -qF "$TXT_SOLO_CABLE" <<<"$vistos"; then
+    mal "no llegué al pie de la administración, donde dice que es «$TXT_SOLO_CABLE»"
+  else
+    ok "la administración ya no ofrece «$TXT_SOLTAR»: al pie dice que es $TXT_SOLO_CABLE"
+  fi
+  captura administracion-pie
+
+  # En pausa, lock task se va y el nivel 2 no.
+  if ! { tocar_desplazando texto "$TXT_PAUSAR" && esperar 10 "$(c_lock NONE)"; }; then
+    mal "«$TXT_PAUSAR» no saca de lock task (está en $(estado))"
+    ir_a_inicio
+    return
+  fi
+  ok "«$TXT_PAUSAR» saca de lock task (NONE)"
+  ir_a_inicio
+  afirmar_pausada "con Slowtown en pausa"
+  intento_navegador "con Slowtown en pausa" NONE
+  # En pausa la lista de todas tiene todo lo instalado, menos lo del nivel 2.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+  else
+    if esperar_ui 10 texto "$APP_CALENDARIO"; then
+      ok "en pausa, la lista de todas tiene también las no permitidas, como $APP_CALENDARIO"
+    else
+      mal "en pausa, la lista de todas no muestra $APP_CALENDARIO: así no prueba nada"
+    fi
+    tocar campo 1
+    esperar 5 "$(c_teclado)"
+    sleep 1
+    for busqueda in "$BUSQUEDA_NAVEGADOR" "$BUSQUEDA_VETADA"; do
+      adb_t 20 shell input text "$busqueda" >/dev/null 2>&1
+      # Primero que el campo diga eso: si no, el cartel puede ser de la búsqueda anterior.
+      if esperar_ui 10 texto "$busqueda" && esperar_ui 10 texto "$TXT_SIN_COINCIDENCIAS"; then
+        ok "buscar «$busqueda» no encuentra nada: «$TXT_SIN_COINCIDENCIAS»"
+      else
+        mal "buscar «$busqueda» encuentra algo: $(etiquetas_cajon | en_una_linea)"
+      fi
+      captura "busqueda-$busqueda"
+      # Se borra, una tecla por letra, hasta que vuelve la lista entera.
+      adb_t 20 shell input keyevent $(printf 'KEYCODE_DEL %.0s' $(seq ${#busqueda})) >/dev/null 2>&1
+      esperar_ui 10 texto "$APP_CALENDARIO" || nota "borrar «$busqueda» no devolvió la lista entera"
+    done
+    volver_del_cajon || { mal "Atrás no vuelve de la lista a Inicio"; ir_a_inicio; }
+  fi
+
+  # De vuelta activo, para lo que sigue.
+  if entrar_admin && activar_slowtown; then
+    ok "«$TXT_ACTIVAR» lo vuelve a activar (LOCKED)"
+  else
+    mal "no pude volver a activar Slowtown (lock task: $(estado))"
+  fi
+  ir_a_inicio
+  afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
 }
 
 # ── 10. Ajustes desde la administración ─────────────────────────────────────
@@ -1613,6 +2138,8 @@ paso_11() {
     ir_a_inicio
     if esperar 15 "$(c_lock LOCKED)"; then nota "sacando el bloqueo y apretando Inicio, sí se activa"; fi
   fi
+  # La pausa la guarda Android: no depende de que Slowtown llegue a arrancar.
+  afirmar_pausada "después de reiniciar"
   captura tras-reinicio
 }
 
@@ -1628,25 +2155,19 @@ paso_12() {
   done
   nota "5 vueltas a Inicio desde el Reloj"
   # Las reglas de Inicio fijo sólo se ven en package-restrictions.xml, que es
-  # de system: hace falta root (la imagen del emulador es userdebug). En
-  # Android 12 el archivo es XML binario; abx2xml lo pasa a texto.
+  # de system: hace falta root (la imagen del emulador es userdebug).
   if ! adb_como 0; then
     mal "no pude pasar adb a root"
     return
   fi
-  xml=$(disp "f=/data/local/tmp/slowtown-pr.xml; abx2xml /data/system/users/0/package-restrictions.xml \$f 2>/dev/null || cp /data/system/users/0/package-restrictions.xml \$f; cat \$f; rm -f \$f")
+  xml=$(package_restrictions)
   adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
   printf '%s\n' "$xml" >"$SALIDA/package-restrictions.xml"
   if ! grep -q '<package-restrictions' <<<"$xml"; then
     mal "no pude leer package-restrictions.xml"
     return
   fi
-  n=$(awk '
-    /<persistent-preferred-activities[^>]*\/>/ { next }
-    /<persistent-preferred-activities/ { dentro = 1; next }
-    /<\/persistent-preferred-activities>/ { dentro = 0 }
-    dentro && /<item / && /com\.slowtown\.launcher\// { n++ }
-    END { print n + 0 }' <<<"$xml")
+  n=$(reglas_inicio_fijo <<<"$xml")
   if [ "$n" = 1 ]; then
     ok "hay exactamente 1 regla de Inicio fijo para Slowtown"
   elif [ "$n" = 0 ]; then
@@ -1690,6 +2211,8 @@ paso_13() {
     ir_a_inicio
     return
   fi
+  # La guardia abre el teléfono, pero el nivel 2 no lo toca.
+  afirmar_pausada "con la guardia de crashes abierta"
   # Sin el Inicio fijo, Android pregunta qué Inicio usar. Si el selector no
   # aparece solo, apretar Inicio lo tiene que mostrar.
   if ! esperar 20 "$(c_foco "$FOCO_SELECTOR")"; then
@@ -1743,20 +2266,192 @@ paso_13() {
 }
 
 # ── 14. La salida por cable ─────────────────────────────────────────────────
+# Primero la de siempre: liberar.sh le pide a Slowtown que se suelte
+# (CableProvider), y Slowtown deshace el nivel 2, abre el teléfono, suelta el
+# Inicio fijo, queda en pausa y deja de ser Device Owner. Atiende sólo a shell
+# y a root. Después el último recurso, liberar.sh --forzar, como si Slowtown
+# no contestara (paso_14_forzar). Después de cada una se vuelve a provisionar.
 paso_14() {
   titulo 14 "Salida por cable"
-  if (cd "$RAIZ" && ./scripts/liberar.sh </dev/null); then ok "liberar.sh termina bien"; else mal "liberar.sh falló"; fi
+  local salida rc p xml n
+  local soltar=(content call --uri "content://$PAQUETE.cable" --method soltar)
+  # Como en el teléfono, adb sin root: liberar.sh llega como shell (uid 2000).
+  adb_como 2000 || mal "no pude sacarle root a adb: liberar.sh llamaría a Slowtown como root"
+
+  # Nadie más la puede soltar. Desde el uid de una app (run-as), Android ya no
+  # deja que «content» llegue (le falta ACCESS_CONTENT_PROVIDERS_EXTERNALLY);
+  # system (uid 1000) sí llega, y ahí la que tiene que decir que no es Slowtown.
+  salida=$(disp run-as "$PAQUETE" "${soltar[@]}")
+  if grep -q 'Result:' <<<"$salida" || ! grep -q SecurityException <<<"$salida"; then
+    mal "run-as $PAQUETE ${soltar[*]}: no lo rechazó ($(grep -m1 -E 'Result|Exception' <<<"$salida"))"
+  else
+    ok "desde el uid de la app (run-as), «content call» no llega a Slowtown: Android lo rechaza"
+  fi
+  salida=$(disp su 1000 "${soltar[@]}")
+  if grep -q 'Sólo por cable' <<<"$salida"; then
+    ok "como system (uid 1000) sí llega, y Slowtown lo rechaza: «$(grep -o 'Sólo por cable[^"]*' <<<"$salida" | head -n 1)»"
+  elif grep -q 'Result:' <<<"$salida"; then
+    mal "como system (uid 1000), Slowtown se soltó: sólo tiene que atender a shell y root"
+  else
+    aviso "no pude llamar como system (uid 1000): $(head -n 1 <<<"$salida")"
+  fi
+  p=$(pausa_de "$NAVEGADOR")
+  if ! es_device_owner; then
+    mal "después de esos intentos, Slowtown ya no es Device Owner: la soltó otro que no es adb"
+  elif [ "$p" != android ]; then
+    mal "después de esos intentos, $APP_NAVEGADOR no está pausado ($p)"
+  else
+    ok "después de esos intentos, Slowtown sigue siendo Device Owner y $APP_NAVEGADOR sigue pausado"
+  fi
+
+  salida=$(cd "$RAIZ" && ./scripts/liberar.sh </dev/null 2>&1)
+  rc=$?
+  printf '%s\n' "$salida"
+  if (( rc == 0 )); then ok "liberar.sh termina bien"; else mal "liberar.sh falló"; fi
+  if grep -q "$TXT_SOLTADA_VUELVEN .*$NAVEGADOR" <<<"$salida"; then
+    ok "liberar.sh dice que $NAVEGADOR se puede abrir otra vez"
+  else
+    mal "liberar.sh no dice que $NAVEGADOR se puede abrir otra vez"
+  fi
   if esperar 15 "$(c_lock NONE)"; then ok "lock task en NONE"; else mal "lock task sigue en $(estado)"; fi
   if es_device_owner; then mal "Slowtown sigue siendo Device Owner"; else ok "Slowtown ya no es Device Owner"; fi
+  p=$(pausa_de "$NAVEGADOR")
+  if [ "$p" = no ]; then ok "$APP_NAVEGADOR ya no está pausado"; else mal "$APP_NAVEGADOR sigue pausado ($p)"; fi
+  # Queda en pausa: si se la vuelve a provisionar, no se cierra sola.
+  if esperar 5 "run-as $PAQUETE cat shared_prefs/slowtown.xml | grep -q 'name=\"closed\" value=\"false\"'"; then
+    ok "queda en pausa: closed=false en sus preferencias"
+  else
+    mal "sus preferencias no dicen closed=false: $(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml | grep -o '<boolean name="closed"[^>]*>')"
+  fi
+  # Sin el bloqueo, desinstalarlo para el usuario anda, y vuelto a poner ya no
+  # está pausado (sin Device Owner, nadie lo pausa).
+  salida=$(disp pm uninstall -k --user 0 "$NAVEGADOR")
+  disp cmd package install-existing "$NAVEGADOR" >/dev/null
+  p=$(pausa_de "$NAVEGADOR")
+  if grep -q Success <<<"$salida" && hay_paquete "$NAVEGADOR" && [ "$p" = no ]; then
+    ok "ya no está bloqueado: se desinstala para el usuario, se vuelve a poner y no está pausado"
+  else
+    mal "después de soltarla: pm uninstall dijo «$(head -n 1 <<<"$salida")», y vuelto a poner quedó pausado: $p"
+  fi
+  # Lo que queda guardado en el sistema, con root y después sin root otra vez.
+  if adb_como 0; then
+    if politicas_chrome; then
+      if [ -z "$(politica_chrome URLBlocklist)" ]; then
+        if [ -z "$RESTRICCIONES" ]; then ok "Android ya no guarda políticas para Chrome (borró el archivo)"
+        else ok "las políticas de Chrome ya no tienen URLBlocklist"; fi
+      else
+        mal "Chrome sigue con URLBlocklist: $(politica_chrome URLBlocklist | head -n 3 | en_una_linea)…"
+      fi
+    else
+      mal "no pude leer las políticas de Chrome ($RESTRICCIONES_CHROME)"
+    fi
+    xml=$(package_restrictions)
+    printf '%s\n' "$xml" >"$SALIDA/package-restrictions-liberado.xml"
+    n=$(reglas_inicio_fijo <<<"$xml")
+    if ! grep -q '<package-restrictions' <<<"$xml"; then mal "no pude leer package-restrictions.xml"
+    elif [ "$n" = 0 ]; then ok "y suelta el Inicio fijo: ninguna regla para Slowtown"
+    else mal "quedan $n reglas de Inicio fijo para Slowtown"; fi
+    adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
+  else
+    mal "no pude pasar adb a root para ver lo que quedó en el sistema"
+  fi
   captura liberado
-  nota "vuelvo a provisionar para dejar el emulador listo"
+
+  nota "vuelvo a provisionar"
+  if volver_a_provisionar; then
+    # Soltada en pausa: volver a Inicio no la cierra sola.
+    ir_a_inicio
+    sostener 3 "$(c_lock NONE)"
+    afirmar_en_inicio "otra vez Device Owner, pero en pausa como quedó: volver a Inicio no la cierra" NONE
+  fi
+  paso_14_forzar
+  nota "al terminar: lock task $(estado), foco $(foco)"
+}
+
+volver_a_provisionar() {   # provisionar.sh, y que el nivel 2 vuelva solo
+  # Como en el teléfono, con Slowtown de Inicio común: la instalación la
+  # vuelve a abrir antes de que sea Device Owner, y el nivel 2 tiene que
+  # llegar igual, sin esperar a otro arranque.
+  disp cmd package set-home-activity "$INICIO_COMPONENTE" >/dev/null
+  ir_a_inicio || nota "Inicio no lleva a Slowtown antes de volver a provisionar ($(foco))"
   if (cd "$RAIZ" && ./scripts/provisionar.sh </dev/null) && es_device_owner; then
     ok "provisionar.sh la deja otra vez como Device Owner"
   else
     mal "no pude volver a provisionar"
+    return 1
+  fi
+  if esperar 15 "$(c_pausada "$NAVEGADOR")" && [ "$(pausa_de "$NAVEGADOR")" = android ]; then
+    ok "y el nivel 2 vuelve solo: $APP_NAVEGADOR pausado otra vez"
+  else
+    mal "otra vez Device Owner, pero $APP_NAVEGADOR no está pausado ($(pausa_de "$NAVEGADOR")): el nivel 2 no llegó"
+  fi
+}
+
+# El último recurso: liberar.sh --forzar saca a Slowtown con «dpm
+# remove-active-admin», sin preguntarle (SLOWTOWN_SIN_SOLTAR=1 hace como si no
+# contestara). Antes lee de sus preferencias lo que pausó, y después les saca
+# la pausa a las de sistema desinstalándolas para el usuario y volviéndolas a
+# poner. Android se lleva solo las políticas de Chrome y el bloqueo de
+# desinstalar; el Inicio fijo queda, y Slowtown no queda en pausa.
+paso_14_forzar() {
+  local salida rc p n
+  # Activa, para que haya algo que abrir.
+  if entrar_admin && activar_slowtown; then
+    ok "activa otra vez (LOCKED), para probar el último recurso"
+  else
+    mal "no pude activar Slowtown antes de --forzar (lock task: $(estado))"
   fi
   ir_a_inicio
-  nota "al terminar: lock task $(estado), foco $(foco)"
+  adb_como 2000 || mal "no pude sacarle root a adb"
+  salida=$(cd "$RAIZ" && SLOWTOWN_SIN_SOLTAR=1 ./scripts/liberar.sh --forzar </dev/null 2>&1)
+  rc=$?
+  printf '%s\n' "$salida"
+  if (( rc == 0 )); then ok "liberar.sh --forzar termina bien"; else mal "liberar.sh --forzar falló (salió $rc)"; fi
+  if esperar 15 "$(c_lock NONE)"; then ok "--forzar abre el teléfono: lock task en NONE"; else mal "después de --forzar, lock task sigue en $(estado)"; fi
+  if es_device_owner; then mal "después de --forzar, Slowtown sigue siendo Device Owner"; else ok "después de --forzar, Slowtown ya no es Device Owner"; fi
+  p=$(pausa_de "$NAVEGADOR")
+  if [ "$p" = no ] && grep -q "$TXT_FORZADA_VUELVE $NAVEGADOR\$" <<<"$salida"; then
+    ok "le saca la pausa a $APP_NAVEGADOR, que es de sistema, y lo dice: «$TXT_FORZADA_VUELVE $NAVEGADOR»"
+  else
+    mal "después de --forzar, $APP_NAVEGADOR quedó pausado: $p ($(grep -c "$TXT_FORZADA_VUELVE" <<<"$salida") líneas «$TXT_FORZADA_VUELVE»)"
+  fi
+  if hay_paquete "$NAVEGADOR"; then
+    nota "$NAVEGADOR sigue instalado para el usuario 0"
+  else
+    mal "--forzar dejó $NAVEGADOR desinstalado para el usuario 0"
+    disp cmd package install-existing "$NAVEGADOR" >/dev/null
+  fi
+  # Las políticas de Chrome las borra Android en segundo plano (se miran con
+  # root), pero sólo las de las apps instaladas: sin Chrome, quedan.
+  if adb_como 0; then
+    if esperar 10 "ls /data/system/users/0 >/dev/null 2>&1 && [ ! -e $RESTRICCIONES_CHROME ]"; then
+      ok "Android borra las políticas de Chrome al sacar el Device Owner"
+    elif ! hay_paquete "$CHROME"; then
+      aviso "las políticas de Chrome siguen guardadas: Android las borra sólo de las apps instaladas (clearApplicationRestrictions, Android 12), y este emulador no tiene Chrome; en el teléfono Chrome está"
+    else
+      mal "Chrome está instalado y sus políticas siguen guardadas después de --forzar"
+    fi
+    n=$(package_restrictions | reglas_inicio_fijo)
+    if [ "$n" = 1 ]; then nota "el Inicio fijo queda (1 regla), como avisa liberar.sh"
+    else aviso "liberar.sh avisa que el Inicio fijo queda, y quedaron $n reglas"; fi
+    adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
+  else
+    mal "no pude pasar adb a root para ver lo que quedó en el sistema"
+  fi
+  captura forzado
+
+  nota "vuelvo a provisionar para dejar el emulador listo"
+  volver_a_provisionar || return
+  # --forzar no la deja en pausa: al volver a ser Device Owner, Slowtown rearma
+  # la política sola, y se cierra en la primera vuelta a Inicio.
+  esperar 15 "dumpsys activity activities | grep -q 'u0:\[.*$PAQUETE[],]'" ||
+    nota "la lista de lock task todavía no tiene a Slowtown"
+  ir_a_inicio
+  if esperar 10 "$(c_lock LOCKED)"; then
+    afirmar_en_inicio "estaba activa al forzarla: otra vez Device Owner, se cierra en la primera vuelta a Inicio"
+  else
+    mal "estaba activa al forzarla, y otra vez Device Owner no se cierra al volver a Inicio (lock task: $(estado))"
+  fi
 }
 
 # ── Principal ───────────────────────────────────────────────────────────────
@@ -1767,7 +2462,7 @@ for arg in "$@"; do
     --build) COMPILAR=1 ;;
     --limpio) LIMPIO=1 ;;
     -h | --help)
-      sed -n '2,/^# corre, no tocar/{s/^# \{0,1\}//;p}' "$0"
+      sed -n '2,/^# Mientras corre, no tocar/{s/^# \{0,1\}//;p}' "$0"
       exit 0
       ;;
     *)
@@ -1777,7 +2472,7 @@ for arg in "$@"; do
   esac
 done
 
-PATH="$PATH:${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools"
+PATH="$PATH:$SDK/platform-tools"
 for cmd in adb python3 timeout; do
   command -v "$cmd" >/dev/null || { echo "🚨 Falta $cmd." >&2; exit 2; }
 done
@@ -1799,6 +2494,7 @@ paso_8
 paso_9
 paso_9b
 paso_9c
+paso_9d
 paso_10
 paso_11
 paso_12

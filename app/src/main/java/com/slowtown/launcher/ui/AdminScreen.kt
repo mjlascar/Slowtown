@@ -3,18 +3,11 @@ package com.slowtown.launcher.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 data class AdminStatus(
@@ -30,6 +23,7 @@ data class AdminStatus(
 fun AdminScreen(
     status: AdminStatus,
     onChooseApps: () -> Unit,
+    onSites: () -> Unit,
     onChooseWidget: () -> Unit,
     onFolders: () -> Unit,
     onToggleClosed: () -> Unit,
@@ -37,10 +31,8 @@ fun AdminScreen(
     onOpenPlayStore: () -> Unit,
     onChangePassword: () -> Unit,
     onLeaveSafeMode: () -> Unit,
-    onRelease: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var confirmRelease by remember { mutableStateOf(false) }
     val wide = Modifier.fillMaxWidth()
 
     FormScaffold(title = "Administración", onBack = onBack) {
@@ -68,47 +60,29 @@ fun AdminScreen(
         }
 
         Button(onClick = onChooseApps, modifier = wide) { Text("Elegir las apps permitidas") }
+        OutlinedButton(onClick = onSites, modifier = wide) { Text("Páginas bloqueadas") }
         OutlinedButton(onClick = onChooseWidget, modifier = wide) { Text("Elegir el widget de Inicio") }
         OutlinedButton(onClick = onFolders, modifier = wide) { Text("Carpetas") }
         Button(onClick = onToggleClosed, enabled = status.deviceOwner, modifier = wide) {
             Text(if (status.closed) "Pausar Slowtown" else "Activar Slowtown")
         }
-        if (status.closed) HintText("Pausarlo cierra las apps que estén abiertas.")
+        if (status.closed) {
+            HintText("Pausarlo cierra las apps que estén abiertas. Lo que está bloqueado siempre sigue bloqueado.")
+        }
         OutlinedButton(onClick = onOpenSettings, modifier = wide) { Text("Ir a Ajustes") }
         OutlinedButton(onClick = onOpenPlayStore, modifier = wide) { Text("Ir a Play Store") }
         HintText(
-            "Ajustes y Play Store dejan todo el teléfono a mano hasta que vuelvas " +
-                "a Inicio, se apague la pantalla o pasen 10 minutos.",
+            "Ajustes y Play Store dejan a mano todo el teléfono, salvo lo que está " +
+                "bloqueado siempre, hasta que vuelvas a Inicio, se apague la pantalla " +
+                "o pasen 10 minutos.",
         )
         OutlinedButton(onClick = onChangePassword, modifier = wide) { Text("Cambiar la contraseña") }
 
         if (status.deviceOwner) {
-            OutlinedButton(
-                onClick = { confirmRelease = true },
-                modifier = wide,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text("Dejar de ser Device Owner") }
+            // Desde la administración ya no: la contraseña está en un cajón de
+            // la casa, y soltarlo apagaba también lo que se bloquea siempre.
+            HintText("Slowtown deja de ser Device Owner sólo por cable, desde la compu (scripts/liberar.sh).")
         }
-    }
-
-    if (confirmRelease) {
-        AlertDialog(
-            onDismissRequest = { confirmRelease = false },
-            title = { Text("¿Dejar de ser Device Owner?") },
-            text = {
-                Text(
-                    "Slowtown queda como un launcher común, sin poder activarse. Para " +
-                        "volver hay que provisionar otra vez por cable, y Android sólo " +
-                        "lo deja hacer sin ninguna cuenta en el teléfono.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirmRelease = false; onRelease() }) { Text("Sí, soltarlo") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmRelease = false }) { Text("Cancelar") }
-            },
-        )
     }
 }
 

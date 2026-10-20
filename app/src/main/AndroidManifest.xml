@@ -50,6 +50,15 @@
             android:name=".admin.FreeSession$End"
             android:exported="false" />
 
+        <!-- La salida por cable (scripts/liberar.sh). Exportado sin permiso a
+             propósito: `adb shell content call` corre como shell, y el propio
+             proveedor rechaza a cualquiera que no sea shell o root. -->
+        <provider
+            android:name=".admin.CableProvider"
+            android:authorities="com.slowtown.launcher.cable"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
         <!-- Lo que `dpm set-device-owner` activa. -->
         <receiver
             android:name=".admin.SlowtownAdminReceiver"

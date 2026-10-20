@@ -65,6 +65,51 @@ alarma, y `Policies.apply` respeta una sesión en curso: rearmar la política no
 la corta antes. En el emulador, el final se dispara a mano con root:
 `adb shell "am broadcast -n 'com.slowtown.launcher/.admin.FreeSession\$End'"`.
 
+## Los dos niveles
+
+Marcos los pidió para no acostumbrarse a aflojar: una contraseña que está en
+un cajón de su casa se termina sacando.
+
+- **Nivel 1, la configuración** (con contraseña): las apps permitidas, las
+  páginas que se suman en «Páginas bloqueadas» (`Prefs.blockedSites`),
+  pausar Slowtown y las dos sesiones.
+- **Nivel 2, el código** (`Fixed`): no se cambia desde el teléfono, ni con la
+  contraseña; sólo con una versión nueva, compilada e instalada por cable con
+  la clave estable. Son las políticas de Chrome (`Chrome`: sin incógnito,
+  SafeSearch, el filtro propio de Chrome para sitios de adultos, sin DNS propio
+  de Chrome, sin noticias en la pestaña nueva, y `URLBlocklist`) y las apps
+  pausadas (`Vetoed`: `Fixed.APPS` y
+  cualquier navegador que no sea Chrome, también los deshabilitados). Nunca se
+  pausa nada de `Vetoed.NEVER`, de `Essentials`, un launcher ni un teclado.
+- **Las páginas del nivel 2**: Chrome lee hasta 1.000. Primero
+  `Fixed.CORE_SITES` (a mano: YouTube, TikTok, Instagram, el streaming),
+  después las del nivel 1 y al final la base, `res/raw/paginas_fijas.txt`:
+  dominios enteros (`.xxx`, `.bet`, `bet.ar`…) y las más visitadas de cada
+  categoría de las listas UT1 de la Universidad Toulouse Capitole (CC BY-SA
+  4.0), ordenadas con el ranking Tranco. La arma `scripts/paginas-fijas.py`,
+  que también explica lo que se saca a propósito (`NUNCA`): ajedrez online
+  (lo pidió Marcos), música, podcasts y radio, ayuda para dejar el juego,
+  dominios compartidos y lo técnico. Las listas completas, que son millones,
+  son para el DNS.
+
+El nivel 2 se pone en cada arranque, cada vez que se instala o cambia una app
+y al quedar como Device Owner (`SlowtownApp`; esto último porque, si Slowtown
+ya era el Inicio, `provisionar.sh` la reabre antes de `set-device-owner` y la
+revisión del arranque llega tarde), con Slowtown activo o en pausa. Aguanta
+las sesiones y el modo seguro porque lo guarda Android. «Dejar de ser Device
+Owner» ya no está en la administración: sólo por cable.
+
+Pausadas y no escondidas: la pausa sobrevive a las actualizaciones de Play, y
+en Ajustes se ve qué pasa. Probado en el emulador: la pausa queda a nombre de
+`android`, adb no la saca (`pm unsuspend` no hace nada) ni puede volver a
+mostrar una app escondida (no tiene `MANAGE_USERS`), y desinstalar Slowtown no
+la levanta. Por eso la salida por cable pasa por Slowtown. Lo único que la
+borra es volver a la versión de fábrica de una app de sistema («Desinstalar
+actualizaciones»): a esas, y a Chrome, Slowtown les bloquea desinstalar
+(`setUninstallBlocked`), y sacar el Device Owner lo suelta solo. Abrir una app
+pausada con Slowtown activo muestra «Ajustes no está disponible»: Android
+quiere mostrar su aviso de administrador, que es de Ajustes.
+
 ## Reglas que no se rompen
 
 1. **Ajustes y el launcher de fábrica nunca se deshabilitan, esconden ni
@@ -78,10 +123,17 @@ la corta antes. En el emulador, el final se dispara a mano con root:
    `com.sec.imsservice`, `com.sec.ims`, ni `com.vzw.apnlib` si está. Ni
    SystemUI, `com.android.providers.settings`, `com.android.shell` o el
    instalador de paquetes.
-3. **Siempre hay una salida por cable.** El build de debug es `testOnly`
-   (`app/src/debug/AndroidManifest.xml`) para que `scripts/liberar.sh` pueda
-   sacar a Slowtown de Device Owner. Se instala con `adb install -t`.
-   `provisionar.sh` se niega a provisionar un APK sin testOnly.
+3. **Siempre hay una salida por cable.** `scripts/liberar.sh` le pide a
+   Slowtown, con `adb shell content call` (`CableProvider`, que sólo atiende a
+   shell y root), que deshaga el nivel 2, abra el teléfono y deje de ser
+   Device Owner, y queda en pausa. Si Slowtown no contesta, se instala una
+   versión que ande y se vuelve a correr. El último recurso, `liberar.sh
+   --forzar`, usa `dpm remove-active-admin`, que anda porque el build de debug
+   es `testOnly` (`app/src/debug/AndroidManifest.xml`). Después saca la pausa a
+   las apps de sistema (lee la lista con `run-as`, y las desinstala para el
+   usuario y las vuelve a poner, con sus datos); las de Play quedan pausadas
+   hasta reinstalarlas. Se instala con `adb install -t`. `provisionar.sh` se
+   niega a provisionar un APK sin testOnly.
 4. **Primero el emulador** (Android 12, API 31, sin cuentas). Al teléfono sólo
    llega lo que ya anduvo ahí, con llamadas y SMS probados con el teléfono
    cerrado.
@@ -120,8 +172,12 @@ unos 3 GB reales, y el build otros 2: el 19/10 el kernel lo mató por falta de
 memoria a mitad de un build. Compilar antes de levantarlo, o cerrar Firefox.
 
 `./scripts/probar-emulador.sh --limpio` corre todo el recorrido de punta a
-punta (instalar, activar, intentos de escape, llamada, SMS, Ajustes, reinicio,
-crashes, salida por cable) y termina con código 1 si algo falla. Al teléfono
+punta (instalar, activar, intentos de escape, llamada, SMS, Ajustes, nivel 2,
+reinicio, crashes, salida por cable, también con `--forzar`) y termina con
+código 1 si algo falla. El navegador del emulador (WebView Browser Tester) es
+el que el nivel 2 pausa; para probar las instalaciones nuevas, la prueba arma
+dos APK mínimos con aapt2. Chrome no está en el emulador: se verifica que
+Android guarde las políticas, no que Chrome las cumpla. Al teléfono
 no llega nada que no haya pasado por acá. Corre sólo en un emulador: si el
 S10e también está conectado, lo deja de lado (todo va con `-s` y
 `ANDROID_SERIAL`). `liberar.sh` y `provisionar.sh` llaman a `adb` a secas:

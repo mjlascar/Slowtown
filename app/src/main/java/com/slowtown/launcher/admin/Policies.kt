@@ -158,8 +158,10 @@ object Policies {
     }
 
     /**
-     * Deja de ser Device Owner. Para volver hay que provisionar otra vez por
-     * cable, y Android sólo lo permite sin ninguna cuenta en el teléfono.
+     * Deja de ser Device Owner. Sólo lo pide el cable ([CableProvider], desde
+     * `scripts/liberar.sh`), después de deshacer el nivel 2: desde la
+     * administración no, porque la contraseña está en un cajón de la casa.
+     * Para volver hay que provisionar otra vez, sin cuentas en el teléfono.
      */
     // Obsoleto desde API 26, pero sigue siendo la única forma de que el propio
     // Device Owner se suelte, y anda de Android 12 a 17.

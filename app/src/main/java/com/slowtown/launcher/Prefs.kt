@@ -38,6 +38,26 @@ class Prefs(context: Context) {
         get() = Folders.parse(prefs.getString(KEY_FOLDERS, null))
         set(value) = prefs.edit().putString(KEY_FOLDERS, Folders.serialize(value)).apply()
 
+    /**
+     * Las páginas que se suman en la configuración a las que bloquea siempre
+     * el nivel 2 ([com.slowtown.launcher.admin.Fixed]). Es el nivel 1:
+     * se cambian con la contraseña.
+     */
+    var blockedSites: Set<String>
+        get() = prefs.getStringSet(KEY_BLOCKED_SITES, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_BLOCKED_SITES, value).apply()
+
+    /**
+     * Lo que pausó el nivel 2 ([com.slowtown.launcher.admin.Vetoed]): para
+     * soltarlo al salir por cable, y lo que una versión nueva ya no pause.
+     */
+    var vetoed: Set<String>
+        get() = prefs.getStringSet(KEY_VETOED, null)?.toSet() ?: emptySet()
+        // commit y no apply: sin este registro, nadie podría sacar la pausa.
+        set(value) {
+            prefs.edit().putStringSet(KEY_VETOED, value).commit()
+        }
+
     /** Si el usuario quiere Slowtown activo (lock task). Sólo tiene efecto siendo Device Owner. */
     var closed: Boolean
         get() = prefs.getBoolean(KEY_CLOSED, false)
@@ -70,6 +90,8 @@ class Prefs(context: Context) {
         const val KEY_ALLOWED = "allowed"
         const val KEY_FAVORITES = "favorites"
         const val KEY_FOLDERS = "folders"
+        const val KEY_BLOCKED_SITES = "blocked_sites"
+        const val KEY_VETOED = "vetoed"
         const val KEY_CLOSED = "closed"
         const val KEY_ADMIN_SESSION_UNTIL = "admin_session_until"
         const val KEY_FREE_SESSION_UNTIL = "free_session_until"

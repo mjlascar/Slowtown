@@ -30,6 +30,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.admin.AdminSession
+import com.slowtown.launcher.admin.Chrome
+import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.LockTaskEvents
 import com.slowtown.launcher.admin.Policies
@@ -49,6 +51,7 @@ import com.slowtown.launcher.ui.FolderScreen
 import com.slowtown.launcher.ui.FreeSessionInfo
 import com.slowtown.launcher.ui.FoldersScreen
 import com.slowtown.launcher.ui.HomeScreen
+import com.slowtown.launcher.ui.SitesScreen
 import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
 import com.slowtown.launcher.ui.WidgetChoice
@@ -76,7 +79,7 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, WidgetPicker, Folders }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -90,6 +93,7 @@ class HomeActivity : ComponentActivity() {
     private var openable by mutableStateOf<List<LaunchableApp>>(emptyList())
     private var favorites by mutableStateOf<Set<String>>(emptySet())
     private var folders by mutableStateOf<List<Folder>>(emptyList())
+    private var blockedSites by mutableStateOf<Set<String>>(emptySet())
     private var openFolderId by mutableStateOf<String?>(null)
     private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var homeHint by mutableStateOf("")
@@ -149,7 +153,7 @@ class HomeActivity : ComponentActivity() {
             // Atrás nunca sale del launcher: vuelve un paso, y de ahí a Inicio.
             override fun handleOnBackPressed() = when (screen) {
                 Screen.Folder -> screen = Screen.Drawer
-                Screen.ChooseApps, Screen.WidgetPicker, Screen.Folders -> screen = Screen.Admin
+                Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders -> screen = Screen.Admin
                 else -> goHome()
             }
         })
@@ -222,6 +226,10 @@ class HomeActivity : ComponentActivity() {
                     Screen.Admin -> AdminScreen(
                         status = status,
                         onChooseApps = { screen = Screen.ChooseApps },
+                        onSites = {
+                            blockedSites = prefs.blockedSites
+                            screen = Screen.Sites
+                        },
                         onChooseWidget = ::openWidgetPicker,
                         onFolders = { screen = Screen.Folders },
                         onToggleClosed = ::toggleClosed,
@@ -231,13 +239,18 @@ class HomeActivity : ComponentActivity() {
                         },
                         onChangePassword = { screen = Screen.CreatePassword },
                         onLeaveSafeMode = ::leaveSafeMode,
-                        onRelease = ::release,
                         onBack = ::goHome,
                     )
                     Screen.ChooseApps -> ChooseAppsScreen(
                         apps = permittable,
                         chosen = prefs.allowed,
                         onDone = ::saveChosen,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.Sites -> SitesScreen(
+                        sites = blockedSites,
+                        onAdd = { site -> saveSites(blockedSites + site) },
+                        onRemove = { site -> saveSites(blockedSites - site) },
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Folders -> FoldersScreen(
@@ -576,12 +589,13 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    private fun release() {
-        if (isLocked()) runCatching { stopLockTask() }
-        Policies.release(this)
-        prefs.closed = false
-        refreshStatus()
-        refreshApps()
+    /** El nivel 1 de las páginas: rige en Chrome desde ya, esté Slowtown activo o en pausa. */
+    private fun saveSites(sites: Set<String>) {
+        prefs.blockedSites = sites
+        blockedSites = sites
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { Chrome.apply(this@HomeActivity, sites) }
+        }
     }
 
     private fun refreshStatus() {
@@ -616,7 +630,10 @@ class HomeActivity : ComponentActivity() {
     private fun refreshApps() {
         appsLoad?.cancel()
         appsLoad = lifecycleScope.launch {
+            // Lo del nivel 2 no aparece en ningún lado: no se abre, ni se puede permitir.
+            val vetoed = prefs.vetoed + Fixed.APPS
             val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
+                .filterNot { it.packageName in vetoed }
             val active = shouldBeClosed()
             val allowed = prefs.allowed
             // Con «Habilitar todo» en curso se ven todas, como sin Slowtown.

@@ -104,6 +104,15 @@ Recomendación para una primera versión: dos capas.
    Las WebView leen `com.android.browser:URLBlocklist` de la app que las
    contiene. Samsung Internet no tiene políticas: se esconde.
 
+`URLBlocklist` lee hasta 1.000 entradas (Google lo documenta en «Allow or
+block access to websites»). Las listas por categoría tienen millones (UT1:
+4,6 millones de eróticas, 51 mil de apuestas, 34 mil de juegos), así que a
+Chrome va una base con las más visitadas de cada una según Tranco, y las
+listas completas quedan para el DNS. Una entrada sin subdominio tapa todo un
+dominio: `bet.ar` (las apuestas legales de Argentina) o `xxx`. Las listas
+mezclan cosas: en «apuestas» de UT1 estaba Gamblers Anonymous, en «juegos»
+Starlink, y en «video» radios y podcasts. Hay que revisarlas a mano.
+
 Huecos a tapar: `translate.goog` (proxy de Google), AMP, frontends como
 Invidious, navegadores que renderizan en sus servidores (Opera Mini, Puffin) y
 VPNs (`DISALLOW_CONFIG_VPN`). Segunda versión posible: una VPN local que sólo
