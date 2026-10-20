@@ -1,6 +1,7 @@
 package com.slowtown.launcher.admin
 
 import android.content.Context
+import android.util.Log
 import com.slowtown.launcher.Prefs
 import com.slowtown.launcher.R
 
@@ -63,9 +64,9 @@ object Fixed {
     }
 
     /**
-     * Lo que se abre aunque caiga adentro de las bloqueadas. Iniciar sesión en Google
-     * desde Chrome pasa por accounts.youtube.com para dejar la sesión puesta
-     * también en YouTube, y sin esto el ingreso queda a medias.
+     * Lo que se abre aunque caiga adentro de las bloqueadas. Iniciar sesión en
+     * Google desde Chrome pasa por accounts.youtube.com para dejar la sesión
+     * puesta también en YouTube, y sin esto el ingreso queda a medias.
      */
     val SITE_EXCEPTIONS = listOf("accounts.youtube.com")
 
@@ -107,19 +108,49 @@ object Fixed {
     )
 
     /**
+     * Un solo candado para poner y sacar el nivel 2: si una revisión (la del
+     * arranque, una app que se instala) se cruzara con la salida por cable,
+     * volvería a pausar todo justo antes de que Slowtown se suelte, y esas
+     * pausas quedarían sin nadie que las pueda sacar. No es el de este objeto:
+     * ése lo toma [listedSites], adentro de [Chrome.apply].
+     */
+    private val lock = Any()
+
+    /**
      * Pone el nivel 2 (y las páginas del nivel 1, que viajan en las mismas
      * políticas de Chrome). Sin importar si Slowtown está activo o en pausa.
      * Hace consultas al sistema: fuera del hilo principal.
      */
     fun enforce(context: Context) {
-        if (!Policies.isDeviceOwner(context)) return
-        Chrome.apply(context, Prefs(context).blockedSites)
-        Vetoed.enforce(context)
+        synchronized(lock) {
+            if (!Policies.isDeviceOwner(context)) return
+            // Cada mitad por su lado: si Chrome falla, las apps se pausan igual.
+            runCatching { Chrome.apply(context, Prefs(context).blockedSites) }
+                .onFailure { Log.e(TAG, "No pude poner las políticas de Chrome", it) }
+            runCatching { Vetoed.enforce(context) }
+                .onFailure { Log.e(TAG, "No pude pausar las apps del nivel 2", it) }
+        }
     }
 
-    /** Lo saca, para la salida por cable. Devuelve las apps que vuelven. */
-    fun undo(context: Context): List<String> {
-        Chrome.clear(context)
-        return Vetoed.undo(context)
+    /** Sólo las páginas, al cambiar las del nivel 1. Fuera del hilo principal. */
+    fun applySites(context: Context) {
+        synchronized(lock) {
+            if (Policies.isDeviceOwner(context)) Chrome.apply(context, Prefs(context).blockedSites)
+        }
     }
+
+    /**
+     * La salida por cable: saca el nivel 2 y deja de ser Device Owner, sin que
+     * una revisión se cruce. Devuelve las apps que se pueden abrir otra vez.
+     */
+    fun release(context: Context): List<String> {
+        synchronized(lock) {
+            Chrome.clear(context)
+            val restored = Vetoed.undo(context)
+            Policies.release(context)
+            return restored
+        }
+    }
+
+    private const val TAG = "Slowtown"
 }

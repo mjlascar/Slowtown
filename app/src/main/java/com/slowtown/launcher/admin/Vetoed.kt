@@ -112,20 +112,29 @@ object Vetoed {
         prefs.vetoed = paused
     }
 
-    /** Para la salida por cable: las vuelve a dejar como estaban. Devuelve cuáles. */
+    /**
+     * Para la salida por cable: las vuelve a dejar como estaban, mirando qué
+     * está pausado de verdad y no sólo lo anotado (un registro que no llegó a
+     * guardarse no deja nada atrás). Sacar la pausa del administrador no toca
+     * la de otras apps, como Bienestar digital. Devuelve las que se pueden
+     * abrir otra vez.
+     */
     @Synchronized
     fun undo(context: Context): List<String> {
         if (!Policies.isDeviceOwner(context)) return emptyList()
+        val dpm = context.getSystemService(DevicePolicyManager::class.java)
+        val admin = Policies.admin(context)
         val prefs = Prefs(context)
-        val paused = prefs.vetoed
-        if (paused.isNotEmpty()) {
-            val dpm = context.getSystemService(DevicePolicyManager::class.java)
-            val admin = Policies.admin(context)
-            dpm.setPackagesSuspended(admin, paused.toTypedArray(), false)
-            paused.forEach { if (isInstalled(context, it)) dpm.setUninstallBlocked(admin, it, false) }
-        }
+        val installed = context.packageManager
+            .getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)
+            .map { it.packageName }
+        val paused = installed.filter { runCatching { dpm.isPackageSuspended(admin, it) }.getOrDefault(false) }
+            .toSet() + prefs.vetoed.filter { it in installed }
+        if (paused.isNotEmpty()) dpm.setPackagesSuspended(admin, paused.toTypedArray(), false)
+        (paused + prefs.vetoed).filter { it in installed }
+            .forEach { runCatching { dpm.setUninstallBlocked(admin, it, false) } }
         prefs.vetoed = emptySet()
-        return paused.sorted()
+        return paused.filterNot { runCatching { dpm.isPackageSuspended(admin, it) }.getOrDefault(false) }.sorted()
     }
 
     private fun untouchable(context: Context): Set<String> = buildSet {

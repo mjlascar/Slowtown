@@ -64,6 +64,9 @@ NUNCA = {
     "boomplaymusic.com", "reverbnation.com", "mp3party.net", "napster.com",
     "live365.com", "hulkshare.com", "stereogum.com", "pri.org", "101.ru", "purevolume.com",
     "bcbits.com",
+    # Chrome bloquea también los videos embebidos, y muchos cursos y páginas de
+    # empresas ponen los suyos en Vimeo.
+    "vimeo.com",
     # Para hablar, trabajar, pagar y estudiar.
     "whatsapp.com", "whatsapp.net", "telegram.org", "t.me", "signal.org",
     "messenger.com", "icq.com", "linkedin.com", "xing.com", "yammer.com",

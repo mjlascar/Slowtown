@@ -81,13 +81,19 @@ object Chrome {
      * (bloquea también los subdominios). null si no parece una página.
      */
     fun normalizeSite(input: String): String? {
+        // Un texto enorme pegado por error viajaría en las políticas en cada arranque.
+        if (input.length > MAX_INPUT) return null
         val host = input.trim().lowercase()
             .substringAfter("://")
             .substringBefore('/').substringBefore('?').substringBefore('#')
             .substringAfterLast('@').substringBefore(':')
             .removePrefix("www.")
-        return host.takeIf { SITE.matches(it) }
+        // Los topes de un nombre de dominio: 253 en total, 63 por parte.
+        val valid = host.length <= 253 && host.split('.').all { it.length <= 63 } && SITE.matches(host)
+        return host.takeIf { valid }
     }
+
+    private const val MAX_INPUT = 2048
 
     private val SITE = Regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$")
 

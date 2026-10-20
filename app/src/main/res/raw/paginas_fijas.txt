@@ -678,7 +678,6 @@ tiermaker.com
 # video y streaming: las 90 más visitadas de 3.710
 youtube.com
 netflix.com
-vimeo.com
 twitch.tv
 ok.ru
 dailymotion.com
@@ -766,6 +765,7 @@ trutv.com
 joblo.com
 ultimedia.com
 viddler.com
+globovideos.com
 
 # redes: las 50 más visitadas de 715
 facebook.com

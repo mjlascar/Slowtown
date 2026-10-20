@@ -18,10 +18,19 @@ PAQUETE=com.slowtown.launcher
 ADMIN="$PAQUETE/.admin.SlowtownAdminReceiver"
 APK="${1:-app/build/outputs/apk/debug/app-debug.apk}"
 
-# Permiso para poner widgets en Inicio sin el diálogo de Android, que es de
-# Ajustes y con Slowtown activo quedaría bloqueado.
+# apksigner y aapt2, del SDK: para mirar el APK antes de instalarlo.
+sdk="${ANDROID_HOME:-$(sed -n 's/^sdk\.dir=//p' "$RAIZ/local.properties" 2>/dev/null)}"
+herramienta() {
+  ls -1 "${sdk:-$HOME/Android/Sdk}"/build-tools/*/"$1" 2>/dev/null | sort -V | tail -n 1
+}
+
+# Lo que Slowtown necesita y sólo se da desde Ajustes, que con Slowtown activo
+# queda bloqueado: poner widgets en Inicio sin el diálogo de Android, y leer los
+# datos de uso para mostrar el tiempo de pantalla (lo mismo que Bienestar
+# digital, que no comparte sus números).
 permitir_widgets() {
   adb shell appwidget grantbind --package "$PAQUETE" --user 0 >/dev/null
+  adb shell appops set "$PAQUETE" GET_USAGE_STATS allow >/dev/null
 }
 
 if [ "$(adb get-state 2>/dev/null)" != device ]; then
@@ -55,8 +64,7 @@ if [ "$emulador" != 1 ]; then
     echo "   y compilá de nuevo antes de tocar un teléfono real." >&2
     exit 1
   fi
-  sdk="${ANDROID_HOME:-$(sed -n 's/^sdk\.dir=//p' "$RAIZ/local.properties" 2>/dev/null)}"
-  apksigner=$(ls -1 "${sdk:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+  apksigner=$(herramienta apksigner)
   if [ -z "$apksigner" ]; then
     echo "🚨 No encuentro apksigner en el SDK." >&2
     exit 1
@@ -70,6 +78,20 @@ if [ "$emulador" != 1 ]; then
     exit 1
   fi
   echo "  ✅ firmado con la clave estable"
+fi
+
+# Sin testOnly no queda el último recurso de liberar.sh (--forzar), para cuando
+# Slowtown no contesta. Se mira en el APK, antes de instalar nada.
+aapt2=$(herramienta aapt2)
+if [ -z "$aapt2" ]; then
+  echo "🚨 No encuentro aapt2 en el SDK." >&2
+  exit 1
+fi
+manifiesto=$("$aapt2" dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null || true)
+if ! grep -q 'testOnly(0x01010272)=true' <<<"$manifiesto"; then
+  echo "🚨 $APK no es una build de prueba (testOnly). No lo instalo: sin eso, liberar.sh" >&2
+  echo "   no tendría su último recurso. Compilá con ./gradlew assembleDebug." >&2
+  exit 1
 fi
 
 echo
@@ -119,28 +141,36 @@ if [ -n "$cuentas" ]; then
 fi
 echo "  ✅ ninguna cuenta"
 
-if [ "$emulador" != 1 ]; then
-  echo
-  echo "⚠️  Esto es un teléfono real. Device Owner no se desinstala: sólo sale con"
-  echo "   scripts/liberar.sh (si el APK es de prueba), desde la propia app, o con"
-  echo "   un factory reset."
-  read -r -p "   Escribí SI para seguir: " ok
-  [ "$ok" = SI ] || { echo "Cancelado."; exit 1; }
-fi
-
 echo
 echo "── instalando ────────────────────────────────────────"
+# Instalarla todavía no cierra nada: es una app más hasta set-device-owner.
 adb install -r -t "$APK"
 permitir_widgets
 
-# Sin testOnly, liberar.sh no funciona y la única salida es la app o un reset.
 paquete=$(adb shell dumpsys package "$PAQUETE" | tr -d '\r')
 if ! grep -q TEST_ONLY <<<"$paquete"; then
   echo "🚨 El APK instalado no es una build de prueba (testOnly). No lo dejo como" >&2
-  echo "   Device Owner: si algo sale mal, no habría salida por cable." >&2
+  echo "   Device Owner: liberar.sh no tendría su último recurso." >&2
   exit 1
 fi
-echo "  ✅ build de prueba: scripts/liberar.sh la puede sacar"
+echo "  ✅ build de prueba: scripts/liberar.sh --forzar la puede sacar"
+
+# Lo que va a pausar el nivel 2 apenas sea Device Owner, preguntado a la
+# propia Slowtown (no hace falta que sea Device Owner para contestar).
+echo
+echo "── nivel 2 ───────────────────────────────────────────"
+respuesta=$(timeout 60 adb shell content call --uri "content://$PAQUETE.cable" --method mostrar 2>&1 | tr -d '\r' || true)
+pausaria=$(sed -n 's/.*pausaria=\([^,}]*\).*/\1/p' <<<"$respuesta")
+echo "  va a pausar: ${pausaria:-nada}"
+
+if [ "$emulador" != 1 ]; then
+  echo
+  echo "⚠️  Esto es un teléfono real. Device Owner no se desinstala: sólo sale con"
+  echo "   scripts/liberar.sh, por cable, o con un factory reset. Mirá la lista de"
+  echo "   arriba: si hay algo que no tendría que pausarse, cancelá."
+  read -r -p "   Escribí SI para seguir: " ok
+  [ "$ok" = SI ] || { echo "Cancelado. Slowtown quedó instalada como una app común."; exit 1; }
+fi
 
 echo
 echo "── Device Owner ──────────────────────────────────────"
