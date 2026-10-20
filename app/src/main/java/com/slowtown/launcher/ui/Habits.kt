@@ -211,7 +211,14 @@ private fun Graph(habit: Habit, done: Set<LocalDate>, today: LocalDate, onToggle
                 Box(Modifier.size(width = (cell + gap) * weeks, height = 14.dp)) {
                     for (w in 0 until weeks) {
                         val monday = firstMonday.plusWeeks(w.toLong())
-                        if (w == 0 || monday.month != monday.minusWeeks(1).month) {
+                        // Cada mes donde empieza. El de la primera columna, sólo si
+                        // le queda lugar antes del siguiente (si no, se pisan).
+                        val starts = if (w == 0) {
+                            firstMonday.plusWeeks(2).month == firstMonday.month
+                        } else {
+                            monday.month != monday.minusWeeks(1).month
+                        }
+                        if (starts) {
                             Text(
                                 monday.month.getDisplayName(TextStyle.SHORT, SPANISH).trimEnd('.'),
                                 modifier = Modifier.offset(x = (cell + gap) * w),
