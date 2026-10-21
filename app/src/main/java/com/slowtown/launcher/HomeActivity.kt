@@ -37,7 +37,8 @@ import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.apps.AppCatalog
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
-import com.slowtown.launcher.apps.Habit
+import com.slowtown.launcher.apps.HabitKind
+import com.slowtown.launcher.apps.HabitPlan
 import com.slowtown.launcher.apps.Habits
 import com.slowtown.launcher.apps.LaunchableApp
 import com.slowtown.launcher.apps.ScreenTime
@@ -52,6 +53,7 @@ import com.slowtown.launcher.ui.DrawerScreen
 import com.slowtown.launcher.ui.FolderScreen
 import com.slowtown.launcher.ui.FreeSessionInfo
 import com.slowtown.launcher.ui.FoldersScreen
+import com.slowtown.launcher.ui.HabitsPickerScreen
 import com.slowtown.launcher.ui.HabitsScreen
 import com.slowtown.launcher.ui.HabitsWidget
 import com.slowtown.launcher.ui.HomeScreen
@@ -85,7 +87,7 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -112,7 +114,8 @@ class HomeActivity : ComponentActivity() {
 
     /** Los hábitos de Slowtown en el lugar del widget, en vez del de una app. */
     private var showHabits by mutableStateOf(false)
-    private var habitMarks by mutableStateOf<Map<Habit, Set<LocalDate>>>(emptyMap())
+    private var habitPlan by mutableStateOf(Habits.DEFAULT_PLAN)
+    private var habitMarks by mutableStateOf<Map<HabitKind, Set<LocalDate>>>(emptyMap())
 
     /** Lo mismo que muestra Bienestar digital, calculado con los datos de uso de Android. */
     private var screenTime by mutableStateOf<String?>(null)
@@ -167,6 +170,7 @@ class HomeActivity : ComponentActivity() {
             // Atrás nunca sale del launcher: vuelve un paso, y de ahí a Inicio.
             override fun handleOnBackPressed() = when (screen) {
                 Screen.Folder -> screen = Screen.Drawer
+                Screen.HabitsPicker -> screen = Screen.Habits
                 Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders -> screen = Screen.Admin
                 else -> goHome()
             }
@@ -211,6 +215,7 @@ class HomeActivity : ComponentActivity() {
                         widget = if (showHabits) {
                             @Composable {
                                 HabitsWidget(
+                                    plan = habitPlan,
                                     marks = habitMarks,
                                     today = today,
                                     onToggleToday = { toggleHabit(it, today) },
@@ -305,10 +310,17 @@ class HomeActivity : ComponentActivity() {
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Habits -> HabitsScreen(
+                        plan = habitPlan,
                         marks = habitMarks,
                         today = today,
                         onToggle = ::toggleHabit,
+                        onChoose = { screen = Screen.HabitsPicker },
                         onBack = ::goHome,
+                    )
+                    Screen.HabitsPicker -> HabitsPickerScreen(
+                        plan = habitPlan,
+                        onChange = ::saveHabitPlan,
+                        onBack = { screen = Screen.Habits },
                     )
                 }
             }
@@ -623,17 +635,24 @@ class HomeActivity : ComponentActivity() {
     }
 
     /** Marcar o desmarcar un día no pide contraseña: no afloja nada. Los días que no llegaron, no. */
-    private fun toggleHabit(habit: Habit, date: LocalDate) {
+    private fun toggleHabit(kind: HabitKind, date: LocalDate) {
         if (date.isAfter(LocalDate.now())) return
-        val current = Habits.parse(prefs.habitDays(habit))
+        val current = Habits.parse(prefs.habitDays(kind))
         val updated = if (date in current) current - date else current + date
-        prefs.setHabitDays(habit, updated.mapTo(mutableSetOf()) { it.toString() })
-        habitMarks = habitMarks + (habit to updated)
+        prefs.setHabitDays(kind, updated.mapTo(mutableSetOf()) { it.toString() })
+        habitMarks = habitMarks + (kind to updated)
+    }
+
+    /** Qué hábitos van en Inicio y cuántas veces por semana: sin contraseña, no afloja nada. */
+    private fun saveHabitPlan(plan: List<HabitPlan>) {
+        prefs.habitPlan = plan
+        habitPlan = plan
     }
 
     private fun refreshHabits() {
         today = LocalDate.now()
-        habitMarks = Habit.entries.associateWith { Habits.parse(prefs.habitDays(it)) }
+        habitPlan = prefs.habitPlan
+        habitMarks = HabitKind.entries.associateWith { Habits.parse(prefs.habitDays(it)) }
     }
 
     /** Hasta un segundo después de la medianoche, para no despertar un instante antes. */

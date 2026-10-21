@@ -49,16 +49,19 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 
 ## Hábitos y tiempo de pantalla
 
-- **Hábitos** (`apps/Habits.kt`, `ui/Habits.kt`): Marcos quiere meditar 2
-  veces por semana y hacer ejercicio 3, sin app aparte. Van en el lugar del
-  widget, y vienen puestos (`Prefs.habitsWidget`, salvo que ya haya un widget
-  de otra app); en el selector de widget son «Hábitos de Slowtown». Dos filas
-  con los últimos 7 días, como los cuadraditos de GitHub, hoy a la derecha;
-  cuánto lleva contra la meta en esos 7 días; y a la derecha, pegado al día de
-  hoy, el botón que lo marca (yin y yang, pesa: dibujados con Canvas, sin
-  emojis). Tocar los cuadraditos abre «Hábitos», el resumen por semanas, donde
-  se puede marcar un día pasado. Sin contraseña: no afloja nada. Los días se
-  guardan como fechas ISO (`habit_meditar`, `habit_ejercicio`).
+- **Hábitos** (`apps/Habits.kt`, `ui/Habits.kt`, `ui/HabitIcons.kt`): sin app
+  aparte. Van en el lugar del widget, y vienen puestos (`Prefs.habitsWidget`,
+  salvo que ya haya un widget de otra app); en el selector de widget son
+  «Hábitos de Slowtown». Una fila por hábito con los últimos 7 días, como los
+  cuadraditos de GitHub, hoy a la derecha; cuánto lleva contra la meta en esos
+  7 días; y a la derecha, pegado al día de hoy, el botón que lo marca. Tocar
+  los cuadraditos abre «Hábitos», el resumen por semanas, donde se puede marcar
+  un día pasado, y de ahí «Elegir hábitos»: un catálogo de 14 (`HabitKind`,
+  cada uno con su dibujo hecho con Canvas, sin emojis), hasta 4 en Inicio, cada
+  uno con sus veces por semana (de 1 a 7). De entrada, lo que Marcos se propuso:
+  meditar 2 y ejercicio 3. Sin contraseña: no afloja nada. El plan se guarda en
+  `habit_plan` (JSON) y los días como fechas ISO, por hábito (`habit_meditar`,
+  `habit_leer`…): sacar un hábito no borra sus días.
 - **Tiempo de pantalla** (`apps/ScreenTime.kt`): «Hoy: 1 h 5 min de pantalla»
   abajo de la fecha. Bienestar digital no comparte sus números, así que se
   calcula igual que él, con los datos de uso de Android (sin contar Inicio).

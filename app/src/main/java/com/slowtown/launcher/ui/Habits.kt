@@ -1,6 +1,5 @@
 package com.slowtown.launcher.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -20,16 +20,18 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -39,7 +41,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.slowtown.launcher.apps.Habit
+import com.slowtown.launcher.apps.HabitKind
+import com.slowtown.launcher.apps.HabitPlan
 import com.slowtown.launcher.apps.Habits
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -64,9 +67,10 @@ private val COUNT = 34.dp
  */
 @Composable
 fun HabitsWidget(
-    marks: Map<Habit, Set<LocalDate>>,
+    plan: List<HabitPlan>,
+    marks: Map<HabitKind, Set<LocalDate>>,
     today: LocalDate,
-    onToggleToday: (Habit) -> Unit,
+    onToggleToday: (HabitKind) -> Unit,
     onOpen: () -> Unit,
 ) {
     val days = Habits.lastDays(today)
@@ -85,20 +89,20 @@ fun HabitsWidget(
                 }
             }
         }
-        Habit.entries.forEach { habit ->
-            val done = marks[habit].orEmpty()
+        plan.forEach { (kind, perWeek) ->
+            val done = marks[kind].orEmpty()
             val count = Habits.lastWeekCount(done, today)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "$count/${habit.perWeek}",
+                    "$count/$perWeek",
                     modifier = Modifier.width(COUNT),
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (count >= habit.perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (count >= perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(
                     Modifier
                         .clearAndSetSemantics {
-                            contentDescription = "${habit.label}, últimos 7 días: $count de ${habit.perWeek}. Ver el resumen"
+                            contentDescription = "${kind.label}, últimos 7 días: $count de $perWeek. Ver el resumen"
                         }
                         .clickable(onClick = onOpen),
                     horizontalArrangement = Arrangement.spacedBy(GAP),
@@ -106,7 +110,7 @@ fun HabitsWidget(
                     days.forEach { day -> Cell(done = day in done, today = day == today, size = CELL) }
                 }
                 Spacer(Modifier.width(14.dp))
-                HabitButton(habit, doneToday = today in done, onToggle = { onToggleToday(habit) })
+                HabitButton(kind, doneToday = today in done, onToggle = { onToggleToday(kind) })
             }
         }
     }
@@ -114,7 +118,7 @@ fun HabitsWidget(
 
 /** El botón de hoy: vacío con el dibujo, o verde cuando hoy ya está marcado. */
 @Composable
-private fun HabitButton(habit: Habit, doneToday: Boolean, onToggle: () -> Unit) {
+private fun HabitButton(kind: HabitKind, doneToday: Boolean, onToggle: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val background = if (doneToday) DONE else MaterialTheme.colorScheme.background
     Box(
@@ -126,11 +130,11 @@ private fun HabitButton(habit: Habit, doneToday: Boolean, onToggle: () -> Unit) 
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onToggle()
             }
-            .semantics { contentDescription = todayLabel(habit) },
+            .semantics { contentDescription = kind.todayLabel },
         contentAlignment = Alignment.Center,
     ) {
-        HabitIcon(
-            habit,
+        HabitGlyph(
+            kind,
             color = if (doneToday) Color.Black else MaterialTheme.colorScheme.onSurface,
             background = background,
             modifier = Modifier.size(24.dp),
@@ -145,42 +149,128 @@ private fun HabitButton(habit: Habit, doneToday: Boolean, onToggle: () -> Unit) 
  */
 @Composable
 fun HabitsScreen(
-    marks: Map<Habit, Set<LocalDate>>,
+    plan: List<HabitPlan>,
+    marks: Map<HabitKind, Set<LocalDate>>,
     today: LocalDate,
-    onToggle: (Habit, LocalDate) -> Unit,
+    onToggle: (HabitKind, LocalDate) -> Unit,
+    onChoose: () -> Unit,
     onBack: () -> Unit,
 ) {
     FormScaffold(title = "Hábitos", onBack = onBack) {
         HintText("Tocá un día para marcarlo o desmarcarlo.")
-        Habit.entries.forEach { habit ->
-            val done = marks[habit].orEmpty()
+        OutlinedButton(onClick = onChoose, modifier = Modifier.fillMaxWidth()) { Text("Elegir hábitos") }
+        plan.forEach { (kind, perWeek) ->
+            val done = marks[kind].orEmpty()
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HabitIcon(
-                    habit,
+                HabitGlyph(
+                    kind,
                     color = MaterialTheme.colorScheme.onSurface,
                     background = MaterialTheme.colorScheme.background,
                     modifier = Modifier.size(22.dp),
                 )
-                Text(habit.label, style = MaterialTheme.typography.titleMedium)
+                Text(kind.label, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${habit.perWeek} por semana",
+                    "$perWeek por semana",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             val week = Habits.weekCount(done, Habits.weekStart(today))
             HintText(
-                "Esta semana: $week de ${habit.perWeek} · Semanas cumplidas seguidas: " +
-                    "${Habits.streak(habit, done, today)} · Días en total: ${done.count { !it.isAfter(today) }}",
+                "Esta semana: $week de $perWeek · Semanas cumplidas seguidas: " +
+                    "${Habits.streak(perWeek, done, today)} · Días en total: ${done.count { !it.isAfter(today) }}",
             )
-            Graph(habit, done, today, onToggle)
+            Graph(kind, done, today, onToggle)
             Spacer(Modifier.width(8.dp))
         }
     }
 }
 
+/**
+ * Qué hábitos van en Inicio (hasta [Habits.MAX_ON_HOME]) y cuántas veces por
+ * semana cada uno. Sin contraseña, como marcarlos: no afloja nada. Sacar uno
+ * no borra sus días.
+ */
 @Composable
-private fun Graph(habit: Habit, done: Set<LocalDate>, today: LocalDate, onToggle: (Habit, LocalDate) -> Unit) {
+fun HabitsPickerScreen(
+    plan: List<HabitPlan>,
+    onChange: (List<HabitPlan>) -> Unit,
+    onBack: () -> Unit,
+) {
+    var message by remember { mutableStateOf<String?>(null) }
+
+    fun toggle(kind: HabitKind) {
+        val chosen = plan.any { it.kind == kind }
+        message = when {
+            chosen && plan.size == 1 -> "Tiene que quedar al menos uno."
+            !chosen && plan.size >= Habits.MAX_ON_HOME ->
+                "Ya hay ${Habits.MAX_ON_HOME} en Inicio: sacá uno para sumar otro."
+            else -> null
+        }
+        if (message != null) return
+        onChange(if (chosen) plan.filterNot { it.kind == kind } else plan + HabitPlan(kind, kind.defaultPerWeek))
+    }
+
+    fun step(kind: HabitKind, delta: Int) {
+        onChange(plan.map { if (it.kind == kind) it.copy(perWeek = (it.perWeek + delta).coerceIn(1, 7)) else it })
+    }
+
+    FormScaffold(title = "Elegir hábitos", onBack = onBack) {
+        HintText(
+            "Hasta ${Habits.MAX_ON_HOME} en Inicio. Tocá uno para sumarlo o sacarlo, y con − y + " +
+                "elegí cuántas veces por semana.",
+        )
+        message?.let { ErrorText(it) }
+        HabitKind.entries.forEach { kind ->
+            val chosen = plan.firstOrNull { it.kind == kind }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = chosen != null, role = Role.Checkbox) { toggle(kind) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Cell(done = chosen != null, today = false, size = 20.dp)
+                HabitGlyph(
+                    kind,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    background = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    kind.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (chosen != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (chosen != null) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { step(kind, -1) },
+                        enabled = chosen.perWeek > 1,
+                        modifier = Modifier.semantics { contentDescription = "Menos veces: ${kind.label}" },
+                    ) { Text("−", style = MaterialTheme.typography.titleLarge) }
+                    Text("${chosen.perWeek} por semana", style = MaterialTheme.typography.bodyLarge)
+                    TextButton(
+                        onClick = { step(kind, +1) },
+                        enabled = chosen.perWeek < 7,
+                        modifier = Modifier.semantics { contentDescription = "Más veces: ${kind.label}" },
+                    ) { Text("+", style = MaterialTheme.typography.titleLarge) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onToggle: (HabitKind, LocalDate) -> Unit) {
     val cell = 15.dp
     val gap = 3.dp
     val labels = 16.dp
@@ -243,9 +333,9 @@ private fun Graph(habit: Habit, done: Set<LocalDate>, today: LocalDate, onToggle
                                     modifier = Modifier
                                         .semantics {
                                             contentDescription =
-                                                "${habit.label}, ${date.format(DAY)}: ${if (marked) "sí" else "no"}"
+                                                "${kind.label}, ${date.format(DAY)}: ${if (marked) "sí" else "no"}"
                                         }
-                                        .clickable { onToggle(habit, date) },
+                                        .clickable { onToggle(kind, date) },
                                 )
                             }
                         }
@@ -265,53 +355,6 @@ private fun Cell(done: Boolean, today: Boolean, size: Dp, modifier: Modifier = M
             .background(if (done) DONE else EMPTY, shape)
             .border(if (today) 1.5.dp else 0.5.dp, if (today) MaterialTheme.colorScheme.onSurface else OUTLINE, shape),
     )
-}
-
-/** El dibujo de cada hábito, a mano para que vaya con el resto: blanco y negro, sin emojis. */
-@Composable
-fun HabitIcon(habit: Habit, color: Color, background: Color, modifier: Modifier = Modifier) {
-    when (habit) {
-        Habit.MEDITATE -> YinYang(color, background, modifier)
-        Habit.EXERCISE -> Dumbbell(color, modifier)
-    }
-}
-
-@Composable
-private fun YinYang(color: Color, background: Color, modifier: Modifier) {
-    Canvas(modifier) {
-        val stroke = 1.5.dp.toPx()
-        val r = size.minDimension / 2 - stroke / 2
-        val c = center
-        // La mitad clara a la derecha, y las dos cabezas: clara arriba, oscura
-        // abajo, cada una con un punto del color contrario.
-        drawArc(color, -90f, 180f, true, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r))
-        drawCircle(color, r / 2, Offset(c.x, c.y - r / 2))
-        drawCircle(background, r / 2, Offset(c.x, c.y + r / 2))
-        drawCircle(background, r / 7, Offset(c.x, c.y - r / 2))
-        drawCircle(color, r / 7, Offset(c.x, c.y + r / 2))
-        drawCircle(color, r, c, style = Stroke(stroke))
-    }
-}
-
-@Composable
-private fun Dumbbell(color: Color, modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val corner = CornerRadius(w * 0.04f)
-        // La barra, los discos grandes y los chicos de cada lado.
-        drawRoundRect(color, Offset(w * 0.2f, h * 0.45f), Size(w * 0.6f, h * 0.1f), corner)
-        drawRoundRect(color, Offset(w * 0.17f, h * 0.2f), Size(w * 0.12f, h * 0.6f), corner)
-        drawRoundRect(color, Offset(w * 0.71f, h * 0.2f), Size(w * 0.12f, h * 0.6f), corner)
-        drawRoundRect(color, Offset(w * 0.04f, h * 0.31f), Size(w * 0.1f, h * 0.38f), corner)
-        drawRoundRect(color, Offset(w * 0.86f, h * 0.31f), Size(w * 0.1f, h * 0.38f), corner)
-    }
-}
-
-/** Para la pantalla y para las pruebas: lo que dice el botón de hoy de cada hábito. */
-fun todayLabel(habit: Habit): String = when (habit) {
-    Habit.MEDITATE -> "Meditación de hoy"
-    Habit.EXERCISE -> "Ejercicio de hoy"
 }
 
 // L M X J V S D, como en los calendarios en castellano.

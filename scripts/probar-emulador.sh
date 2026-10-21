@@ -128,6 +128,9 @@ TXT_FILA_HABITO=', últimos 7 días: '         # «Meditar, últimos 7 días: 1 
 TXT_VER_RESUMEN='. Ver el resumen'
 TXT_HABITOS_TITULO='Hábitos'                 # el resumen
 TXT_HABITOS_PISTA='Tocá un día para marcarlo o desmarcarlo.'
+TXT_ELEGIR_HABITOS='Elegir hábitos'           # el botón del resumen y el título de su pantalla
+TXT_HABITOS_TOPE='Ya hay 4 en Inicio: sacá uno para sumar otro.'
+TXT_HABITOS_UNO='Tiene que quedar al menos uno.'
 TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
 TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
 INICIALES=LMXJVSD                            # los días del widget de hábitos, de lunes a domingo
@@ -1922,6 +1925,75 @@ paso_8b() {
   afirmar_en_inicio "los hábitos no piden contraseña: Slowtown sigue activo (LOCKED)"
 }
 
+# Atrás, como lo haría cualquiera: en las pantallas largas (el resumen con
+# cuatro hábitos, la lista para elegirlos) «Volver» queda muy abajo.
+atras() { adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1; }
+
+# ── 8c. Elegir hábitos ──────────────────────────────────────────────────────
+paso_8c() {
+  titulo 8c "Elegir hábitos: sumar uno, cambiarle las veces por semana, el tope de 4 y sacarlo"
+  ir_a_inicio
+  if ! { tocar_en_inicio contiene "${HABITO_NOMBRE[meditar]}$TXT_FILA_HABITO" &&
+    esperar_ui 10 texto "$TXT_ELEGIR_HABITOS" && tocar texto "$TXT_ELEGIR_HABITOS" &&
+    esperar_ui 10 texto "Leer"; }; then
+    mal "no llego a «$TXT_ELEGIR_HABITOS» desde el resumen ($(foco))"
+    ir_a_inicio
+    return
+  fi
+  ok "el resumen tiene «$TXT_ELEGIR_HABITOS», y abre la lista de hábitos"
+  captura elegir-habitos
+  # Leer: se suma con 5 por semana, y con + pasa a 6.
+  if tocar texto "Leer" && esperar_ui 10 texto "Más veces: Leer" && ui texto "5 por semana" >/dev/null; then
+    ok "tocar «Leer» lo suma, con 5 veces por semana de entrada"
+  else
+    mal "tocar «Leer» no lo suma con 5 por semana"
+  fi
+  if tocar texto "Más veces: Leer" && esperar_ui 10 texto "6 por semana"; then
+    ok "con «+» Leer pasa a 6 por semana"
+  else
+    mal "«+» no sube Leer a 6 por semana"
+  fi
+  # El tope: con Caminar son 4, y Bici ya no entra.
+  if tocar texto "Caminar" && esperar_ui 10 texto "Más veces: Caminar" && tocar texto "Bici" &&
+    esperar_ui 10 texto "$TXT_HABITOS_TOPE" && ! ui texto "Más veces: Bici" >/dev/null; then
+    ok "con 4 hábitos, sumar un quinto (Bici) dice «$TXT_HABITOS_TOPE»"
+  else
+    mal "el tope de 4 no anda: no aparece «$TXT_HABITOS_TOPE» o Bici quedó sumado"
+  fi
+  captura elegir-habitos-cuatro
+  # En Inicio: cuatro filas, con el botón de hoy de Leer y su meta de 6.
+  if atras && esperar_ui 10 texto "$TXT_HABITOS_PISTA" && atras && esperar_ui 10 texto "Lectura de hoy" &&
+    ui texto "Caminata de hoy" >/dev/null && ui contiene "Leer$TXT_FILA_HABITO" >/dev/null &&
+    ui texto "0/6" >/dev/null; then
+    ok "Inicio suma Leer con su meta (0/6) y los botones «Lectura de hoy» y «Caminata de hoy»"
+  else
+    mal "Inicio o el resumen no muestran los hábitos sumados ($(foco))"
+  fi
+  captura inicio-cuatro-habitos
+  # Sacar Leer y Caminar, y el piso de uno: sin ejercicio, meditar no se puede sacar.
+  if tocar_en_inicio contiene "${HABITO_NOMBRE[meditar]}$TXT_FILA_HABITO" && esperar_ui 10 texto "$TXT_ELEGIR_HABITOS" &&
+    tocar texto "$TXT_ELEGIR_HABITOS" && esperar_ui 10 texto "Leer" &&
+    tocar texto "Leer" && esperar_que_no 10 texto "Más veces: Leer" &&
+    tocar texto "Caminar" && esperar_que_no 10 texto "Más veces: Caminar" &&
+    tocar texto "Ejercicio" && esperar_que_no 10 texto "Más veces: Ejercicio" &&
+    tocar texto "Meditar" && esperar_ui 10 texto "$TXT_HABITOS_UNO" && ui texto "Más veces: Meditar" >/dev/null; then
+    ok "se sacan con un toque, y el último no: «$TXT_HABITOS_UNO»"
+  else
+    mal "sacar hábitos o el piso de uno no anda ($(foco))"
+  fi
+  # Ejercicio vuelve con sus 3 de entrada y sus días: sacarlo no los borra.
+  if tocar texto "Ejercicio" && esperar_ui 10 texto "Más veces: Ejercicio" && ui texto "3 por semana" >/dev/null &&
+    atras && esperar_ui 10 texto "$TXT_HABITOS_PISTA" &&
+    atras && esperar_ui 10 texto "$TXT_HOY_EJERCICIO" &&
+    ! ui texto "Lectura de hoy" >/dev/null; then
+    ok "Ejercicio vuelve con 3 por semana, e Inicio queda como estaba: meditar y ejercicio"
+  else
+    mal "no pude dejar los hábitos como estaban ($(foco))"
+  fi
+  afirmar_habitos "después de elegir hábitos, con los días de antes"
+  afirmar_en_inicio "elegir hábitos no pide contraseña: Slowtown sigue activo (LOCKED)"
+}
+
 # ── 9. Widget de Inicio ─────────────────────────────────────────────────────
 # El lugar del pie es de un widget: el de una app (el Reloj) o los hábitos de
 # Slowtown, que vienen puestos. Elegir uno saca al otro, y «Sacar el widget»
@@ -2914,6 +2986,7 @@ paso_6
 paso_7
 paso_8
 paso_8b
+paso_8c
 paso_9
 paso_9b
 paso_9c

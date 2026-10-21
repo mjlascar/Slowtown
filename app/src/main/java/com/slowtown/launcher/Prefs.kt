@@ -5,7 +5,9 @@ import android.content.ComponentName
 import android.content.Context
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
-import com.slowtown.launcher.apps.Habit
+import com.slowtown.launcher.apps.HabitKind
+import com.slowtown.launcher.apps.HabitPlan
+import com.slowtown.launcher.apps.Habits
 
 /** Lo que eligió el usuario. La contraseña vive aparte, en [com.slowtown.launcher.security.Password]. */
 class Prefs(context: Context) {
@@ -91,12 +93,20 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_HABITS_WIDGET, value).apply()
 
     /** Los días marcados de un hábito, como fechas ISO («2026-10-19»). Sin contraseña: no afloja nada. */
-    fun habitDays(habit: Habit): Set<String> =
-        prefs.getStringSet(KEY_HABIT_PREFIX + habit.key, null)?.toSet() ?: emptySet()
+    fun habitDays(kind: HabitKind): Set<String> =
+        prefs.getStringSet(KEY_HABIT_PREFIX + kind.key, null)?.toSet() ?: emptySet()
 
-    fun setHabitDays(habit: Habit, days: Set<String>) {
-        prefs.edit().putStringSet(KEY_HABIT_PREFIX + habit.key, days).apply()
+    fun setHabitDays(kind: HabitKind, days: Set<String>) {
+        prefs.edit().putStringSet(KEY_HABIT_PREFIX + kind.key, days).apply()
     }
+
+    /**
+     * Los hábitos de Inicio y cuántas veces por semana, en orden. De entrada,
+     * meditar 2 y ejercicio 3. Sacar uno no borra sus días: si vuelve, vuelven.
+     */
+    var habitPlan: List<HabitPlan>
+        get() = Habits.parsePlan(prefs.getString(KEY_HABIT_PLAN, null))
+        set(value) = prefs.edit().putString(KEY_HABIT_PLAN, Habits.serializePlan(value)).apply()
 
     /** El widget de Inicio, o [AppWidgetManager.INVALID_APPWIDGET_ID] si no hay. */
     var widgetId: Int
@@ -116,5 +126,6 @@ class Prefs(context: Context) {
         const val KEY_WIDGET_ID = "widget_id"
         const val KEY_HABITS_WIDGET = "habits_widget"
         const val KEY_HABIT_PREFIX = "habit_"
+        const val KEY_HABIT_PLAN = "habit_plan"
     }
 }
