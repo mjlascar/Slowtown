@@ -56,13 +56,13 @@ object ScreenTime {
         foreground(events, midnight, now, excluded(context), interactive).coerceIn(0L, now - midnight)
     }.getOrNull()
 
-    /** «1 h 5 min», «2 h», «45 min» o «menos de un minuto». */
+    /** «1 h 5 min», «2 h», «45 min» o «0 min»: corto, va arriba a la derecha de Inicio. */
     fun format(millis: Long): String {
         val minutes = millis / 60_000L
         val hours = minutes / 60
         val rest = minutes % 60
         return when {
-            minutes < 1 -> "menos de un minuto"
+            minutes < 1 -> "0 min"
             hours == 0L -> "$rest min"
             rest == 0L -> "$hours h"
             else -> "$hours h $rest min"

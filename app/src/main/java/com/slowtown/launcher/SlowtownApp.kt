@@ -7,11 +7,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioManager
 import android.util.Log
 import com.slowtown.launcher.admin.Bedtime
+import com.slowtown.launcher.admin.CallGuard
 import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.security.CrashGuard
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class SlowtownApp : Application() {
@@ -64,6 +67,38 @@ class SlowtownApp : Application() {
         }
     }
 
+    /**
+     * La noche no corta llamadas ([CallGuard]). Cada cambio del modo de audio
+     * (suena, se atiende, se corta) rearma la lista: al cortar, el audio
+     * vuelve a normal y se achica; al empezar, queda agendada la mirada de
+     * cada minuto de [Bedtime.refresh]. Consulta al sistema y puede esperar
+     * unos segundos: en su hilo, de a uno.
+     */
+    private val callThread = Executors.newSingleThreadExecutor { Thread(it, "llamada") }
+    private val callMode = AudioManager.OnModeChangedListener { mode ->
+        runCatching { Bedtime.callChanged(this@SlowtownApp, ended = mode == AudioManager.MODE_NORMAL) }
+            .onFailure { Log.e(TAG, "No pude rearmar la lista al cambiar una llamada", it) }
+    }
+
+    /**
+     * La noche rige con el teléfono en uso ([Bedtime.inUse]): al apagar la
+     * pantalla vuelve la lista de siempre, para que una llamada pueda abrir
+     * la suya, y al desbloquear se achica. Consulta al sistema: en otro hilo.
+     */
+    private val screen = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val pending = goAsync()
+            thread(name = "pantalla") {
+                try {
+                    runCatching { Bedtime.refresh(this@SlowtownApp) }
+                        .onFailure { Log.e(TAG, "No pude rearmar la lista al prender o apagar la pantalla", it) }
+                } finally {
+                    pending.finish()
+                }
+            }
+        }
+    }
+
     // RECEIVER_NOT_EXPORTED es de API 33; en Android 12 el sistema lo ignora, y
     // estos avisos los manda sólo el sistema igual.
     @SuppressLint("InlinedApi")
@@ -82,6 +117,15 @@ class SlowtownApp : Application() {
             IntentFilter(DevicePolicyManager.ACTION_DEVICE_OWNER_CHANGED),
             RECEIVER_NOT_EXPORTED,
         )
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        registerReceiver(screen, screenFilter, RECEIVER_NOT_EXPORTED)
+        // El modo de audio lo lee cualquier app: no pide permisos.
+        runCatching { getSystemService(AudioManager::class.java).addOnModeChangedListener(callThread, callMode) }
+            .onFailure { Log.e(TAG, "No pude escuchar las llamadas", it) }
         // El nivel 2 en cada arranque (un reinicio, una actualización de
         // Slowtown), también con la guardia de crashes abierta: no traba nada.
         // Recorre todas las apps: fuera del hilo principal.

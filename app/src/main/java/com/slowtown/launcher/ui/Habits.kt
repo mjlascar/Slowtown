@@ -32,12 +32,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -56,11 +59,27 @@ private val EMPTY = Color(0xFF161B22)
 private val OUTLINE = Color(0xFF3D444D)
 
 private val CELL = 24.dp
+private val MIN_CELL = 18.dp
 private val GAP = 5.dp
 private val COUNT = 34.dp
+private val FLAME = 30.dp
+private val FLAME_GAP = 6.dp
+private val BUTTON = 40.dp
+private val BUTTON_GAP = 14.dp
+
+// Las semanas en que el fuego llega a cada color: de una brasa (una semana)
+// a un fuego fuerte (doce o más).
+private val FLAME_STOPS = listOf(
+    1 to Color(0xFF8A6420),
+    3 to Color(0xFFD9921F),
+    5 to Color(0xFFFFA21A),
+    8 to Color(0xFFFF6A13),
+    12 to Color(0xFFFF3311),
+)
 
 /**
- * Los hábitos en Inicio: una fila por hábito con los últimos 7 días (hoy a la
+ * Los hábitos en Inicio: una fila por hábito con la racha (un fuego con las
+ * semanas seguidas con la meta cumplida), los últimos 7 días (hoy a la
  * derecha, como en GitHub), cuánto lleva contra la meta, y a la derecha de
  * todo el botón que marca hoy, pegado al cuadradito que prende. Tocar los
  * cuadraditos abre el resumen.
@@ -74,46 +93,95 @@ fun HabitsWidget(
     onOpen: () -> Unit,
 ) {
     val days = Habits.lastDays(today)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.width(COUNT))
-            Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                days.forEach { day ->
-                    Text(
-                        initial(day),
-                        modifier = Modifier.width(CELL),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Los cuadraditos se achican si no entra todo: el S10e es más angosto que el emulador.
+        val fixed = FLAME + FLAME_GAP + COUNT + GAP * 6 + BUTTON_GAP + BUTTON
+        val cell = ((maxWidth - fixed) / 7).coerceIn(MIN_CELL, CELL)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(FLAME + FLAME_GAP + COUNT))
+                Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
+                    days.forEach { day ->
+                        Text(
+                            initial(day),
+                            modifier = Modifier.width(cell),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-        }
-        plan.forEach { (kind, perWeek) ->
-            val done = marks[kind].orEmpty()
-            val count = Habits.lastWeekCount(done, today)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "$count/$perWeek",
-                    modifier = Modifier.width(COUNT),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (count >= perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    Modifier
-                        .clearAndSetSemantics {
-                            contentDescription = "${kind.label}, últimos 7 días: $count de $perWeek. Ver el resumen"
-                        }
-                        .clickable(onClick = onOpen),
-                    horizontalArrangement = Arrangement.spacedBy(GAP),
-                ) {
-                    days.forEach { day -> Cell(done = day in done, today = day == today, size = CELL) }
+            plan.forEach { (kind, perWeek) ->
+                val done = marks[kind].orEmpty()
+                val count = Habits.lastWeekCount(done, today)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StreakFlame(kind, Habits.streak(perWeek, done, today))
+                    Spacer(Modifier.width(FLAME_GAP))
+                    Text(
+                        "$count/$perWeek",
+                        modifier = Modifier.width(COUNT),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (count >= perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        Modifier
+                            .clearAndSetSemantics {
+                                contentDescription = "${kind.label}, últimos 7 días: $count de $perWeek. Ver el resumen"
+                            }
+                            .clickable(onClick = onOpen),
+                        horizontalArrangement = Arrangement.spacedBy(GAP),
+                    ) {
+                        days.forEach { day -> Cell(done = day in done, today = day == today, size = cell) }
+                    }
+                    Spacer(Modifier.width(BUTTON_GAP))
+                    HabitButton(kind, doneToday = today in done, onToggle = { onToggleToday(kind) })
                 }
-                Spacer(Modifier.width(14.dp))
-                HabitButton(kind, doneToday = today in done, onToggle = { onToggleToday(kind) })
             }
         }
     }
+}
+
+/**
+ * La racha: las semanas seguidas con la meta cumplida ([Habits.streak]),
+ * escrita adentro de un fuego que se pone más fuerte con las semanas. Sin
+ * racha, la silueta gris y sin número.
+ */
+@Composable
+private fun StreakFlame(kind: HabitKind, weeks: Int) {
+    val color = flameColor(weeks)
+    Box(
+        Modifier
+            .size(FLAME)
+            .clearAndSetSemantics {
+                contentDescription = "Racha de ${kind.label}: $weeks ${if (weeks == 1) "semana" else "semanas"}"
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Flame(color, Modifier.matchParentSize())
+        if (weeks > 0) {
+            Text(
+                "$weeks",
+                // En la panza del fuego, que está más abajo que el centro.
+                modifier = Modifier.offset(y = FLAME * 0.18f),
+                // Negro sobre los colores claros, blanco sobre la brasa: el que más contrasta.
+                color = if (color.luminance() >= 0.18f) Color.Black else Color.White,
+                style = if (weeks < 100) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** Entre los colores de [FLAME_STOPS], según las semanas; sin racha, el gris de los bordes. */
+private fun flameColor(weeks: Int): Color {
+    if (weeks <= 0) return OUTLINE
+    val upper = FLAME_STOPS.indexOfFirst { it.first >= weeks }
+    if (upper == -1) return FLAME_STOPS.last().second
+    if (upper == 0) return FLAME_STOPS.first().second
+    val (fromWeeks, from) = FLAME_STOPS[upper - 1]
+    val (toWeeks, to) = FLAME_STOPS[upper]
+    return lerp(from, to, (weeks - fromWeeks).toFloat() / (toWeeks - fromWeeks))
 }
 
 /** El botón de hoy: vacío con el dibujo, o verde cuando hoy ya está marcado. */
@@ -123,7 +191,7 @@ private fun HabitButton(kind: HabitKind, doneToday: Boolean, onToggle: () -> Uni
     val background = if (doneToday) DONE else MaterialTheme.colorScheme.background
     Box(
         Modifier
-            .size(40.dp)
+            .size(BUTTON)
             .background(background, CircleShape)
             .border(1.dp, if (doneToday) DONE else OUTLINE, CircleShape)
             .toggleable(value = doneToday, role = Role.Checkbox) {

@@ -49,6 +49,7 @@ import com.slowtown.launcher.ui.AdminScreen
 import com.slowtown.launcher.ui.AdminStatus
 import com.slowtown.launcher.ui.AppActions
 import com.slowtown.launcher.ui.BedtimeScreen
+import com.slowtown.launcher.ui.BedtimeSettings
 import com.slowtown.launcher.ui.NotificationsScreen
 import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
@@ -113,7 +114,7 @@ class HomeActivity : ComponentActivity() {
 
     /** Si ahora manda la noche (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
     private var night by mutableStateOf(false)
-    private var bedtimeSettings by mutableStateOf(Triple(false, 23 * 60, 7 * 60))
+    private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
 
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
@@ -301,7 +302,12 @@ class HomeActivity : ComponentActivity() {
                         onChooseWidget = ::openWidgetPicker,
                         onFolders = { screen = Screen.Folders },
                         onBedtime = {
-                            bedtimeSettings = Triple(prefs.bedtimeEnabled, prefs.bedtimeStart, prefs.bedtimeEnd)
+                            bedtimeSettings = BedtimeSettings(
+                                prefs.bedtimeEnabled,
+                                prefs.bedtimeStart,
+                                prefs.bedtimeEnd,
+                                prefs.bedtimeDays,
+                            )
                             screen = Screen.Bedtime
                         },
                         onNotifications = { screen = Screen.Notifications },
@@ -325,9 +331,7 @@ class HomeActivity : ComponentActivity() {
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Bedtime -> BedtimeScreen(
-                        enabled = bedtimeSettings.first,
-                        start = bedtimeSettings.second,
-                        end = bedtimeSettings.third,
+                        settings = bedtimeSettings,
                         onChange = ::saveBedtime,
                         onBack = { screen = Screen.Admin },
                     )
@@ -402,7 +406,7 @@ class HomeActivity : ComponentActivity() {
         // Al volver a Inicio: mientras se mira Inicio, el tiempo no corre.
         lifecycleScope.launch {
             val millis = withContext(Dispatchers.Default) { ScreenTime.today(this@HomeActivity) }
-            screenTime = millis?.let { "Hoy: ${ScreenTime.format(it)} de pantalla" }
+            screenTime = millis?.let { ScreenTime.format(it) }
         }
         if (screen == Screen.Home && pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // Volver de Ajustes con Atrás también termina la sesión, no sólo Inicio.
@@ -565,12 +569,13 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    /** La hora de dormir: rige desde ya (si es de noche, la lista se achica) y se agenda el próximo cambio. */
-    private fun saveBedtime(enabled: Boolean, start: Int, end: Int) {
-        prefs.bedtimeEnabled = enabled
-        prefs.bedtimeStart = start
-        prefs.bedtimeEnd = end
-        bedtimeSettings = Triple(enabled, start, end)
+    /** Bedtime: rige desde ya (si es de noche, la lista se achica) y se agenda el próximo cambio. */
+    private fun saveBedtime(settings: BedtimeSettings) {
+        prefs.bedtimeEnabled = settings.enabled
+        prefs.bedtimeStart = settings.start
+        prefs.bedtimeEnd = settings.end
+        prefs.bedtimeDays = settings.days
+        bedtimeSettings = settings
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
                 Bedtime.schedule(this@HomeActivity)
@@ -787,7 +792,7 @@ class HomeActivity : ComponentActivity() {
         notice = when {
             freeUntil > 0 -> "Todo habilitado hasta las ${hhmm(freeUntil)}"
             bedtime && burstUntil > 0 -> "Ráfaga de 5 minutos: hasta las ${hhmm(burstUntil)}"
-            night -> "Hora de dormir hasta las ${com.slowtown.launcher.ui.dayTime(prefs.bedtimeEnd)}"
+            // De noche el aviso es otro, y lo arma HomeScreen: «Es Bedtime, andá a dormir».
             else -> null
         }
         // El botón sólo tiene sentido con Slowtown activo y sin una sesión en curso.

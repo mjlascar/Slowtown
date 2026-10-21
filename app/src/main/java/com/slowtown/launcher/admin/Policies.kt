@@ -116,8 +116,8 @@ object Policies {
 
     /**
      * Sólo la lista, cuando cambia algo que depende de la hora (empieza o
-     * termina la noche, o una ráfaga): escribe sólo si cambió, así que se
-     * puede llamar en cada vuelta a Inicio.
+     * termina la noche, o una ráfaga) o de una llamada: escribe sólo si
+     * cambió, así que se puede llamar en cada vuelta a Inicio.
      */
     @Synchronized
     fun refreshPackages(context: Context, packages: Collection<String>) {
@@ -129,11 +129,15 @@ object Policies {
      * La lista que corresponde ahora. Con una sesión en curso (administración
      * o «Habilitar todo»), todo lo instalado: rearmar la política no la puede
      * cortar antes. De noche, sin ráfaga, sólo lo de siempre ([allowlist]
-     * suma el reloj y las alarmas), sin las apps permitidas.
+     * suma el reloj y las alarmas), sin las apps permitidas, y sólo con el
+     * teléfono en uso ([Bedtime.inUse]). La noche no corta llamadas
+     * ([CallGuard]): mientras hay una, la lista es la de siempre, y la app de
+     * la llamada, si es de las permitidas, está siempre.
      */
     private fun effectivePackages(context: Context, packages: Collection<String>): Set<String> {
         val session = AdminSession.isActive(context) || FreeSession.isActive(context)
-        val allowed = allowlist(context, if (Bedtime.restricts(context)) emptySet() else packages)
+        val night = Bedtime.restricts(context) && Bedtime.inUse(context) && !CallGuard.inCall(context)
+        val allowed = allowlist(context, if (night) emptySet() else packages) + CallGuard.packages(context)
         return if (session) allowed + installed(context) else allowed
     }
 

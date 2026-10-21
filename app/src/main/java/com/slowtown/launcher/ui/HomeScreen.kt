@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -23,6 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
 import kotlinx.coroutines.delay
@@ -46,9 +54,12 @@ fun HomeScreen(
     safeMode: Boolean,
     /** Un aviso corto abajo de la fecha, por ejemplo «Todo habilitado hasta las 17:52». */
     notice: String?,
-    /** De noche: la ráfaga de 5 minutos con las apps de siempre. */
+    /**
+     * De noche, la ráfaga de 5 minutos con las apps de siempre: Inicio dice
+     * «Es Bedtime, andá a dormir», y el botón aparece recién al tocarlo.
+     */
     onBurst: (() -> Unit)?,
-    /** «Hoy: 1 h 5 min de pantalla», o null sin acceso a los datos de uso. */
+    /** El tiempo de pantalla de hoy, corto («1 h 5 min»), o null sin acceso a los datos de uso. */
     screenTime: String?,
     widget: (@Composable () -> Unit)?,
     onOpen: (LaunchableApp) -> Unit,
@@ -70,18 +81,28 @@ fun HomeScreen(
             .safeDrawingPadding()
             .padding(horizontal = 28.dp, vertical = 32.dp),
     ) {
-        Clock(onLongPress = onAdmin)
-        if (screenTime != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(screenTime, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-        }
+        Clock(onLongPress = onAdmin, screenTime = screenTime)
         if (notice != null) {
             Spacer(Modifier.height(12.dp))
             Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
         }
         if (onBurst != null) {
+            // La ráfaga no está siempre a la vista (lo pidió Marcos): hay que
+            // tocar el aviso. Al irse de Inicio o al terminar la noche, se esconde.
+            var burstShown by remember { mutableStateOf(false) }
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
+            Text(
+                BEDTIME_NOTICE,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .clickable { burstShown = !burstShown }
+                    .padding(vertical = 4.dp),
+            )
+            if (burstShown) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
+            }
         }
         if (safeMode) {
             Spacer(Modifier.height(16.dp))
@@ -127,8 +148,13 @@ fun HomeScreen(
     }
 }
 
+/**
+ * La hora y la fecha. Arriba a la derecha, el tiempo de pantalla de hoy, sin
+ * explicación (lo pidió Marcos: menos texto, y la cabecera más pareja); la
+ * explicación queda para quien lee la pantalla en voz alta.
+ */
 @Composable
-private fun Clock(onLongPress: () -> Unit) {
+private fun Clock(onLongPress: () -> Unit, screenTime: String?) {
     val now by produceState(LocalDateTime.now()) {
         while (true) {
             value = LocalDateTime.now()
@@ -137,7 +163,21 @@ private fun Clock(onLongPress: () -> Unit) {
         }
     }
     Column(Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) }) {
-        Text(now.format(HOUR), style = MaterialTheme.typography.displayLarge)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Text(now.format(HOUR), style = MaterialTheme.typography.displayLarge)
+            Spacer(Modifier.weight(1f))
+            if (screenTime != null) {
+                Text(
+                    screenTime,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleLarge,
+                    // A la altura de lo alto de los números de la hora.
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .semantics { contentDescription = "Hoy: $screenTime de pantalla" },
+                )
+            }
+        }
         Text(
             now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) },
             style = MaterialTheme.typography.titleLarge,
@@ -147,5 +187,11 @@ private fun Clock(onLongPress: () -> Unit) {
 }
 
 private val SPANISH = Locale.forLanguageTag("es-AR")
+
+private val BEDTIME_NOTICE = buildAnnotatedString {
+    append("Es ")
+    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append("Bedtime") }
+    append(", andá a dormir")
+}
 private val HOUR = DateTimeFormatter.ofPattern("HH:mm")
 private val DATE = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", SPANISH)

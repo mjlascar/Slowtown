@@ -1,5 +1,7 @@
 package com.slowtown.launcher.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +47,7 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
     var enabled by remember { mutableStateOf(initial.enabled) }
     var times by remember { mutableStateOf(initial.times) }
     var packages by remember { mutableStateOf(initial.packages) }
+    var groupsOnly by remember { mutableStateOf(initial.groupsOnly) }
     var words by remember { mutableStateOf(initial.alwaysPass) }
     val access = remember { WavesListener.hasAccess(context) }
 
@@ -80,6 +83,18 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
     fun savePackages(value: Set<String>) {
         packages = value
         Waves.setPackages(context, value)
+        // La que deja de esperar no se queda con «sólo los grupos»: si vuelve, espera entera.
+        val kept = groupsOnly intersect value
+        if (kept != groupsOnly) {
+            groupsOnly = kept
+            Waves.setGroupsOnly(context, kept)
+        }
+        WavesListener.reapply()
+    }
+
+    fun saveGroupsOnly(value: Set<String>) {
+        groupsOnly = value
+        Waves.setGroupsOnly(context, value)
         WavesListener.reapply()
     }
 
@@ -105,8 +120,8 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
     FormScaffold(title = "Notificaciones", onBack = onBack) {
         HintText(
             "Las de las apps que elijas no llegan apenas salen: esperan y llegan " +
-                "todas juntas a las horas de abajo. Llegan las originales: se tocan " +
-                "y se responden como siempre.",
+                "todas juntas, en silencio, a las horas de abajo. Llegan las originales: " +
+                "se tocan y se responden como siempre.",
         )
         if (!access) {
             ErrorText(
@@ -132,14 +147,24 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
                 if (times.size > 1) TextButton(onClick = { saveTimes(times - at) }) { Text("Sacar") }
             }
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Step("−", "Una hora menos") { hour = (hour + 23) % 24; timeMessage = null }
-            Text("%02d".format(hour), style = MaterialTheme.typography.titleLarge)
-            Step("+", "Una hora más") { hour = (hour + 1) % 24; timeMessage = null }
-            Text(":", style = MaterialTheme.typography.titleLarge)
-            Step("−", "Cinco minutos menos") { minute = (minute + 55) % 60; timeMessage = null }
-            Text("%02d".format(minute), style = MaterialTheme.typography.titleLarge)
-            Step("+", "Cinco minutos más") { minute = (minute + 5) % 60; timeMessage = null }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NumberWheel(
+                count = 24,
+                value = hour,
+                onValueChange = { hour = it; timeMessage = null },
+                label = "Nueva entrega, hora",
+            )
+            Text(":", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 8.dp))
+            NumberWheel(
+                count = 60,
+                value = minute,
+                onValueChange = { minute = it; timeMessage = null },
+                label = "Nueva entrega, minutos",
+            )
         }
         OutlinedButton(onClick = ::addTime, modifier = Modifier.fillMaxWidth()) {
             Text("Agregar las ${Waves.format(hour * 60 + minute)}")
@@ -184,18 +209,43 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
         if (enabled && packages.isEmpty()) HintText("Todavía no elegiste ninguna: no espera nada.")
         choices.forEach { app ->
             val checked = app.packageName in packages
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .toggleable(value = checked, role = Role.Checkbox) {
-                        savePackages(if (it) packages + app.packageName else packages - app.packageName)
+            // En una columna, para que «sólo los grupos» quede pegado a su app.
+            Column {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = checked, role = Role.Checkbox) {
+                            savePackages(if (it) packages + app.packageName else packages - app.packageName)
+                        }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = checked, onCheckedChange = null)
+                    Spacer(Modifier.width(12.dp))
+                    Text(app.label, style = MaterialTheme.typography.titleMedium)
+                }
+                if (checked) {
+                    val onlyGroups = app.packageName in groupsOnly
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            // Debajo del nombre de la app: la casilla mide 24 dp, más los 12 del espacio.
+                            .padding(start = 36.dp)
+                            .toggleable(value = onlyGroups, role = Role.Checkbox) {
+                                saveGroupsOnly(if (it) groupsOnly + app.packageName else groupsOnly - app.packageName)
+                            }
+                            .semantics { contentDescription = "Sólo los grupos: ${app.label}" }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = onlyGroups, onCheckedChange = null)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Sólo los grupos", style = MaterialTheme.typography.bodyLarge)
+                            HintText("Los chats de a dos llegan en el momento.")
+                        }
                     }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = checked, onCheckedChange = null)
-                Spacer(Modifier.width(12.dp))
-                Text(app.label, style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
         // Elegidas que ya no están en la lista (se desinstalaron, o las pausó
@@ -206,13 +256,5 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
                 TextButton(onClick = { savePackages(packages - pkg) }) { Text("Sacar") }
             }
         }
-    }
-}
-
-/** Un botón de − o + para la hora o los minutos. */
-@Composable
-private fun Step(symbol: String, description: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = description }) {
-        Text(symbol, style = MaterialTheme.typography.titleLarge)
     }
 }

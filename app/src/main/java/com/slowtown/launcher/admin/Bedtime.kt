@@ -1,6 +1,7 @@
 package com.slowtown.launcher.admin
 
 import android.app.AlarmManager
+import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,11 +9,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.AlarmClock
 import android.util.Log
 import com.slowtown.launcher.Prefs
 import com.slowtown.launcher.security.CrashGuard
+import java.time.DayOfWeek
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.concurrent.thread
@@ -29,12 +32,22 @@ import kotlin.concurrent.thread
  * aunque haya otra app abierta: la lista de lock task se achica y Android
  * cierra lo demás. Las sesiones (administración, «Habilitar todo») siguen
  * abriendo todo, y al terminar vuelve la lista de la noche.
+ *
+ * La noche no corta llamadas ([CallGuard]): mientras hay una, sonando o en
+ * curso, también de WhatsApp, la noche espera; al cortar, la lista se achica.
  */
 object Bedtime {
     const val BURST_MS = 5 * 60_000L
 
     private const val TAG = "Slowtown"
     private const val EXTRA_BURST_END = "fin_de_rafaga"
+    private const val EXTRA_CALL_CHECK = "llamada"
+
+    /** Cada cuánto se vuelve a mirar si sigue la llamada que posterga la noche. */
+    private const val CALL_CHECK_MS = 60_000L
+
+    /** El margen antes de achicar la lista cuando termina una llamada ([callChanged]). */
+    private const val CALL_SETTLE_MS = 5_000L
 
     /**
      * Alarmas que no siempre se anuncian como reloj: Alarmy, con la que Marcos
@@ -56,7 +69,23 @@ object Bedtime {
 
     fun isNight(context: Context, now: LocalDateTime = LocalDateTime.now()): Boolean {
         val prefs = Prefs(context)
-        return prefs.bedtimeEnabled && inWindow(now.hour * 60 + now.minute, prefs.bedtimeStart, prefs.bedtimeEnd)
+        val start = prefs.bedtimeStart
+        val end = prefs.bedtimeEnd
+        return prefs.bedtimeEnabled &&
+            inWindow(now.hour * 60 + now.minute, start, end) &&
+            nightOf(now, start, end) in prefs.bedtimeDays
+    }
+
+    /**
+     * De qué día es la noche que está corriendo en [now] (sólo tiene sentido
+     * adentro de la ventana): del día en que empieza, como se dice, así que la
+     * del viernes va de viernes a sábado. Una que empieza de madrugada (de 1 a
+     * 7) es de la noche anterior.
+     */
+    internal fun nightOf(now: LocalDateTime, start: Int, end: Int): DayOfWeek {
+        val minute = now.hour * 60 + now.minute
+        val fromYesterday = if (start > end) minute < end else start < 12 * 60
+        return (if (fromYesterday) now.toLocalDate().minusDays(1) else now.toLocalDate()).dayOfWeek
     }
 
     fun burstUntil(context: Context): Long =
@@ -64,6 +93,21 @@ object Bedtime {
 
     /** Si ahora manda la noche: es de noche y no hay una ráfaga en curso. */
     fun restricts(context: Context): Boolean = isNight(context) && burstUntil(context) == 0L
+
+    /**
+     * Si el teléfono se está usando: pantalla prendida y desbloqueado. La
+     * noche rige sólo así ([Policies]). Con la pantalla apagada o en la de
+     * bloqueo no hay nada que frenar, y es justo cuando Android abre la
+     * pantalla de una llamada que entra (la de WhatsApp), antes de que
+     * Slowtown alcance a sumar la app: con la lista de la noche, la bloquearía.
+     * Al desbloquear se achica ([com.slowtown.launcher.SlowtownApp]). Ante la
+     * duda, se está usando: rige.
+     */
+    fun inUse(context: Context): Boolean = runCatching {
+        val power = context.getSystemService(PowerManager::class.java)
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        power.isInteractive && !keyguard.isKeyguardLocked
+    }.getOrDefault(true)
 
     /**
      * El reloj y las alarmas instalados. Van en la lista siempre, de día
@@ -110,12 +154,43 @@ object Bedtime {
         if (until != 0L && until <= System.currentTimeMillis()) endBurst(context)
     }
 
-    /** Rearma la lista de lock task según la hora, si Slowtown está activo. Escribe sólo si cambió. */
+    /**
+     * Rearma la lista de lock task según la hora, si Slowtown está activo.
+     * Escribe sólo si cambió. Si una llamada posterga la noche, se vuelve a
+     * mirar cada minuto mientras dure: el corte avisa por el modo de audio y
+     * por el lector de notificaciones, y esto es por si se pierden los dos.
+     */
     fun refresh(context: Context) {
         val prefs = Prefs(context)
         if (prefs.closed && !CrashGuard.inSafeMode(context) && Policies.isDeviceOwner(context)) {
             Policies.refreshPackages(context, prefs.allowedPackages)
+            val app = context.applicationContext
+            val am = app.getSystemService(AlarmManager::class.java)
+            if (restricts(app) && CallGuard.inCall(app)) {
+                am.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + CALL_CHECK_MS,
+                    callCheckIntent(app),
+                )
+            } else {
+                am.cancel(callCheckIntent(app))
+            }
         }
+    }
+
+    /**
+     * Empezó o terminó una llamada ([CallGuard]). Sólo de noche cambia algo:
+     * de día, las apps de la llamada ya están en la lista. Al terminar, con
+     * unos segundos de margen: al atender, algunas apps cambian la
+     * notificación que suena por la de la llamada en curso, o pasan un
+     * instante por el audio normal, y en el medio no se ve ninguna llamada.
+     * Achicar ahí cerraría la pantalla recién abierta. Espera ese rato: fuera
+     * del hilo principal.
+     */
+    fun callChanged(context: Context, ended: Boolean) {
+        if (!isNight(context)) return
+        if (ended) Thread.sleep(CALL_SETTLE_MS)
+        refresh(context)
     }
 
     /**
@@ -163,21 +238,35 @@ object Bedtime {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    /** Empieza o termina la noche, o termina una ráfaga: llega aunque Slowtown no esté corriendo. */
+    private fun callCheckIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        4,
+        Intent(context, Tick::class.java).putExtra(EXTRA_CALL_CHECK, true),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
+     * Empieza o termina la noche, termina una ráfaga o toca mirar si sigue una
+     * llamada: llega aunque Slowtown no esté corriendo.
+     */
     class Tick : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val pending = goAsync()
             val app = context.applicationContext
             val burstEnd = intent.getBooleanExtra(EXTRA_BURST_END, false)
+            val callCheck = intent.getBooleanExtra(EXTRA_CALL_CHECK, false)
             thread(name = "hora-de-dormir") {
                 try {
                     runCatching {
-                        if (burstEnd) {
-                            endBurst(app)
-                        } else {
-                            endBurstIfExpired(app)
-                            refresh(app)
-                            schedule(app)
+                        when {
+                            burstEnd -> endBurst(app)
+                            // Si la llamada sigue, refresh agenda la próxima mirada.
+                            callCheck -> refresh(app)
+                            else -> {
+                                endBurstIfExpired(app)
+                                refresh(app)
+                                schedule(app)
+                            }
                         }
                     }.onFailure { Log.e(TAG, "La hora de dormir falló", it) }
                 } finally {

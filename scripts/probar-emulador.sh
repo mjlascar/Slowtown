@@ -8,14 +8,26 @@
 # escaparse, abre una app permitida, mira el tiempo de pantalla de Inicio
 # (sube con un rato en el Reloj, y sin el acceso al uso no está), atiende una
 # llamada, recibe un SMS, busca y abre una app desde la lista de todas, saca
-# y vuelve a poner una app en Inicio, marca hábitos (los botones de hoy y un
-# día en el resumen), cambia el pie de Inicio entre el widget del Reloj y los
-# hábitos, arma y borra una carpeta, usa las dos veces de «Habilitar todo»,
-# prueba el nivel 2, prende la hora de dormir (de noche sólo el Reloj, una
-# ráfaga de 5 minutos sin contraseña, el final de la ráfaga y la alarma del
-# final de la noche, y apagada vuelve todo), abre Ajustes desde la
-# administración, reinicia (y los hábitos siguen), cuenta las reglas de
-# Inicio fijo, fuerza tres crashes y usa la salida por cable.
+# y vuelve a poner una app en Inicio, marca hábitos (los botones de hoy, un
+# día en el resumen y el fuego de la racha), cambia el pie de Inicio entre el
+# widget del Reloj y los hábitos, arma y borra una carpeta, usa las dos veces
+# de «Habilitar todo», prueba el nivel 2, prende Bedtime (la noche se elige
+# con las ruedas, y sin la de hoy en «Qué noches» no rige; de noche sólo el
+# Reloj, una ráfaga de 5 minutos sin contraseña, su final y la alarma del
+# final de la noche, y apagada vuelve todo), prueba que la noche no corte
+# llamadas (una del teléfono en plena ráfaga, la pantalla apagada o
+# bloqueada, y una por internet que abre su pantalla con el teléfono
+# apagado), prueba las notificaciones por oleadas con «Sólo los grupos» (los
+# chats de grupo esperan la entrega y vuelven solos a su hora, los de a dos
+# llegan en el momento), abre Ajustes desde la administración, reinicia (y
+# los hábitos siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes
+# y usa la salida por cable.
+#
+# Las llamadas por internet y las oleadas se prueban con «Avisos de prueba»
+# (scripts/prueba-avisos/, se arma con javac, d8 y aapt2), que imita a
+# WhatsApp: los chats en un solo grupo con su resumen, y una llamada de
+# pantalla completa. Se instala para los pasos 9e y 9f y se desinstala al
+# terminarlos.
 #
 # El nivel 2: el navegador del emulador (WebView Browser Tester) pausado por
 # el Device Owner, sin abrirse, sin aparecer en ninguna lista y sin poder
@@ -49,8 +61,11 @@
 #
 # Sólo corre contra un emulador, y sólo si hay uno solo: libera y vuelve a
 # provisionar Device Owner, reinicia, fuerza crashes, instala apps de prueba
-# y desinstala y vuelve a instalar el navegador del emulador. Un teléfono
-# conectado queda de lado: todo va con -s y ANDROID_SERIAL.
+# y desinstala y vuelve a instalar el navegador del emulador. Mientras corre
+# la pantalla no se apaga sola (svc power stayon), y por un rato tiene la
+# pantalla de bloqueo de deslizar, sin contraseña; al terminar, las dos cosas
+# vuelven como estaban. Un teléfono conectado queda de lado: todo va con -s y
+# ANDROID_SERIAL.
 #
 # Mientras corre, no tocar el emulador: la prueba maneja la pantalla.
 
@@ -122,8 +137,10 @@ TXT_YA_FIJA='Ésa ya está bloqueada siempre.'
 TXT_SOLTAR='Dejar de ser Device Owner'       # el botón que ya no está en la administración
 TXT_SOLO_CABLE='sólo por cable'              # un pedazo de lo que dice ahora, al pie de la administración
 TXT_SIN_COINCIDENCIAS='No hay ninguna app con ese nombre.'   # el buscador de la lista de todas
-TXT_PANTALLA_RE='^Hoy: (.+) de pantalla$'    # bajo la fecha, con acceso al uso: «Hoy: 1 h 5 min de pantalla»
-TXT_MENOS_DE_UN_MINUTO='menos de un minuto'  # el tiempo de pantalla, antes del primer minuto
+# El tiempo de pantalla, con acceso al uso: arriba a la derecha de la hora dice
+# sólo «1 h 5 min» (o «0 min»), y la descripción, «Hoy: 1 h 5 min de pantalla».
+TXT_PANTALLA_RE='^Hoy: (.+) de pantalla$'
+TXT_PANTALLA_CORTO_RE='^([0-9]+ h( [0-9]+ min)?|[0-9]+ min)$'
 TXT_HOY_MEDITAR='Meditación de hoy'          # los botones de hoy de los hábitos, por su descripción
 TXT_HOY_EJERCICIO='Ejercicio de hoy'
 TXT_FILA_HABITO=', últimos 7 días: '         # «Meditar, últimos 7 días: 1 de 2. Ver el resumen»
@@ -135,17 +152,24 @@ TXT_HABITOS_TOPE='Ya hay 4 en Inicio: sacá uno para sumar otro.'
 TXT_HABITOS_UNO='Tiene que quedar al menos uno.'
 TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
 TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
-TXT_DORMIR='Hora de dormir'                  # el botón de la administración y el título de su pantalla
+TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 2 semanas»
+TXT_DORMIR='Bedtime'                         # el botón de la administración y el título de su pantalla
 TXT_DORMIR_PRENDIDA=Prendida                 # su interruptor
-TXT_EMPIEZA=Empieza                          # sus dos filas de hora, de a 15 minutos con − y +
+TXT_EMPIEZA=Empieza                          # sus dos filas de hora, cada una con dos ruedas: horas y minutos
 TXT_TERMINA=Termina
-TXT_MAS_TEMPRANO='Más temprano: '            # el − y el + de cada fila, por su descripción: «Más temprano: Empieza»
-TXT_MAS_TARDE='Más tarde: '
-TXT_DORMIR_HASTA='Hora de dormir hasta las ' # el aviso de Inicio de noche
+TXT_ES_DE_NOCHE='Es Bedtime, andá a dormir'  # el aviso de Inicio de noche: tocarlo muestra (o esconde) la ráfaga
+TXT_NOCHE_DEL='Noche del '                   # los siete días de Bedtime, por su descripción: «Noche del viernes»
 TXT_USAR_5='Usar 5 minutos'                  # la ráfaga, en Inicio, sin contraseña
 TXT_RAFAGA='Ráfaga de 5 minutos: hasta las ' # el aviso de Inicio mientras dura
 DORMIR_DESDE=$((23 * 60))                    # la noche de fábrica, en minutos del día: de 23:00...
 DORMIR_HASTA=$((7 * 60))                     # ...a 07:00
+TXT_NOTIFICACIONES=Notificaciones            # el botón de la administración y el título de su pantalla
+TXT_OLEADAS='Llegan por oleadas'             # su interruptor
+TXT_OLEADAS_PISTA='en silencio, a las horas de abajo'   # un pedazo de su explicación: las entregas no suenan
+TXT_ENTREGA='Nueva entrega'                  # las ruedas del horario que se suma: «Nueva entrega, hora: 09»
+TXT_AGREGAR_LAS='Agregar las '               # su botón: «Agregar las 09:00»
+TXT_SOLO_GRUPOS='Sólo los grupos: '          # debajo de cada app que espera, por su descripción: «Sólo los grupos: WhatsApp»
+OLEADAS_DE_FABRICA='12:00 19:00'             # las entregas de entrada
 INICIALES=LMXJVSD                            # los días del widget de hábitos, de lunes a domingo
 DIAS_ES=(lunes martes miércoles jueves viernes sábado domingo)   # las celdas del resumen:
 MESES_ES=(enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre)   # «Meditar, domingo 18 de octubre: no»
@@ -190,6 +214,14 @@ NAVEGADOR_PRUEBA=com.slowtown.prueba.navegador
 APP_VETADA=org.schabi.newpipe
 APP_VETADA_NOMBRE='NewPipe de prueba'
 BUSQUEDA_VETADA=newpipe
+# «Avisos de prueba» (scripts/prueba-avisos/, armada con armar.sh): se maneja
+# con am broadcast, y el resultado («data=») trae las claves de lo publicado.
+# Con 0x20 (FLAG_INCLUDE_STOPPED_PACKAGES): recién instalada está detenida, y
+# sin eso no recibe nada.
+AVISOS=com.slowtown.prueba.avisos
+AVISOS_NOMBRE='Avisos de prueba'
+AVISOS_PANTALLA=$AVISOS/.Principal           # la de la llamada: la abre la pantalla completa
+AVISOS_ORDEN="am broadcast -n $AVISOS/.Publicar -f 0x20"
 TXT_ATENDER=Answer                           # el aviso de llamada (en pantalla dice ANSWER)
 TXT_GESTIONAR=Manage                         # botón al pie del panel de notificaciones
 ID_GESTIONAR=id/manage_text                  # el mismo (dice History si el historial está prendido)
@@ -227,6 +259,7 @@ CALENDARIO=com.android.calendar/.AllInOneActivity
 NUM_CALENTAMIENTO=2235550001
 NUM_LLAMADA=2235554321
 NUM_SMS=2235551111
+NUM_NOCHE=2235552222   # la que entra de noche, en plena ráfaga
 
 UI_REMOTO=/data/local/tmp/slowtown-ui.xml
 
@@ -249,6 +282,9 @@ N_POLITICAS=0
 HABITO_HOY=''      # lo que marca el paso 8b: ejercicio hoy y meditar ayer (fechas ISO)
 HABITO_AYER=''
 FALTA=''           # lo último que vio esperar_sin_faltas que no estaba como tenía que estar
+QUIETA_ANTES=''    # stay_on_while_plugged_in de antes de la corrida: al terminar, vuelve
+BLOQUEO_PUESTO=0   # si la corrida le puso la pantalla de bloqueo de deslizar (y hay que sacarla)
+AVISOS_APK=''      # avisos.apk, una vez armada
 declare -A CAMBIAR=() VISTAS=()
 
 # ── Lectura de pantallas ────────────────────────────────────────────────────
@@ -265,7 +301,12 @@ declare -A CAMBIAR=() VISTAS=()
 #   libre TIPO CONSULTA PAQUETE        como texto/regex, pero sólo en ese paquete y sale 4
 #                                      si otra ventana (un aviso) tapa ese punto
 #   marcado CONSULTA                   «checkable checked» del primer nodo con ese texto o
-#                                      descripción, p. ej. «true false» (sale 1 si no está)
+#                                      descripción o, si él no se marca, de su ancestro más
+#                                      cercano que sí (en Compose, el renglón entero), p. ej.
+#                                      «true false» (sale 1 si no está)
+#   celda REGEX FAMILIA                el centro dibujado de la primera celda chica y tocable
+#                                      que calza con REGEX (los días del resumen de hábitos);
+#                                      FAMILIA calza con todas las de su grilla
 #   valido                             si el XML se puede leer
 PY_UI=$(cat <<'PY'
 import re
@@ -284,8 +325,7 @@ def caja(n):
     return b if len(b) == 4 and b[2] > b[0] and b[3] > b[1] else None
 
 
-def nodos(archivo, sin_widgets=False):
-    raiz = ET.parse(archivo).getroot()
+def nodos(raiz, sin_widgets=False):
     fuera = set()
     if sin_widgets:
         for w in raiz.iter('node'):
@@ -324,10 +364,10 @@ def criterio(tipo, consulta):
 
 
 def main(modo, archivo, *args):
+    raiz = ET.parse(archivo).getroot()
     if modo == 'valido':
-        ET.parse(archivo)
         return 0
-    lista = list(nodos(archivo, sin_widgets=(modo == 'textos')))
+    lista = list(nodos(raiz, sin_widgets=(modo == 'textos')))
     if modo == 'textos':
         for n, b in lista:
             x, y = centro(b)
@@ -374,10 +414,33 @@ def main(modo, archivo, *args):
         print('\n'.join(hallados))
         return 0 if hallados else 1
     if modo == 'marcado':
+        # Un toggleable de Compose es el renglón entero, y su texto (o la
+        # descripción que se le puso) queda en un hijo que no se marca.
+        padre = {h: p for p in raiz.iter() for h in p}
         cumple = criterio('texto', args[0])
         for n, b in lista:
             if cumple(n):
-                print(n.get('checkable') or 'false', n.get('checked') or 'false')
+                m = n
+                while m is not None and m.get('checkable') != 'true':
+                    m = padre.get(m)
+                m = n if m is None else m
+                print(m.get('checkable') or 'false', m.get('checked') or 'false')
+                return 0
+        return 1
+    if modo == 'celda':
+        # Compose agranda la zona de toque de lo que es chico (hasta 48 dp) y,
+        # de cada nodo, informa sólo lo que no le tapan las zonas de los que
+        # vienen después (la celda de la derecha, la de abajo): un pedazo de
+        # arriba a la izquierda, que cae sobre la celda de arriba. Lo que no
+        # se corta son el borde de arriba y el de la izquierda de la zona, y
+        # la celda está en el medio de la zona: medio lado más allá. El lado
+        # es el de la celda menos tapada.
+        r, familia = re.compile(args[0]), re.compile(args[1])
+        lado = max((max(b[2] - b[0], b[3] - b[1]) for n, b in lista
+                    if any(familia.search(t) for t in textos(n))), default=0)
+        for n, b in lista:
+            if any(r.search(t) for t in textos(n)):
+                print(b[0] + lado // 2, b[1] + lado // 2)
                 return 0
         return 1
     if modo == 'libre':
@@ -425,9 +488,19 @@ titulo() {
   echo
   echo "── $PASO. $* ──────────────────────────────"
 }
+restaurar_emulador() {   # lo que la corrida cambió del emulador, como estaba: también si se corta
+  [ -n "$SERIE" ] || return 0
+  if (( BLOQUEO_PUESTO )); then
+    adb_t 20 shell locksettings set-disabled true >/dev/null 2>&1 && BLOQUEO_PUESTO=0
+  fi
+  if [ -n "$QUIETA_ANTES" ]; then
+    adb_t 20 shell settings put global stay_on_while_plugged_in "$QUIETA_ANTES" >/dev/null 2>&1 && QUIETA_ANTES=''
+  fi
+}
 resumen() {
   echo
   echo "── resumen ──────────────────────────────────────────"
+  restaurar_emulador
   if [ -n "$SERIE" ]; then adb_t 60 logcat -d >"$SALIDA/logcat.txt" 2>/dev/null; fi
   echo "Capturas, volcados y logcat: $SALIDA"
   if (( ${#FALLAS[@]} )); then
@@ -734,6 +807,35 @@ esperar_ui() {  # esperar_ui SEGUNDOS TIPO CONSULTA [--windows]: deja el volcado
     sleep 0.5
   done
 }
+volcar_quieto() {   # volcar_quieto [--windows]: como volcar_ui, pero con la pantalla quieta (dos volcados seguidos iguales)
+  # Una pantalla recién abierta, o que acaba de cambiar, todavía se acomoda
+  # (entra deslizándose, se corre sola hasta lo último, aparece un renglón):
+  # un toque calculado con un volcado de ese momento cae en otro lado.
+  local previo="$UI_XML.previo" vuelta
+  volcar_ui "$@" || return 1
+  for vuelta in 1 2 3 4 5 6; do
+    cp "$UI_XML" "$previo"
+    sleep 0.3
+    volcar_ui "$@" || return 1
+    cmp -s "$UI_XML" "$previo" && return 0
+  done
+  return 0   # no se quedó quieta: vale el último
+}
+tocar_quieto() {   # tocar_quieto TIPO CONSULTA [--windows]: como tocar, con la pantalla quieta
+  local tipo=$1 consulta=$2 xy x y
+  shift 2
+  volcar_quieto "$@" || return 1
+  xy=$(ui "$tipo" "$consulta") || return 1
+  read -r x y <<<"$xy"
+  tocar_xy "$x" "$y"
+}
+tocar_celda() {   # tocar_celda REGEX FAMILIA: toca, donde se dibuja, un día del resumen de hábitos (ver «ui celda»)
+  local xy x y
+  volcar_quieto || return 1
+  xy=$(ui celda "$1" "$2") || return 1
+  read -r x y <<<"$xy"
+  tocar_xy "$x" "$y"
+}
 tocar_en_inicio() {   # tocar_en_inicio TIPO CONSULTA [MS]: toca (o mantiene MS) algo de Inicio
   # Un aviso del sistema (el del SMS, una llamada perdida) se dibuja encima de
   # la hora y se llevaría el toque: se espera a que se vaya solo. Sirve igual
@@ -832,8 +934,9 @@ etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una po
   pie=$(ui textos | awk -F'\t' -v t="$TXT_TODAS" '$5 == t { print $3; exit }')
   while IFS=$'\t' read -r x y arriba abajo t; do
     [[ -n $pie ]] && (( arriba >= pie )) && continue
-    [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE ]] && continue
+    [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE || $t =~ $TXT_PANTALLA_CORTO_RE ]] && continue
     [[ $t == "$TXT_INICIO_SIN_APPS" || $t == "$TXT_INICIO_SIN_PERMITIDAS" || $t == "$TXT_TODAS" ]] && continue
+    [[ $t == "$TXT_ES_DE_NOCHE" || $t == "$TXT_USAR_5" ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
   done < <(ui textos)
@@ -1212,15 +1315,16 @@ celda_re() {   # celda_re NOMBRE FECHA: el comienzo de la descripción de esa ce
   (( m == 9 )) && mes='(septiembre|setiembre)'
   echo "^$1, ${DIAS_ES[u - 1]} $d de $mes: "
 }
-dias_de_habito() {   # dias_de_habito HÁBITO: las fechas que tiene guardadas (meditar o ejercicio), una por línea
+conjunto() {   # conjunto NOMBRE [ARCHIVO]: los valores del <set name="NOMBRE"> de shared_prefs/ARCHIVO.xml (slowtown, si no se dice), uno por línea
   # Un conjunto vacío Android lo escribe «<set name="..." />».
   local prefs
-  prefs=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml)
-  awk -v k="habit_$1" '
+  prefs=$(disp run-as "$PAQUETE" cat "shared_prefs/${2:-slowtown}.xml")
+  awk -v k="$1" '
     index($0, "<set name=\"" k "\"") { if ($0 ~ /\/>/) exit; dentro = 1; next }
     dentro && /<\/set>/ { exit }
     dentro { gsub(/.*<string>|<\/string>.*/, ""); print }' <<<"$prefs" | sort
 }
+dias_de_habito() { conjunto "habit_$1"; }   # dias_de_habito HÁBITO: las fechas que tiene guardadas (meditar o ejercicio), una por línea
 esperar_dia() {   # esperar_dia HÁBITO FECHA si|no: hasta que esté (o no) entre las guardadas
   # Slowtown guarda con apply(): llega al disco un momento después.
   local fin=$((SECONDS + 10)) esta
@@ -1251,8 +1355,9 @@ esperar_lejos_de_medianoche() {   # si falta poco para la medianoche del emulado
 }
 afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos como están guardados
   # Por hábito: «N/meta» con N de los últimos 7 días, la fila con la misma
-  # cuenta, y el botón de hoy marcado si hoy está guardado. Más las iniciales.
-  local que=$1 hoy h dias n esperado e marcado mal_=() dice=()
+  # cuenta, el fuego con las semanas seguidas con la meta cumplida, y el
+  # botón de hoy marcado si hoy está guardado. Más las iniciales.
+  local que=$1 hoy h dias n esperado e marcado racha semanas fuego mal_=() dice=()
   hoy=$(hoy_en_el_emulador)
   if ! esperar_ui 10 texto "$TXT_HOY_MEDITAR"; then
     mal "$que: Inicio no muestra los hábitos"
@@ -1265,10 +1370,15 @@ afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos co
     ui texto "$esperado" >/dev/null || mal_+=("no dice $esperado para $h")
     ui texto "${HABITO_NOMBRE[$h]}$TXT_FILA_HABITO$n de ${HABITO_META[$h]}$TXT_VER_RESUMEN" >/dev/null ||
       mal_+=("la fila de $h no dice «$n de ${HABITO_META[$h]}»")
+    racha=$(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")
+    if (( racha == 1 )); then semanas='1 semana'; else semanas="$racha semanas"; fi
+    fuego="$TXT_RACHA${HABITO_NOMBRE[$h]}: $semanas"
+    ui texto "$fuego" >/dev/null ||
+      mal_+=("el fuego de $h no dice «$fuego» (dice «$(ui textos | cut -f5 | grep -m1 "^$TXT_RACHA${HABITO_NOMBRE[$h]}:")»)")
     if grep -qxF "$hoy" <<<"$dias"; then marcado=true; else marcado=false; fi
     e=$(ui marcado "${HABITO_BOTON[$h]}")
     [ "$e" = "true $marcado" ] || mal_+=("«${HABITO_BOTON[$h]}» está «${e:-?}» y tendría que ser «true $marcado»")
-    dice+=("$h $esperado$( [ "$marcado" = true ] && echo ', hoy sí')")
+    dice+=("$h $esperado, racha $racha$( [ "$marcado" = true ] && echo ', hoy sí')")
   done
   e=$(iniciales_vistas)
   [ "$e" = "$(iniciales_de "$hoy")" ] || mal_+=("los días dicen «$e» y tendrían que ser «$(iniciales_de "$hoy")»")
@@ -1279,7 +1389,7 @@ afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos co
   fi
 }
 
-texto_pantalla() {   # lo que dice el tiempo de pantalla en el último volcado, sin «Hoy: » ni « de pantalla»
+texto_pantalla() {   # el tiempo de pantalla del último volcado, por su descripción: «1 h 5 min»
   local x y arriba abajo t
   while IFS=$'\t' read -r x y arriba abajo t; do
     if [[ $t =~ $TXT_PANTALLA_RE ]]; then
@@ -1289,9 +1399,16 @@ texto_pantalla() {   # lo que dice el tiempo de pantalla en el último volcado, 
   done < <(ui textos)
   return 1
 }
-minutos_de() {   # minutos_de TIEMPO: «1 h 5 min» → 65, «45 min» → 45, «menos de un minuto» → 0
+pantalla_junto_a_la_hora() {   # pantalla_junto_a_la_hora TIEMPO: si en el último volcado se lee «TIEMPO» a la derecha de la hora, en su renglón y en una línea
+  # Una línea: no más alta que la fecha, que tiene la misma letra.
+  ui textos | awk -F'\t' -v t="$1" -v hora="$TXT_HORA_RE" -v fecha="$TXT_FECHA_RE" '
+    $5 ~ hora && hx == "" { hx = $1; harr = $3; hab = $4 }
+    $5 ~ fecha && falto == "" { falto = $4 - $3 }
+    $5 == t && tx == "" { tx = $1; ty = $2; talto = $4 - $3 }
+    END { exit !(hx != "" && tx != "" && falto != "" && tx > hx && ty >= harr && ty <= hab && talto <= falto * 1.3) }'
+}
+minutos_de() {   # minutos_de TIEMPO: «1 h 5 min» → 65, «2 h» → 120, «45 min» → 45, «0 min» → 0
   local h m
-  if [ "$1" = "$TXT_MENOS_DE_UN_MINUTO" ]; then echo 0; return 0; fi
   [[ $1 =~ ^(([0-9]+) h)?( ?([0-9]+) min)?$ ]] || return 1
   h=${BASH_REMATCH[2]}
   m=${BASH_REMATCH[4]}
@@ -1343,11 +1460,20 @@ paso_0() {
   if [ "$tam" != 1080x2340 ]; then
     aviso "«Answer» se toca en $ATENDER_XY, medido en 1080x2340: si uiautomator no ve el aviso, ajustá SLOWTOWN_ATENDER_XY"
   fi
+  # Que la pantalla no se apague sola en el medio (un rato en el Reloj, las
+  # esperas de las oleadas, la noche que rige sólo con el teléfono en uso).
+  # Al terminar vuelve lo de antes (restaurar_emulador).
+  QUIETA_ANTES=$(disp settings get global stay_on_while_plugged_in)
+  [[ $QUIETA_ANTES =~ ^[0-9]+$ ]] || QUIETA_ANTES=0
+  disp svc power stayon true >/dev/null
+  # Por si una corrida cortada la dejó con la pantalla apagada.
+  disp input keyevent KEYCODE_WAKEUP >/dev/null
 }
 
 # ── 1. Instalación ──────────────────────────────────────────────────────────
 paso_1() {
   titulo 1 "Instalación"
+  local intento out
   if (( COMPILAR )); then
     [ -d "$JAVA_HOME_GRADLE" ] || abortar "no está el JDK en $JAVA_HOME_GRADLE"
     nota "compilando: JAVA_HOME=$JAVA_HOME_GRADLE ./gradlew assembleDebug"
@@ -1364,8 +1490,15 @@ paso_1() {
       (cd "$RAIZ" && ./scripts/liberar.sh </dev/null) || abortar "liberar.sh falló"
     fi
     if instalada; then
-      if adb_t 120 uninstall "$PAQUETE" >/dev/null; then ok "desinstalada: arranca de cero"
-      else abortar "no pude desinstalar $PAQUETE"; fi
+      # Android termina de sacar el administrador un momento después de que
+      # liberar.sh vuelve, y mientras tanto no deja desinstalar: unos intentos.
+      for intento in 1 2 3 4 5 6; do
+        out=$(adb_t 120 uninstall "$PAQUETE" 2>&1)
+        grep -q Success <<<"$out" && break
+        sleep 3
+      done
+      if grep -q Success <<<"$out"; then ok "desinstalada: arranca de cero"
+      else abortar "no pude desinstalar $PAQUETE: $(tail -n 1 <<<"$out")"; fi
     fi
   fi
   # Sin terminal en stdin: si provisionar.sh no reconociera el emulador y
@@ -1523,12 +1656,13 @@ paso_4() {
 }
 
 # ── 4b. Tiempo de pantalla ──────────────────────────────────────────────────
-# Bajo la fecha, «Hoy: 1 h 5 min de pantalla»: la misma cuenta que Bienestar
-# digital, con UsageStatsManager. Necesita el acceso al uso, que da
-# provisionar.sh (appops GET_USAGE_STATS); sin él, la línea no está.
+# Arriba a la derecha de la hora, corto («1 h 5 min»), y en la descripción
+# «Hoy: 1 h 5 min de pantalla»: la misma cuenta que Bienestar digital, con
+# UsageStatsManager. Necesita el acceso al uso, que da provisionar.sh (appops
+# GET_USAGE_STATS); sin él, no está.
 paso_4b() {
   titulo 4b "Tiempo de pantalla en Inicio"
-  local out t1 t2 m1 m2 quieta
+  local out t1 t2 m1 m2
   out=$(disp appops get "$PAQUETE" GET_USAGE_STATS)
   if grep -q 'GET_USAGE_STATS: allow' <<<"$out"; then
     ok "provisionar.sh le dio a Slowtown el acceso al uso (appops GET_USAGE_STATS allow)"
@@ -1537,7 +1671,7 @@ paso_4b() {
   fi
   ir_a_inicio
   if ! esperar_ui 10 regex "$TXT_PANTALLA_RE"; then
-    mal "Inicio no muestra «Hoy: … de pantalla» bajo la fecha"
+    mal "Inicio no muestra el tiempo de pantalla (ninguna descripción «Hoy: … de pantalla»)"
     return
   fi
   t1=$(texto_pantalla)
@@ -1545,12 +1679,14 @@ paso_4b() {
     mal "no entiendo el tiempo de pantalla «$t1»"
     return
   fi
-  ok "bajo la fecha, Inicio muestra «Hoy: $t1 de pantalla»"
+  ok "Inicio muestra el tiempo de pantalla: «Hoy: $t1 de pantalla»"
+  if pantalla_junto_a_la_hora "$t1"; then
+    ok "arriba a la derecha de la hora, en una línea, dice sólo «$t1»"
+  else
+    mal "«$t1» no se lee a la derecha de la hora, en su renglón y en una línea"
+  fi
 
-  # Un rato en una app permitida, con la pantalla prendida aunque nadie la toque.
-  quieta=$(disp settings get global stay_on_while_plugged_in)
-  [[ $quieta =~ ^[0-9]+$ ]] || quieta=0
-  disp svc power stayon true >/dev/null
+  # Un rato en una app permitida (la pantalla no se apaga: svc power stayon, del paso 0).
   disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
   if esperar 10 "$(c_foco "$FOCO_RELOJ")"; then
     nota "70 segundos en el Reloj"
@@ -1560,7 +1696,6 @@ paso_4b() {
     mal "no se abre el Reloj ($(foco))"
   fi
   ir_a_inicio
-  disp settings put global stay_on_while_plugged_in "$quieta" >/dev/null
   if esperar_ui 10 regex "$TXT_PANTALLA_RE" && t2=$(texto_pantalla) && m2=$(minutos_de "$t2"); then
     if (( m2 >= m1 + 1 )); then
       ok "70 segundos en el Reloj suman al menos un minuto: de «$t1» a «$t2»"
@@ -1572,8 +1707,8 @@ paso_4b() {
   fi
   captura tiempo-de-pantalla
 
-  # Sin el acceso al uso, la línea no está; con el acceso, vuelve. Inicio la
-  # recalcula al reanudarse: se sale al Reloj y se vuelve.
+  # Sin el acceso al uso, no está; con el acceso, vuelve. Inicio lo recalcula
+  # al reanudarse: se sale al Reloj y se vuelve.
   disp appops set "$PAQUETE" GET_USAGE_STATS deny >/dev/null
   volver_desde_el_reloj
   if esperar_que_no 10 regex "$TXT_PANTALLA_RE"; then
@@ -1897,16 +2032,21 @@ paso_8b() {
     mal "el resumen no tiene el título «$TXT_HABITOS_TITULO» o «${HABITO_NOMBRE[meditar]}, ${HABITO_META[meditar]} por semana»"
   fi
   # Ayer, para el que se olvidó de marcarlo. Los días que vienen no tienen celda.
+  # Las celdas son chicas: se tocan donde se dibujan, no en el medio de lo
+  # que informa uiautomator (que cae en la de arriba).
   celda=$(celda_re "${HABITO_NOMBRE[meditar]}" "$ayer")
+  volcar_quieto
   if ui regex "${celda}sí\$" >/dev/null; then
     nota "ayer ya estaba marcado (de una corrida anterior): lo desmarco primero"
-    tocar regex "${celda}sí\$"
+    tocar_celda "${celda}sí\$" "^${HABITO_NOMBRE[meditar]}, "
     esperar_ui 10 regex "${celda}no\$" || mal "no pude desmarcar ayer en el resumen"
   fi
-  if tocar regex "${celda}no\$" && esperar_ui 10 regex "${celda}sí\$" && esperar_dia meditar "$ayer" si; then
-    ok "en el resumen, tocar ayer (${celda#^}no) lo pasa a «sí», y Slowtown guarda $ayer"
+  dias=$(dias_de_habito meditar)
+  if tocar_celda "${celda}no\$" "^${HABITO_NOMBRE[meditar]}, " && esperar_ui 10 regex "${celda}sí\$" && esperar_dia meditar "$ayer" si &&
+    [ "$(dias_de_habito meditar)" = "$(printf '%s\n%s\n' "$dias" "$ayer" | grep . | sort -u)" ]; then
+    ok "en el resumen, tocar ayer (${celda#^}no) lo pasa a «sí», y Slowtown guarda $ayer y ningún otro día"
   else
-    mal "en el resumen no pude marcar ayer: busqué «${celda}no» (guardadas: $(dias_de_habito meditar | en_una_linea))"
+    mal "en el resumen no pude marcar ayer, o se marcó otro día: busqué «${celda}no» (antes: $(en_una_linea <<<"$dias"); ahora: $(dias_de_habito meditar | en_una_linea))"
   fi
   if ui regex "$(celda_re "${HABITO_NOMBRE[meditar]}" "$(dia_mas "$hoy" 1)")" >/dev/null; then
     mal "el resumen tiene una celda para mañana"
@@ -1981,8 +2121,8 @@ paso_8c() {
   # En Inicio: cuatro filas, con el botón de hoy de Leer y su meta de 6.
   if atras && esperar_ui 10 texto "$TXT_HABITOS_PISTA" && atras && esperar_ui 10 texto "Lectura de hoy" &&
     ui texto "Caminata de hoy" >/dev/null && ui contiene "Leer$TXT_FILA_HABITO" >/dev/null &&
-    ui texto "0/6" >/dev/null; then
-    ok "Inicio suma Leer con su meta (0/6) y los botones «Lectura de hoy» y «Caminata de hoy»"
+    ui texto "0/6" >/dev/null && ui texto "${TXT_RACHA}Leer: 0 semanas" >/dev/null; then
+    ok "Inicio suma Leer con su meta (0/6), el fuego apagado («${TXT_RACHA}Leer: 0 semanas») y los botones «Lectura de hoy» y «Caminata de hoy»"
   else
     mal "Inicio o el resumen no muestran los hábitos sumados ($(foco))"
   fi
@@ -2559,43 +2699,116 @@ nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se 
   afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
 }
 
-# ── 9e. Hora de dormir ──────────────────────────────────────────────────────
+# ── 9e. Bedtime ─────────────────────────────────────────────────────────────
 # De noche, con Slowtown activo, sólo el reloj (y lo de siempre); ráfagas de
-# 5 minutos sin contraseña desde Inicio. La noche se corre para que incluya la
-# hora del emulador, con margen, y al final vuelve a la de fábrica. El final
-# de la ráfaga se dispara como lo hace la alarma, con root.
+# 5 minutos sin contraseña desde Inicio, detrás del aviso de la noche. La
+# noche se elige con dos ruedas por fila (horas y minutos): se corre para que
+# incluya la hora del emulador, con margen, y al final vuelve a la de fábrica.
+# Sin la noche de hoy en «Qué noches», no rige (dormir_noches). El final de la
+# ráfaga se dispara como lo hace la alarma, con root. Después, que la noche no
+# corte llamadas (paso_9e_llamadas).
 minutos_hhmm() { [[ $1 =~ ^([0-9]{2}):([0-9]{2})$ ]] && echo $((10#${BASH_REMATCH[1]} * 60 + 10#${BASH_REMATCH[2]})); }   # «23:00» → 1380
 hhmm() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }   # 1380 → «23:00»
 en_la_noche() {   # en_la_noche MINUTO DESDE HASTA: como Bedtime.inWindow, cruzando la medianoche
   local m=$1 d=$2 h=$3
   if (( d == h )); then return 1; elif (( d < h )); then (( m >= d && m < h )); else (( m >= d || m < h )); fi
 }
-hora_de_fila() {   # hora_de_fila FILA: la hora («23:00») de la fila «Empieza» o «Termina» en el último volcado
-  ui textos | awk -F'\t' -v f="$1" '
-    $5 == f { y = $2 }
-    $5 ~ /^[0-9][0-9]:[0-9][0-9]$/ { n++; h[n] = $5; hy[n] = $2 }
-    END { for (i = 1; i <= n; i++) { d = hy[i] - y; if (d < 0) d = -d; if (y != "" && d < 40) { print h[i]; exit } } }'
+noche_de() {   # noche_de MINUTO DESDE HASTA FECHA: de qué día es la noche que corre a esa hora, del 1 (lunes) al 7, como Bedtime.nightOf
+  # Del día en que empieza: si cruza la medianoche y ya pasó, o si empieza
+  # de madrugada, es la del día anterior.
+  local m=$1 d=$2 h=$3 f=$4
+  if (( d > h ? m < h : d < 12 * 60 )); then f=$(dia_mas "$f" -1); fi
+  date -u -d "$f" +%u
 }
-poner_hora() {   # poner_hora FILA MINUTOS: con «Más temprano» o «Más tarde» (lo más corto), hasta que la fila muestre esa hora
-  local fila=$1 meta=$2 vuelta actual dif boton n xy x y
-  for vuelta in 1 2 3; do
+noches_guardadas() {   # cuántas noches de la semana tiene elegidas Slowtown (sin nada guardado, las siete)
+  local n
+  n=$(conjunto bedtime_days | grep -c .)
+  if [ -z "$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml | grep 'name="bedtime_days"')" ]; then n=7; fi
+  echo "$n"
+}
+
+# Las ruedas de la hora (ui/NumberWheel.kt), en Bedtime y en Notificaciones.
+# Cada una se presenta entera como «Empieza, hora: 23», y de sus números se
+# ven sólo el del medio y sus dos vecinos, cada uno con su descripción
+# («Empieza, hora 22»): tocar un vecino lo trae al medio. Recién quieta avisa
+# el número nuevo, y ahí se guarda.
+valor_de_rueda() {   # valor_de_rueda RUEDA: el número del medio de RUEDA («Empieza, hora») en el último volcado, p. ej. «23»
+  ui textos | awk -F'\t' -v r="$1: " 'index($5, r) == 1 { print substr($5, length(r) + 1); exit }'
+}
+caja_de_rueda() {   # caja_de_rueda RUEDA: «x arriba abajo» de RUEDA en el último volcado
+  ui textos | awk -F'\t' -v r="$1: " 'index($5, r) == 1 { print $1, $3, $4; exit }'
+}
+hora_de_fila() {   # hora_de_fila FILA: la hora («23:00») de las dos ruedas de FILA («Empieza», «Termina», «Nueva entrega») en el último volcado
+  local h m
+  h=$(valor_de_rueda "$1, hora")
+  m=$(valor_de_rueda "$1, minutos")
+  [[ $h =~ ^[0-9]{2}$ && $m =~ ^[0-9]{2}$ ]] && echo "$h:$m"
+}
+poner_rueda() {   # poner_rueda RUEDA CUÁNTOS META: gira RUEDA (de CUÁNTOS números: 24 o 60) hasta META, por el camino más corto
+  # De a un número se toca el vecino, y se espera a que quede quieta en él.
+  # De a varios se arrastra, con el dedo quieto antes de soltar (como
+  # arrastrar): así no sigue de largo y frena en el número más cerca. El
+  # arrastre primero se come la tolerancia del toque: un sexto de fila de más.
+  # Lo que falte (o lo que se pasó) lo arregla la vuelta siguiente.
+  local rueda=$1 cuantos=$2 meta=$3 vuelta actual dif vecino xy x y arriba abajo fila n tope y1 y2
+  for vuelta in $(seq 1 15); do
     volcar_ui || return 1
-    actual=$(minutos_hhmm "$(hora_de_fila "$fila")") || return 1
-    dif=$(( ((meta - actual) % 1440 + 1440) % 1440 ))   # cuántos minutos más tarde
+    actual=$(valor_de_rueda "$rueda")
+    [[ $actual =~ ^[0-9]+$ ]] || return 1
+    dif=$(( ((meta - 10#$actual) % cuantos + cuantos) % cuantos ))   # cuántos números para adelante
     (( dif == 0 )) && return 0
-    if (( dif <= 720 )); then boton="$TXT_MAS_TARDE$fila"; n=$(( (dif + 14) / 15 ))
-    else boton="$TXT_MAS_TEMPRANO$fila"; n=$(( (1440 - dif + 14) / 15 )); fi
-    xy=$(ui texto "$boton") || return 1
-    read -r x y <<<"$xy"
-    # Un toque por vez y con un respiro: cada uno suma 15 minutos a la hora que
-    # muestra la pantalla, así que dos juntos antes de redibujar contarían uno.
-    # Si igual se perdió alguno, la vuelta siguiente lo corrige.
-    adb_t $((n * 2 + 30)) shell "for i in \$(seq $n); do input tap $x $y; sleep 0.2; done" >/dev/null 2>&1
+    (( dif > cuantos / 2 )) && dif=$((dif - cuantos))                # para atrás queda más cerca
+    read -r x arriba abajo <<<"$(caja_de_rueda "$rueda")"
+    [[ $x =~ ^[0-9]+$ && $arriba =~ ^[0-9]+$ && $abajo =~ ^[0-9]+$ ]] || return 1
+    fila=$(( (abajo - arriba) / 3 ))
+    # Los números que siguen están abajo: para adelante el dedo sube. Sin
+    # salirse de la pantalla: si no hay lugar, de a uno.
+    if (( dif > 0 )); then
+      y1=$((abajo - fila / 4))
+      tope=$(( (y1 - 150) / fila - 1 ))
+    else
+      y1=$((arriba + fila / 4))
+      tope=$(( (ALTO - 350 - y1) / fila - 1 ))
+    fi
+    n=${dif#-}
+    (( n > tope )) && n=$tope
+    if (( n <= 1 )); then
+      printf -v vecino '%02d' $(( (10#$actual + (dif > 0 ? 1 : -1) + cuantos) % cuantos ))
+      xy=$(ui texto "$rueda $vecino") || return 1
+      read -r x y <<<"$xy"
+      tocar_xy "$x" "$y"
+      esperar_ui 5 texto "$rueda: $vecino" >/dev/null
+      continue
+    fi
+    if (( dif > 0 )); then y2=$((y1 - n * fila - fila / 6)); else y2=$((y1 + n * fila + fila / 6)); fi
+    adb_t 30 shell "input motionevent DOWN $x $y1; input motionevent MOVE $x $(( (y1 + y2) / 2 )); input motionevent MOVE $x $y2; sleep 0.4; input motionevent UP $x $y2" >/dev/null 2>&1
     sleep 1
   done
-  volcar_ui && [ "$(hora_de_fila "$fila")" = "$(hhmm "$meta")" ]
+  return 1
 }
-abrir_dormir() {   # desde Inicio hasta la pantalla «Hora de dormir» de la administración
+poner_hora() {   # poner_hora FILA MINUTOS: gira las dos ruedas de FILA hasta esa hora (en minutos del día) y lo verifica
+  local fila=$1 meta=$2
+  poner_rueda "$fila, hora" 24 $((meta / 60)) && poner_rueda "$fila, minutos" 60 $((meta % 60)) &&
+    volcar_ui && [ "$(hora_de_fila "$fila")" = "$(hhmm "$meta")" ]
+}
+dormir_guardado() {   # «inicio fin prendida» como lo tiene guardado Slowtown, en minutos del día: «1380 420 false»
+  local prefs
+  prefs=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml)
+  awk -v d="$DORMIR_DESDE" -v h="$DORMIR_HASTA" '
+    function valor(v) { v = $0; sub(/.*value="/, "", v); sub(/".*/, "", v); return v }
+    /name="bedtime_start"/ { s = valor() }
+    /name="bedtime_end"/ { e = valor() }
+    /name="bedtime_enabled"/ { p = valor() }
+    END { print (s == "" ? d : s), (e == "" ? h : e), (p == "" ? "false" : p) }' <<<"$prefs"
+}
+esperar_dormir_guardado() {   # esperar_dormir_guardado «INICIO FIN PRENDIDA»: hasta que Slowtown lo tenga guardado así (guarda con apply)
+  local fin=$((SECONDS + 10))
+  until [ "$(dormir_guardado)" = "$1" ]; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+abrir_dormir() {   # desde Inicio hasta la pantalla «Bedtime» de la administración
   entrar_admin && tocar_desplazando texto "$TXT_DORMIR" && esperar_ui 10 texto "$TXT_DORMIR_PRENDIDA"
 }
 resumida() {   # la pantalla en primer plano, p. ej. com.slowtown.launcher/.HomeActivity
@@ -2614,9 +2827,10 @@ alarma_de_dormir() {   # si Android tiene agendada una alarma RTC_WAKEUP para Be
     END { exit !hay }' <<<"$out"
 }
 falta_de_noche() {   # en el último volcado de Inicio, lo que no está como de noche (nada si está todo)
+  # La ráfaga no está a la vista: aparece recién al tocar el aviso.
   local falta=''
-  ui regex "^$TXT_DORMIR_HASTA" >/dev/null || falta+=" sin «$TXT_DORMIR_HASTA…»"
-  ui texto "$TXT_USAR_5" >/dev/null || falta+=" sin «$TXT_USAR_5»"
+  ui texto "$TXT_ES_DE_NOCHE" >/dev/null || falta+=" sin «$TXT_ES_DE_NOCHE»"
+  ui texto "$TXT_USAR_5" >/dev/null && falta+=" con «$TXT_USAR_5» a la vista"
   ui texto "$APP_RELOJ" >/dev/null || falta+=" sin $APP_RELOJ"
   ui texto "$APP_QUITAR" >/dev/null && falta+=" con $APP_QUITAR"
   echo "$falta"
@@ -2624,15 +2838,16 @@ falta_de_noche() {   # en el último volcado de Inicio, lo que no está como de 
 falta_de_rafaga() {   # lo mismo, durante la ráfaga
   local falta=''
   ui regex "^$TXT_RAFAGA" >/dev/null || falta+=" sin «$TXT_RAFAGA…»"
+  ui texto "$TXT_ES_DE_NOCHE" >/dev/null && falta+=" con «$TXT_ES_DE_NOCHE»"
   ui texto "$APP_QUITAR" >/dev/null || falta+=" sin $APP_QUITAR"
   echo "$falta"
 }
-falta_de_dia() {   # lo mismo, con la hora de dormir apagada
+falta_de_dia() {   # lo mismo, con Bedtime apagada
   local falta=''
   ui texto "$APP_QUITAR" >/dev/null || falta+=" sin $APP_QUITAR"
   ui texto "$APP_RELOJ" >/dev/null || falta+=" sin $APP_RELOJ"
   ui texto "$TXT_USAR_5" >/dev/null && falta+=" con «$TXT_USAR_5»"
-  ui regex "^$TXT_DORMIR_HASTA" >/dev/null && falta+=" con «$TXT_DORMIR_HASTA…»"
+  ui texto "$TXT_ES_DE_NOCHE" >/dev/null && falta+=" con «$TXT_ES_DE_NOCHE»"
   echo "$falta"
 }
 esperar_sin_faltas() {   # esperar_sin_faltas SEGUNDOS FUNCIÓN: hasta que FUNCIÓN no diga nada del volcado; lo último que dijo queda en FALTA
@@ -2648,29 +2863,43 @@ esperar_sin_faltas() {   # esperar_sin_faltas SEGUNDOS FUNCIÓN: hasta que FUNCI
     sleep 0.5
   done
 }
+empezar_rafaga() {   # en Inicio de noche: toca el aviso, que muestra «Usar 5 minutos», y después el botón
+  volcar_ui || return 1
+  if ! ui texto "$TXT_USAR_5" >/dev/null; then
+    { tocar_en_inicio texto "$TXT_ES_DE_NOCHE" && esperar_ui 5 texto "$TXT_USAR_5"; } || return 1
+  fi
+  tocar_en_inicio texto "$TXT_USAR_5"
+}
+terminar_rafaga() {   # como la alarma del final de la ráfaga (el receptor no se exporta: hace falta root)
+  disp "am broadcast -n '$PAQUETE/.admin.Bedtime\$Tick' --ez fin_de_rafaga true" >/dev/null
+}
 
 paso_9e() {
   titulo 9e "«$TXT_DORMIR»: de noche sólo el reloj, y ráfagas de 5 minutos sin contraseña"
-  local ahora min desde=$DORMIR_DESDE hasta=$DORMIR_HASTA i f uid root=0 r
+  local ahora min desde hasta=$DORMIR_HASTA i f e uid root=0 r
   ir_a_inicio
   if ! abrir_dormir; then
     mal "Administración no lleva a «$TXT_DORMIR»"
     ir_a_inicio
     return
   fi
-  if ui texto "$TXT_DORMIR" >/dev/null; then
-    ok "«$TXT_DORMIR» en la administración abre su pantalla, con «$TXT_DORMIR_PRENDIDA», «$TXT_EMPIEZA» y «$TXT_TERMINA»"
-  else
-    mal "la pantalla de «$TXT_DORMIR_PRENDIDA» no tiene el título «$TXT_DORMIR»"
-  fi
-  if [ "$(ui marcado "$TXT_DORMIR_PRENDIDA")" = "true true" ]; then
-    nota "estaba prendida de una corrida anterior: la apago para arrancar de fábrica"
-    tocar texto "$TXT_DORMIR_PRENDIDA"
-    esperar_marcado "$TXT_DORMIR_PRENDIDA" false || mal "no pude apagar la hora de dormir que había quedado prendida"
-  fi
-  volcar_ui
   i=$(hora_de_fila "$TXT_EMPIEZA")
   f=$(hora_de_fila "$TXT_TERMINA")
+  if ui texto "$TXT_DORMIR" >/dev/null && [[ -n $i && -n $f ]]; then
+    ok "«$TXT_DORMIR» en la administración abre su pantalla, con «$TXT_DORMIR_PRENDIDA» y las ruedas de «$TXT_EMPIEZA» y «$TXT_TERMINA»"
+  else
+    mal "la pantalla de «$TXT_DORMIR» no tiene su título o las ruedas de «$TXT_EMPIEZA» y «$TXT_TERMINA» (dicen ${i:-?} y ${f:-?})"
+  fi
+  e=$(ui marcado "$TXT_DORMIR_PRENDIDA")
+  case $e in
+    'true false') ;;
+    'true true')
+      nota "estaba prendida de una corrida anterior: la apago para arrancar de fábrica"
+      tocar texto "$TXT_DORMIR_PRENDIDA"
+      esperar_marcado "$TXT_DORMIR_PRENDIDA" false || mal "no pude apagar «$TXT_DORMIR», que había quedado prendida"
+      ;;
+    *) mal "«$TXT_DORMIR_PRENDIDA» no es un interruptor (checkable/checked: ${e:-no está})" ;;
+  esac
   if [ "$i" = "$(hhmm "$DORMIR_DESDE")" ] && [ "$f" = "$(hhmm "$DORMIR_HASTA")" ]; then
     ok "de fábrica, la noche va de $i a $f"
   else
@@ -2680,41 +2909,42 @@ paso_9e() {
       { mal "no pude volverla a la de fábrica"; ir_a_inicio; return; }
   fi
 
-  # Que la noche tenga adentro la hora del emulador, con margen: si falta poco
-  # para que termine (o terminó hace poco), se corre el final media hora más
-  # allá de ahora; si no es de noche, se adelanta el principio hasta ahora.
+  # Que la noche tenga adentro la hora del emulador, con margen: empieza en el
+  # cuarto de hora de ahora (así giran las dos ruedas; si eso son justo las
+  # 23, un cuarto antes) y, si falta poco para que termine (o terminó hace
+  # poco), el final se corre media hora más allá de ahora.
   ahora=$(disp date +%H:%M)
   if ! min=$(minutos_hhmm "$ahora"); then
     mal "no entiendo la hora del emulador («$ahora»)"
     ir_a_inicio
     return
   fi
+  desde=$(( min / 15 * 15 ))
+  (( desde == DORMIR_DESDE )) && desde=$(( (desde - 15 + 1440) % 1440 ))
   if (( min >= DORMIR_HASTA - 30 && min < DORMIR_HASTA + 30 )); then
     hasta=$(( (min + 30 + 14) / 15 * 15 ))
-  elif ! en_la_noche "$min" "$DORMIR_DESDE" "$DORMIR_HASTA"; then
-    desde=$(( min / 15 * 15 ))
   fi
-  if (( desde != DORMIR_DESDE )) && ! poner_hora "$TXT_EMPIEZA" "$desde"; then
-    mal "no pude correr el principio de la noche a las $(hhmm "$desde") (dice ${i:-?})"
+  if ! poner_hora "$TXT_EMPIEZA" "$desde"; then
+    mal "no pude girar las ruedas de «$TXT_EMPIEZA» hasta las $(hhmm "$desde") (dicen $(hora_de_fila "$TXT_EMPIEZA"))"
   fi
   if (( hasta != DORMIR_HASTA )) && ! poner_hora "$TXT_TERMINA" "$hasta"; then
-    mal "no pude correr el final de la noche a las $(hhmm "$hasta")"
+    mal "no pude girar las ruedas de «$TXT_TERMINA» hasta las $(hhmm "$hasta") (dicen $(hora_de_fila "$TXT_TERMINA"))"
   fi
   volcar_ui
   i=$(hora_de_fila "$TXT_EMPIEZA")
   f=$(hora_de_fila "$TXT_TERMINA")
-  if [ "$i" = "$(hhmm "$desde")" ] && [ "$f" = "$(hhmm "$hasta")" ]; then
-    ok "en el emulador son las $ahora: la noche queda de $i a $f, con los botones de a 15 minutos"
+  if [ "$i" = "$(hhmm "$desde")" ] && [ "$f" = "$(hhmm "$hasta")" ] && esperar_dormir_guardado "$desde $hasta false"; then
+    ok "en el emulador son las $ahora: con las ruedas, la noche queda de $i a $f, y Slowtown la guarda así"
   else
-    mal "la noche tendría que quedar de $(hhmm "$desde") a $(hhmm "$hasta") y quedó de ${i:-?} a ${f:-?}"
+    mal "la noche tendría que quedar de $(hhmm "$desde") a $(hhmm "$hasta"): las ruedas dicen de ${i:-?} a ${f:-?}, y lo guardado es «$(dormir_guardado)»"
   fi
   tocar texto "$TXT_DORMIR_PRENDIDA"
-  if esperar_marcado "$TXT_DORMIR_PRENDIDA" true; then
+  if esperar_marcado "$TXT_DORMIR_PRENDIDA" true && esperar_dormir_guardado "$desde $hasta true"; then
     ok "«$TXT_DORMIR_PRENDIDA» la prende"
   else
-    mal "tocar «$TXT_DORMIR_PRENDIDA» no la prendió ($(ui marcado "$TXT_DORMIR_PRENDIDA"))"
+    mal "tocar «$TXT_DORMIR_PRENDIDA» no la prendió ($(ui marcado "$TXT_DORMIR_PRENDIDA"); guardado: $(dormir_guardado))"
   fi
-  captura hora-de-dormir
+  captura bedtime
 
   # De noche, la lista de lock task se achica al reloj (y lo de siempre).
   if esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
@@ -2728,15 +2958,25 @@ paso_9e() {
     mal "de noche, el reloj ($PAQUETE_RELOJ) salió de la lista de lock task"
   fi
   r=$(estado)
-  if [ "$r" = LOCKED ]; then ok "y Slowtown sigue LOCKED"; else mal "prender la hora de dormir dejó el lock task en ${r:-?}"; fi
+  if [ "$r" = LOCKED ]; then ok "y Slowtown sigue LOCKED"; else mal "prender «$TXT_DORMIR» dejó el lock task en ${r:-?}"; fi
 
   ir_a_inicio
   if esperar_sin_faltas 15 falta_de_noche; then
-    ok "Inicio de noche: «$TXT_DORMIR_HASTA…», «$TXT_USAR_5» y $APP_RELOJ, sin $APP_QUITAR"
+    ok "Inicio de noche: «$TXT_ES_DE_NOCHE» y $APP_RELOJ, sin $APP_QUITAR ni «$TXT_USAR_5» a la vista"
   else
     mal "Inicio de noche no está como tendría que estar:$FALTA"
   fi
   captura inicio-de-noche
+  # La ráfaga está detrás del aviso: tocarlo la muestra, y otra vez la esconde.
+  if tocar_en_inicio texto "$TXT_ES_DE_NOCHE" && esperar_ui 5 texto "$TXT_USAR_5"; then
+    if tocar_en_inicio texto "$TXT_ES_DE_NOCHE" && esperar_que_no 5 texto "$TXT_USAR_5"; then
+      ok "tocar «$TXT_ES_DE_NOCHE» muestra «$TXT_USAR_5», y tocarlo otra vez lo esconde"
+    else
+      mal "tocar otra vez «$TXT_ES_DE_NOCHE» no esconde «$TXT_USAR_5»"
+    fi
+  else
+    mal "tocar «$TXT_ES_DE_NOCHE» no muestra «$TXT_USAR_5»"
+  fi
   disp am start -n "$CAMARA_ACTIVIDAD" >/dev/null
   if esperar 10 "$(c_resumida "$FOCO_BLOQUEO")" && ! esperar 1 "$(c_resumida "$PAQUETE_CAMARA/")"; then
     ok "de noche, abrir $APP_QUITAR con am start da «App is not available» ($FOCO_BLOQUEO)"
@@ -2746,10 +2986,11 @@ paso_9e() {
   adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
   sleep 1
   ir_a_inicio
+  dormir_noches "$desde" "$hasta"
 
   # La ráfaga: sin contraseña, vuelven las permitidas.
-  if ! tocar_en_inicio texto "$TXT_USAR_5"; then
-    mal "no encuentro «$TXT_USAR_5» en Inicio"
+  if ! empezar_rafaga; then
+    mal "no pude empezar la ráfaga: tocar «$TXT_ES_DE_NOCHE» y después «$TXT_USAR_5»"
   else
     if esperar_sin_faltas 15 falta_de_rafaga; then
       ok "«$TXT_USAR_5»: Inicio dice «$TXT_RAFAGA…» y vuelve $APP_QUITAR"
@@ -2778,7 +3019,7 @@ paso_9e() {
       mal "no pude pasar adb a root: sin eso no puedo terminar la ráfaga antes de los 5 minutos"
     fi
     if (( root )); then
-      disp "am broadcast -n '$PAQUETE/.admin.Bedtime\$Tick' --ez fin_de_rafaga true" >/dev/null
+      terminar_rafaga
       if esperar 10 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
         ok "al terminar la ráfaga, $APP_QUITAR sale otra vez de la lista de lock task"
       else
@@ -2800,6 +3041,8 @@ paso_9e() {
     mal "dumpsys alarm no tiene ninguna alarma RTC_WAKEUP de $PAQUETE/.admin.Bedtime\$Tick"
   fi
 
+  paso_9e_llamadas
+
   # Apagarla devuelve el día, y la noche vuelve a la de fábrica para lo que sigue.
   if ! abrir_dormir; then
     mal "no pude volver a «$TXT_DORMIR» para apagarla"
@@ -2817,19 +3060,545 @@ paso_9e() {
   else
     mal "apagada, $APP_QUITAR no vuelve a la lista de lock task"
   fi
-  if poner_hora "$TXT_EMPIEZA" "$DORMIR_DESDE" && poner_hora "$TXT_TERMINA" "$DORMIR_HASTA"; then
-    (( desde != DORMIR_DESDE || hasta != DORMIR_HASTA )) &&
-      ok "la noche vuelve a la de fábrica: de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA")"
+  if poner_hora "$TXT_EMPIEZA" "$DORMIR_DESDE" && poner_hora "$TXT_TERMINA" "$DORMIR_HASTA" &&
+    esperar_dormir_guardado "$DORMIR_DESDE $DORMIR_HASTA false" && [ "$(noches_guardadas)" = 7 ]; then
+    ok "con las ruedas, la noche vuelve a la de fábrica: de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA"), las siete noches"
   else
-    mal "no pude volver la noche a la de fábrica (de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA"))"
+    mal "no pude volver la noche a la de fábrica (las ruedas dicen de $(hora_de_fila "$TXT_EMPIEZA") a $(hora_de_fila "$TXT_TERMINA"); guardado: $(dormir_guardado), $(noches_guardadas) noches)"
   fi
   ir_a_inicio
   if esperar_sin_faltas 15 falta_de_dia; then
-    ok "Inicio apagada: vuelve $APP_QUITAR, sin «$TXT_USAR_5»"
+    ok "Inicio apagada: vuelve $APP_QUITAR, sin «$TXT_ES_DE_NOCHE» ni «$TXT_USAR_5»"
   else
-    mal "con la hora de dormir apagada, Inicio no está como tendría que estar:$FALTA"
+    mal "con «$TXT_DORMIR» apagada, Inicio no está como tendría que estar:$FALTA"
   fi
-  afirmar_en_inicio "la hora de dormir apagada deja todo como antes: Slowtown y LOCKED"
+  afirmar_en_inicio "«$TXT_DORMIR» apagada deja todo como antes: Slowtown y LOCKED"
+}
+
+# «Qué noches»: un círculo por día, de lunes a domingo, y cada noche es del día
+# en que empieza. Sin la de ahora, Bedtime no rige; con ella, otra vez.
+dormir_noches() {   # dormir_noches DESDE HASTA: con la noche ya rigiendo, en Inicio
+  local desde=$1 hasta=$2 reloj h m f u nombre d faltan=''
+  reloj=$(disp date +%H:%M:%F)
+  IFS=: read -r h m f <<<"$reloj"
+  u=$(noche_de $((10#$h * 60 + 10#$m)) "$desde" "$hasta" "$f")
+  nombre=${DIAS_ES[u - 1]}
+  if ! { abrir_dormir && asomar texto "${TXT_NOCHE_DEL}lunes"; }; then
+    mal "no encuentro en «$TXT_DORMIR» las siete noches («${TXT_NOCHE_DEL}lunes»…)"
+    ir_a_inicio
+    return
+  fi
+  for d in "${DIAS_ES[@]}"; do
+    [ "$(ui marcado "$TXT_NOCHE_DEL$d")" = "true true" ] || faltan+=" $d"
+  done
+  if [ -z "$faltan" ]; then
+    ok "de entrada rige las siete noches: los siete días, de lunes a domingo, están marcados"
+  else
+    mal "de entrada no están marcadas las noches de:$faltan"
+  fi
+  if marcar_casilla "$TXT_NOCHE_DEL$nombre" false && esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")" &&
+    ! grep -qx "$u" <<<"$(conjunto bedtime_days)"; then
+    ok "sin la noche del $nombre (la de ahora: empezó el $nombre a las $(hhmm "$desde")), no rige: $APP_QUITAR vuelve a la lista"
+  else
+    mal "sacar la noche del $nombre no la hizo dejar de regir ($(ui marcado "$TXT_NOCHE_DEL$nombre"); guardadas: $(conjunto bedtime_days | en_una_linea))"
+  fi
+  captura bedtime-sin-esta-noche
+  ir_a_inicio
+  if esperar_sin_faltas 15 falta_de_dia; then
+    ok "e Inicio vuelve a ser el de día: $APP_QUITAR, sin «$TXT_ES_DE_NOCHE»"
+  else
+    mal "sin la noche del $nombre, Inicio no está como de día:$FALTA"
+  fi
+  if abrir_dormir && marcar_casilla "$TXT_NOCHE_DEL$nombre" true && esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")" &&
+    [ "$(noches_guardadas)" = 7 ]; then
+    ok "con la noche del $nombre otra vez, vuelve a regir: $APP_QUITAR afuera, y quedan las siete"
+  else
+    mal "con la noche del $nombre otra vez, no vuelve a regir ($(ui marcado "$TXT_NOCHE_DEL$nombre"); $(noches_guardadas) noches guardadas)"
+  fi
+  ir_a_inicio
+  if esperar_sin_faltas 15 falta_de_noche; then
+    ok "e Inicio vuelve a decir «$TXT_ES_DE_NOCHE»"
+  else
+    mal "con la noche del $nombre otra vez, Inicio no está como de noche:$FALTA"
+  fi
+}
+
+# La noche no corta llamadas (admin/CallGuard.kt) y rige sólo con el teléfono
+# en uso (Bedtime.inUse): con la pantalla apagada o bloqueada la lista es la
+# de día, para que una llamada por internet pueda abrir su pantalla. Se mira
+# con la cámara (permitida, y de noche afuera) y con «Avisos de prueba», que
+# se permite para esto: su llamada es de pantalla completa, como la de
+# WhatsApp. Corre de noche, con Bedtime prendida.
+c_despierta() { echo "dumpsys power | grep -q 'mWakefulness=Awake'"; }        # la pantalla prendida
+c_bloqueada() { echo "dumpsys window | grep -q 'isKeyguardShowing=true'"; }  # la pantalla de bloqueo, también tapada por otra
+apagar_pantalla() { adb_t 20 shell input keyevent KEYCODE_SLEEP >/dev/null 2>&1; esperar 10 "! $(c_despierta)"; }
+prender_pantalla() { adb_t 20 shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1; esperar 10 "$(c_despierta)"; }
+desbloquear() { adb_t 20 shell wm dismiss-keyguard >/dev/null 2>&1; esperar 10 "! $(c_bloqueada)"; }
+poner_bloqueo() {   # la pantalla de bloqueo de deslizar, sin contraseña, si el emulador no tenía ninguna
+  [ "$(disp locksettings get-disabled)" = true ] || return 0
+  disp locksettings set-disabled false >/dev/null
+  BLOQUEO_PUESTO=1
+  nota "le pongo al emulador la pantalla de bloqueo de deslizar, sin contraseña (al terminar se saca)"
+}
+sacar_bloqueo() {   # la saca, si la puso poner_bloqueo
+  (( BLOQUEO_PUESTO )) || return 0
+  disp locksettings set-disabled true >/dev/null && BLOQUEO_PUESTO=0
+}
+
+paso_9e_llamadas() {
+  local uid root=0 t0 en_lista
+  nota "de noche, las llamadas"
+
+  # (a) Una del teléfono en plena ráfaga, que termina en el medio: la
+  # llamada sigue, y mientras dura la lista es la de día. Al cortar, la noche
+  # vuelve sola (unos segundos después: CallGuard espera a que se asiente).
+  uid=$(uid_adb)
+  if [ "$uid" = 0 ] || adb_como 0; then root=1; fi
+  ir_a_inicio
+  if (( ! root )); then
+    mal "no pude pasar adb a root: sin eso no puedo terminar la ráfaga en plena llamada"
+  elif ! { empezar_rafaga && esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; }; then
+    mal "no pude empezar otra ráfaga para la llamada"
+  else
+    emu gsm call "$NUM_NOCHE"
+    if ! esperar 20 "$(c_llamada RINGING)"; then
+      mal "de noche, en plena ráfaga, la llamada no llega a sonar"
+    elif ! { adb_t 20 shell input keyevent KEYCODE_CALL >/dev/null 2>&1 && esperar 15 "$(c_llamada ACTIVE)"; }; then
+      # KEYCODE_CALL atiende como el botón verde, sin buscar el aviso.
+      mal "de noche, la llamada no queda ACTIVE al atenderla"
+    else
+      terminar_rafaga
+      if sostener 8 "$(c_llamada ACTIVE) && $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+        ok "termina la ráfaga en plena llamada: la llamada sigue ACTIVE y $APP_QUITAR sigue en la lista (la noche espera)"
+      else
+        en_lista=no
+        esperar 1 "$(c_en_lock_task "$PAQUETE_CAMARA")" && en_lista=sí
+        mal "terminada la ráfaga en plena llamada: ACTIVE $(esperar 1 "$(c_llamada ACTIVE)" && echo sí || echo no), $APP_QUITAR en la lista: $en_lista"
+      fi
+    fi
+    emu gsm cancel "$NUM_NOCHE"
+    esperar 15 "$(c_sin_llamada)" || mal "la llamada de la noche no se corta"
+    t0=$SECONDS
+    if esperar 25 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+      ok "al cortar, la noche vuelve sola: $APP_QUITAR sale de la lista a los $((SECONDS - t0)) s"
+    else
+      mal "cortada la llamada, $APP_QUITAR sigue en la lista de lock task"
+      terminar_rafaga
+    fi
+  fi
+  if (( root )) && [ "$uid" != 0 ]; then adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"; fi
+  # El marcador muestra un rato la llamada terminada.
+  esperar 10 "! $(c_foco "$FOCO_LLAMADA")"
+  ir_a_inicio
+
+  # (b) Con la pantalla apagada o bloqueada, la lista es la de día; en uso
+  # (prendida y desbloqueada), la de la noche.
+  poner_bloqueo
+  if ! esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    mal "de noche, en uso y sin llamada, $APP_QUITAR está en la lista de lock task"
+  fi
+  if apagar_pantalla && esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "de noche, con la pantalla apagada, la lista es la de día: $APP_QUITAR adentro"
+  else
+    mal "de noche, con la pantalla apagada, $APP_QUITAR no vuelve a la lista de lock task"
+  fi
+  if prender_pantalla && esperar 5 "$(c_bloqueada)" && sostener 4 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "al prenderla, en la pantalla de bloqueo, sigue la de día"
+  else
+    mal "al prender la pantalla: despierta $(esperar 1 "$(c_despierta)" && echo sí || echo no), bloqueada $(esperar 1 "$(c_bloqueada)" && echo sí || echo no), y $APP_QUITAR tendría que seguir en la lista"
+  fi
+  if desbloquear && esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "al desbloquear, vuelve la de la noche: $APP_QUITAR afuera"
+  else
+    mal "desbloqueada, $APP_QUITAR sigue en la lista de lock task"
+  fi
+  ir_a_inicio
+
+  # (c) Una llamada por internet que entra con el teléfono apagado: su pantalla
+  # completa se abre y prende la pantalla. Al cortar y desbloquear, la noche.
+  if ! instalar_avisos; then
+    mal "no pude armar o instalar «$AVISOS_NOMBRE»"
+  elif ! permitir_avisos; then
+    mal "no pude permitir «$AVISOS_NOMBRE» en «$TXT_ELEGIR_APPS»"
+  else
+    ok "«$AVISOS_NOMBRE» se instala y queda permitida (en «$TXT_ELEGIR_APPS», con la contraseña)"
+    ir_a_inicio
+    if esperar 15 "! $(c_en_lock_task "$AVISOS")"; then
+      ok "de noche, en uso, «$AVISOS_NOMBRE» queda afuera de la lista, como toda permitida"
+    else
+      mal "de noche, en uso, «$AVISOS_NOMBRE» está en la lista de lock task"
+    fi
+    if ! { apagar_pantalla && esperar 15 "$(c_en_lock_task "$AVISOS")"; }; then
+      mal "con la pantalla apagada, «$AVISOS_NOMBRE» no vuelve a la lista de lock task"
+    fi
+    avisos "--es que llamada --es de Ana" >/dev/null
+    if esperar 15 "$(c_resumida "$AVISOS_PANTALLA")" && esperar 10 "$(c_despierta)"; then
+      ok "con la pantalla apagada, la llamada de «$AVISOS_NOMBRE» abre su pantalla completa ($AVISOS_PANTALLA) y prende la pantalla"
+    else
+      mal "con la pantalla apagada, la llamada de «$AVISOS_NOMBRE» no abrió su pantalla (al frente: $(resumida))"
+    fi
+    if sostener 6 "$(c_resumida "$AVISOS_PANTALLA") && $(c_en_lock_task "$AVISOS")" && [ "$(estado)" = LOCKED ]; then
+      ok "mientras suena, su pantalla sigue al frente y en la lista, con Slowtown LOCKED"
+    else
+      mal "mientras suena, la llamada no se sostiene (al frente: $(resumida); lock task: $(estado))"
+    fi
+    captura llamada-de-noche
+    avisos "--es que cortar" >/dev/null
+    sleep 1
+    desbloquear || nota "no se fue la pantalla de bloqueo"
+    if esperar 20 "! $(c_en_lock_task "$AVISOS") && ! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+      ok "al cortar y desbloquear, vuelve la noche: «$AVISOS_NOMBRE» y $APP_QUITAR afuera"
+    else
+      mal "cortada la llamada y desbloqueado, «$AVISOS_NOMBRE» o $APP_QUITAR siguen en la lista de lock task"
+    fi
+    if esperar 10 "$(c_resumida "$PAQUETE/.HomeActivity")"; then
+      ok "y Android cierra la pantalla de la llamada: queda Inicio"
+    else
+      mal "cortada la llamada, al frente quedó $(resumida)"
+    fi
+  fi
+  # Como estaba: prendida, sin bloqueo. La app de prueba queda para 9f.
+  prender_pantalla
+  desbloquear
+  sacar_bloqueo
+  ir_a_inicio
+}
+
+# «Avisos de prueba»: se arma una vez por corrida y se instala de cero.
+avisos() {   # avisos 'ARGUMENTOS': una orden a «Avisos de prueba»; dice lo que contestó («chat=CLAVE resumen=CLAVE»)
+  local out
+  out=$(disp "$AVISOS_ORDEN $1")
+  sed -n 's/.*data="\(.*\)"$/\1/p' <<<"$out"
+}
+instalar_avisos() {   # la deja instalada; sale 1 si no puede armarla o instalarla
+  local out
+  [[ -n $AVISOS_APK ]] && hay_paquete "$AVISOS" && return 0
+  if [ -z "$AVISOS_APK" ]; then
+    mkdir -p "$SALIDA/apk"
+    if ! out=$("$RAIZ/scripts/prueba-avisos/armar.sh" "$SALIDA/apk" 2>&1 </dev/null); then
+      nota "${out:-armar.sh falló}"
+      return 1
+    fi
+    AVISOS_APK=$SALIDA/apk/avisos.apk
+  fi
+  if hay_paquete "$AVISOS"; then
+    nota "«$AVISOS_NOMBRE» estaba instalada de una corrida anterior: la saco para instalarla de cero"
+    adb_t 60 uninstall "$AVISOS" >/dev/null 2>&1
+  fi
+  out=$(adb_t 120 install "$AVISOS_APK" 2>&1)
+  grep -q Success <<<"$out" || { nota "adb install: $(tail -n 1 <<<"$out")"; return 1; }
+  # Slowtown relee las apps al volver a Inicio, no mientras está al frente:
+  # como quien vuelve de instalar algo.
+  ir_a_inicio
+}
+desinstalar_avisos() {
+  hay_paquete "$AVISOS" || return 0
+  avisos "--es que borrar" >/dev/null
+  grep -q Success <<<"$(adb_t 60 uninstall "$AVISOS" 2>&1)"
+}
+avisos_permitida() {   # si «Avisos de prueba» está entre las permitidas que guardó Slowtown
+  grep -q "^$AVISOS/" <<<"$(conjunto allowed)"
+}
+permitir_avisos() {   # la suma a las permitidas, desde la administración (si ya estaba, de una corrida anterior, no toca nada)
+  local n
+  avisos_permitida && return 0
+  entrar_admin || return 1
+  { tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; } || return 1
+  CAMBIAR=(["$AVISOS_NOMBRE"]=1)
+  recorrer_selector && [ "${CAMBIAR[$AVISOS_NOMBRE]}" = hecho ] || return 1
+  { tocar regex "$TXT_LISTO_RE" && esperar_ui 10 texto "$TXT_ADMIN"; } || return 1
+  ir_a_inicio
+  esperar 10 "run-as $PAQUETE cat shared_prefs/slowtown.xml | grep -q '<string>$AVISOS/'" && avisos_permitida
+}
+
+# ── 9f. Notificaciones por oleadas ──────────────────────────────────────────
+# Con «Avisos de prueba», que arma los chats como WhatsApp: una notificación
+# por chat, con el JID de tag y de atajo, todas en un grupo con su resumen.
+# Con «Sólo los grupos», los chats de grupo esperan la próxima entrega
+# (Android los tiene pospuestos) y los de a dos llegan en el momento. Se suma
+# con las ruedas una entrega para dentro de unos minutos, y a esa hora vuelven
+# solos. Los JID llevan la hora de la corrida: Android se acuerda de la hora de
+# una clave pospuesta aunque la app la cancele. Al final, todo como estaba.
+pospuestas_de_avisos() {   # las claves pospuestas de «Avisos de prueba», una por línea
+  local out
+  out=$(disp cmd notification snoozed)
+  awk -v p="|$AVISOS|" 'index($1, p) { print $1 }' <<<"$out" | sort
+}
+visibles_de_avisos() {   # las claves a la vista de «Avisos de prueba», una por línea
+  local out
+  out=$(disp cmd notification list)
+  awk -v p="|$AVISOS|" 'index($1, p) { print $1 }' <<<"$out" | sort
+}
+c_pospuesta() { echo "cmd notification snoozed | grep -qF '$1 '"; }   # esa clave, pospuesta
+c_visible() { echo "cmd notification list | grep -qxF '$1'"; }         # esa clave, a la vista
+oleadas_guardadas() {   # «prendidas horarios» de slowtown_notif.xml, p. ej. «true 720,1140» (sin nada guardado, «false -»)
+  local prefs
+  prefs=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown_notif.xml)
+  awk '
+    /name="enabled"/ { v = $0; sub(/.*value="/, "", v); sub(/".*/, "", v); e = v }
+    /<string name="times">/ { v = $0; sub(/.*<string name="times">/, "", v); sub(/<\/string>.*/, "", v); t = v }
+    END { print (e == "" ? "false" : e), (t == "" ? "-" : t) }' <<<"$prefs"
+}
+oleadas_prendidas() { oleadas_guardadas | cut -d' ' -f1; }   # true o false
+horarios_de_oleadas() {   # las entregas, en minutos del día, una por línea: las guardadas o, sin nada guardado, las de fábrica
+  local t hm
+  t=$(oleadas_guardadas | cut -d' ' -f2)
+  if [ "$t" = - ]; then
+    for hm in $OLEADAS_DE_FABRICA; do minutos_hhmm "$hm"; done
+  else
+    tr ',' '\n' <<<"$t"
+  fi
+}
+arrastrar_al_costado() {   # arrastrar_al_costado DESDE HASTA (en % del alto): por el borde izquierdo, lejos de las ruedas
+  local x=$((ANCHO / 25)) y1=$((ALTO * $1 / 100)) y2=$((ALTO * $2 / 100))
+  adb_t 30 shell "input motionevent DOWN $x $y1; input motionevent MOVE $x $(((y1 + y2) / 2)); input motionevent MOVE $x $y2; sleep 0.4; input motionevent UP $x $y2" >/dev/null 2>&1
+}
+asomar() {   # asomar TIPO CONSULTA [arriba]: corre el formulario por el costado hasta que eso quede entre el 15 y el 75 % del alto
+  # Si no está a la vista, lo busca más abajo (o más arriba, si se dice). Si
+  # está y el formulario ya no se corre (llegó a una punta), sirve ahí.
+  local tipo=$1 consulta=$2 hacia=${3:-abajo} vuelta xy x y previo="$UI_XML.asomar"
+  rm -f "$previo"
+  for vuelta in 1 2 3 4 5 6 7 8; do
+    volcar_quieto || return 1
+    if xy=$(ui "$tipo" "$consulta"); then
+      read -r x y <<<"$xy"
+      (( y > ALTO * 15 / 100 && y < ALTO * 75 / 100 )) && return 0
+      cmp -s "$UI_XML" "$previo" && return 0
+      cp "$UI_XML" "$previo"
+      if (( y >= ALTO * 75 / 100 )); then arrastrar_al_costado 70 50; else arrastrar_al_costado 30 50; fi
+    elif [ "$hacia" = arriba ]; then
+      arrastrar_al_costado 25 75
+    else
+      arrastrar_al_costado 75 25
+    fi
+  done
+  return 1
+}
+asomar_ruedas() {   # asomar_ruedas FILA: corre el formulario por el costado hasta que las ruedas de FILA se vean enteras, con lugar para girarlas
+  local vuelta x arriba abajo
+  for vuelta in 1 2 3 4 5 6; do
+    volcar_quieto || return 1
+    read -r x arriba abajo <<<"$(caja_de_rueda "$1, hora")"
+    if [[ -z $arriba ]]; then
+      arrastrar_al_costado 25 70   # más arriba: se viene de la lista de apps
+    elif (( arriba < ALTO / 5 )); then
+      arrastrar_al_costado 30 50
+    elif (( abajo > ALTO * 3 / 4 )); then
+      arrastrar_al_costado 70 50
+    else
+      return 0
+    fi
+  done
+  return 1
+}
+marcar_casilla() {   # marcar_casilla CONSULTA true|false [arriba]: la deja así (si no está a la vista, la busca corriendo el formulario)
+  local e
+  asomar texto "$1" "${3:-abajo}" || return 1
+  e=$(ui marcado "$1")
+  [ "$e" = "true $2" ] && return 0
+  [ "${e%% *}" = true ] || return 1
+  tocar_quieto texto "$1" && esperar_marcado "$1" "$2"
+}
+sacar_horario() {   # sacar_horario HH:MM: toca el «Sacar» del renglón de ese horario
+  local xy x y
+  asomar texto "$1" arriba || return 1
+  xy=$(ui textos | awk -F'\t' -v h="$1" -v s="$TXT_SACAR" '
+    $5 == h && hy == "" { hy = $2 }
+    $5 == s { sx[++n] = $1; sy[n] = $2 }
+    END { for (i = 1; i <= n; i++) { d = sy[i] - hy; if (d < 0) d = -d; if (hy != "" && d < 40) { print sx[i], sy[i]; exit } } }')
+  [ -n "$xy" ] || return 1
+  read -r x y <<<"$xy"
+  tocar_xy "$x" "$y"
+  esperar_que_no 10 texto "$1"
+}
+abrir_notificaciones() {   # desde Inicio hasta «Notificaciones» de la administración
+  entrar_admin && tocar_desplazando texto "$TXT_NOTIFICACIONES" && esperar_ui 10 texto "$TXT_OLEADAS"
+}
+esperar_al() {   # esperar_al EPOCH: hasta ese segundo del reloj del emulador
+  local falta
+  falta=$(( $1 - $(disp date +%s) ))
+  (( falta > 0 )) && adb_t $((falta + 30)) shell "sleep $falta" >/dev/null 2>&1
+  return 0
+}
+clave_publicada() { sed -n 's/^chat=\([^ ]*\).*/\1/p'; }   # de lo que contesta «Avisos de prueba» a un chat, la clave del chat
+
+paso_9f() {
+  titulo 9f "Notificaciones por oleadas, con «Sólo los grupos»"
+  local e prendidas reloj ahora h m sg medianoche entrega hm meta dia sello g1 g2 p1 kg1 kg2 kp1 t0 alertas marca
+  ir_a_inicio
+  if ! instalar_avisos; then
+    mal "no pude armar o instalar «$AVISOS_NOMBRE»: sin ella no hay nada que retener"
+    return
+  fi
+  avisos "--es que borrar" >/dev/null
+  prendidas=$(oleadas_prendidas)
+  if ! abrir_notificaciones; then
+    mal "Administración no lleva a «$TXT_NOTIFICACIONES»"
+    ir_a_inicio
+    return
+  fi
+  if ui contiene "$TXT_OLEADAS_PISTA" >/dev/null; then
+    ok "«$TXT_NOTIFICACIONES» abre su pantalla, que avisa que las entregas llegan «$TXT_OLEADAS_PISTA»"
+  else
+    mal "la pantalla de «$TXT_NOTIFICACIONES» no dice que las entregas llegan «$TXT_OLEADAS_PISTA»"
+  fi
+  e=$(ui marcado "$TXT_OLEADAS")
+  case $e in
+    'true false')
+      tocar_quieto texto "$TXT_OLEADAS"
+      if esperar_marcado "$TXT_OLEADAS" true; then ok "«$TXT_OLEADAS» las prende"; else mal "tocar «$TXT_OLEADAS» no las prende"; fi
+      ;;
+    'true true') nota "«$TXT_OLEADAS» ya estaba prendido de antes" ;;
+    *) mal "«$TXT_OLEADAS» no es un interruptor (checkable/checked: ${e:-no está})" ;;
+  esac
+  if marcar_casilla "$AVISOS_NOMBRE" true && marcar_casilla "$TXT_SOLO_GRUPOS$AVISOS_NOMBRE" true; then
+    ok "«$AVISOS_NOMBRE» queda entre las que esperan, y debajo, «Sólo los grupos» marcado"
+  else
+    mal "no pude marcar «$AVISOS_NOMBRE» y su «Sólo los grupos» (${AVISOS_NOMBRE}: $(ui marcado "$AVISOS_NOMBRE"); sólo los grupos: $(ui marcado "$TXT_SOLO_GRUPOS$AVISOS_NOMBRE"))"
+  fi
+  if [ "$(oleadas_prendidas)" = true ] && grep -qxF "$AVISOS" <<<"$(conjunto packages slowtown_notif)" &&
+    grep -qxF "$AVISOS" <<<"$(conjunto groups_only slowtown_notif)"; then
+    ok "Slowtown lo guarda: oleadas prendidas, y «$AVISOS_NOMBRE» espera sólo con los grupos"
+  else
+    mal "lo guardado no es eso: $(oleadas_guardadas); esperan: $(conjunto packages slowtown_notif | en_una_linea); sólo los grupos: $(conjunto groups_only slowtown_notif | en_una_linea)"
+  fi
+  captura notificaciones
+
+  # Una entrega para dentro de unos minutos: el tiempo de girar las ruedas y
+  # publicar, con margen. Si antes cae otra (las de fábrica son a las 12 y a
+  # las 19), se espera que pase: en el minuto de una entrega no espera nada.
+  for dia in 1 2; do
+    reloj=$(disp date +%s:%H:%M:%S)
+    IFS=: read -r ahora h m sg <<<"$reloj"
+    medianoche=$(( ahora - 10#$h * 3600 - 10#$m * 60 - 10#$sg ))
+    entrega=$(( (ahora + 210) / 60 * 60 ))
+    meta=''
+    for hm in $(horarios_de_oleadas); do
+      for e in $(( medianoche + hm * 60 )) $(( medianoche + 86400 + hm * 60 )); do
+        (( e >= ahora - 60 && e <= entrega )) && meta=$e
+      done
+    done
+    [ -z "$meta" ] && break
+    nota "a las $(hhmm $(( (meta - medianoche) / 60 % 1440 ))) ya hay una entrega: espero que pase"
+    esperar_al $((meta + 61))
+  done
+  hm=$(( (entrega - medianoche) / 60 % 1440 ))
+  if ! { asomar_ruedas "$TXT_ENTREGA" &&
+    poner_rueda "$TXT_ENTREGA, hora" 24 $((hm / 60)) && poner_rueda "$TXT_ENTREGA, minutos" 60 $((hm % 60)) &&
+    tocar_quieto texto "$TXT_AGREGAR_LAS$(hhmm "$hm")" && esperar_ui 10 texto "$(hhmm "$hm")"; }; then
+    mal "no pude sumar la entrega de las $(hhmm "$hm") con las ruedas (dicen $(hora_de_fila "$TXT_ENTREGA"))"
+    salir_de_oleadas "$prendidas" "$hm"
+    return
+  fi
+  if grep -qx "$hm" <<<"$(horarios_de_oleadas)"; then
+    ok "con las ruedas, «$TXT_AGREGAR_LAS$(hhmm "$hm")» suma esa entrega, y Slowtown la guarda"
+  else
+    mal "«$TXT_AGREGAR_LAS$(hhmm "$hm")» no la guardó: $(oleadas_guardadas)"
+  fi
+  ir_a_inicio
+
+  # Los chats, con JID nuevos en cada corrida.
+  sello=$(date +%s)
+  g1="1203630${sello}@g.us"
+  g2="1203631${sello}@g.us"
+  p1="54911${sello}@s.whatsapp.net"
+  if (( $(disp date +%s) > entrega - 45 )); then
+    mal "se fue el tiempo: faltan menos de 45 s para la entrega de las $(hhmm "$hm") y todavía no se publicó nada"
+    salir_de_oleadas "$prendidas" "$hm"
+    return
+  fi
+  kg1=$(avisos "--es que chat --es chat $g1 --es de Juan --es texto 'hola grupo' --es titulo Familia" | clave_publicada)
+  if [ -z "$kg1" ]; then
+    mal "«$AVISOS_NOMBRE» no contesta las órdenes de publicar"
+    salir_de_oleadas "$prendidas" "$hm"
+    return
+  fi
+  if esperar 10 "$(c_pospuesta "$kg1") && ! $(c_visible "$kg1")"; then
+    ok "un chat de grupo espera: Android lo tiene pospuesto hasta las $(hhmm "$hm")"
+  else
+    mal "el chat de grupo no quedó pospuesto (pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+  fi
+  kp1=$(avisos "--es que chat --es chat $p1 --es de Ana --es texto hola" | clave_publicada)
+  if [ -n "$kp1" ] && esperar 10 "$(c_visible "$kp1")" && sostener 3 "$(c_visible "$kp1") && ! $(c_pospuesta "$kp1")"; then
+    ok "un chat de a dos llega en el momento: a la vista, sin posponer"
+  else
+    mal "el chat de a dos no llegó en el momento (a la vista: $(visibles_de_avisos | en_una_linea); pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+  fi
+  avisos "--es que chat --es chat $g1 --es de Lucia --es texto 'otro en el grupo'" >/dev/null
+  kg2=$(avisos "--es que chat --es chat $g2 --es de Pedro --es texto 'hola otro grupo' --es titulo Futbol" | clave_publicada)
+  if [ -n "$kg2" ] && esperar 10 "$(c_pospuesta "$kg2")" &&
+    sostener 4 "$(c_pospuesta "$kg1") && $(c_pospuesta "$kg2") && ! $(c_visible "$kg1") && ! $(c_visible "$kg2")"; then
+    ok "un mensaje más en el grupo sigue esperando, y otro grupo también"
+  else
+    mal "los grupos no siguen esperando (a la vista: $(visibles_de_avisos | en_una_linea); pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+  fi
+  captura antes-de-la-entrega
+
+  # La entrega: a su hora, Android los vuelve a publicar solo.
+  nota "espero la entrega de las $(hhmm "$hm") ($(( entrega - $(disp date +%s) )) s)"
+  esperar_al $((entrega - 5))
+  marca=$(marca_logcat)
+  t0=$SECONDS
+  if esperar 70 "$(c_visible "$kg1") && $(c_visible "$kg2") && ! $(c_pospuesta "$kg1") && ! $(c_pospuesta "$kg2")"; then
+    ok "a las $(hhmm "$hm") los dos grupos vuelven solos: a la vista y sin posponer"
+  else
+    mal "a las $(hhmm "$hm") los grupos no volvieron (a la vista: $(visibles_de_avisos | en_una_linea); pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+  fi
+  if sostener 20 "! cmd notification snoozed | grep -qF '|$AVISOS|' && $(c_visible "$kg1") && $(c_visible "$kg2") && $(c_visible "$kp1")"; then
+    ok "y nada se mueve: 20 s sin ninguna pospuesta, con los tres chats a la vista"
+  else
+    mal "después de la entrega algo vuelve a esperar o se va (a la vista: $(visibles_de_avisos | en_una_linea); pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+  fi
+  # Android 12 vuelve a publicar lo pospuesto sin sonido: lo dice el registro de eventos.
+  alertas=$(adb_t 30 logcat -b events -d -T "$marca" 2>/dev/null | grep 'notification_alert' | grep -cF "|$AVISOS|")
+  nota "avisos con sonido o vibración de «$AVISOS_NOMBRE» desde la entrega: $alertas"
+  captura entrega
+
+  salir_de_oleadas "$prendidas" "$hm" "$kg1 $kg2"
+  afirmar_en_inicio "las oleadas no tocan el cierre: Slowtown y LOCKED"
+}
+
+salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Notificaciones» como estaba (PRENDIDAS, sin la entrega MINUTO) y desinstala la app de prueba
+  # CLAVES: lo ya entregado, que no tiene que volver a esconderse.
+  local prendidas=$1 hm=$2 entregadas=${3:-} k bien=1
+  ir_a_inicio
+  if ! abrir_notificaciones; then
+    mal "no pude volver a «$TXT_NOTIFICACIONES» para dejarla como estaba"
+    ir_a_inicio
+  else
+    if grep -qx "$hm" <<<"$(horarios_de_oleadas)"; then
+      if sacar_horario "$(hhmm "$hm")"; then
+        # Cada cambio rearma todo: lo ya entregado no vuelve a esconderse.
+        for k in $entregadas; do
+          sostener 3 "$(c_visible "$k") && ! $(c_pospuesta "$k")" || bien=0
+        done
+        if (( bien )); then
+          ok "«$TXT_SACAR» saca la entrega de las $(hhmm "$hm")${entregadas:+, y lo ya entregado no vuelve a esconderse}"
+        else
+          mal "al sacar la entrega de las $(hhmm "$hm"), lo entregado volvió a esperar (pospuestas: $(pospuestas_de_avisos | en_una_linea))"
+        fi
+      else
+        mal "no pude sacar la entrega de las $(hhmm "$hm")"
+      fi
+    fi
+    marcar_casilla "$AVISOS_NOMBRE" false || mal "no pude desmarcar «$AVISOS_NOMBRE»"
+    if [ "$prendidas" != true ]; then
+      marcar_casilla "$TXT_OLEADAS" false arriba || mal "no pude apagar «$TXT_OLEADAS»"
+    fi
+    if ! grep -qx "$hm" <<<"$(horarios_de_oleadas)" && [ "$(oleadas_prendidas)" = "$prendidas" ] &&
+      ! grep -qxF "$AVISOS" <<<"$(conjunto packages slowtown_notif)" &&
+      ! grep -qxF "$AVISOS" <<<"$(conjunto groups_only slowtown_notif)"; then
+      ok "«$TXT_NOTIFICACIONES» queda como estaba: sin esa entrega, sin «$AVISOS_NOMBRE» y con las oleadas $([ "$prendidas" = true ] && echo prendidas || echo apagadas)"
+    else
+      mal "«$TXT_NOTIFICACIONES» no quedó como estaba: $(oleadas_guardadas); esperan: $(conjunto packages slowtown_notif | en_una_linea); sólo los grupos: $(conjunto groups_only slowtown_notif | en_una_linea)"
+    fi
+    ir_a_inicio
+  fi
+  if desinstalar_avisos; then
+    ok "«$AVISOS_NOMBRE» se desinstala: lo que sigue ve las mismas apps que antes"
+  else
+    mal "no pude desinstalar «$AVISOS_NOMBRE»"
+  fi
 }
 
 # ── 10. Ajustes desde la administración ─────────────────────────────────────
@@ -2880,7 +3649,7 @@ paso_10() {
 # ── 11. Reinicio ────────────────────────────────────────────────────────────
 paso_11() {
   titulo 11 "Reinicio"
-  local antes boot='' fin
+  local antes boot='' fin log frenada
   adb_t 60 logcat -d >"$SALIDA/logcat-antes-del-reinicio.txt" 2>/dev/null
   antes=$(disp cat /proc/sys/kernel/random/boot_id)
   if [ -z "$antes" ]; then
@@ -2909,6 +3678,23 @@ paso_11() {
     adb_t 20 shell wm dismiss-keyguard >/dev/null 2>&1
     ir_a_inicio
     if esperar 15 "$(c_lock LOCKED)"; then nota "sacando el bloqueo y apretando Inicio, sí se activa"; fi
+  fi
+  # Al arrancar, Ajustes puede querer mostrar su diálogo de la SIM
+  # (SimSelectNotification abre .sim.SimDialogActivity): lock task lo frena y
+  # queda «App is not available» sobre Inicio hasta tocar OK. Es de Android, y
+  # Ajustes no entra en la lista (regla 1 de CLAUDE.md): se avisa y se cierra.
+  # Cualquier otra cosa frenada al arrancar es una falla.
+  if esperar 30 "$(c_foco "$FOCO_BLOQUEO")"; then
+    log=$(adb_t 60 logcat -d 2>/dev/null)
+    frenada=$(grep -m1 -B5 'BlockedAppActivity' <<<"$log" | grep -o 'START u0 {[^}]*cmp=[^ }]*' | tail -n 1 | sed 's/.*cmp=//')
+    if [[ $frenada == *SimDialogActivity* ]]; then
+      aviso "después de reiniciar, Ajustes quiso mostrar su diálogo de la SIM ($frenada) y lock task lo frenó: «App is not available» sobre Inicio, hasta tocar OK"
+    else
+      mal "después de reiniciar, lock task frenó algo al arrancar y quedó «App is not available» sobre Inicio (${frenada:-no sé qué})"
+    fi
+    cerrar_cartel_bloqueo
+  else
+    ok "en los 30 s después de arrancar no aparece ningún cartel de bloqueo sobre Inicio"
   fi
   # La pausa la guarda Android: no depende de que Slowtown llegue a arrancar.
   afirmar_pausada "después de reiniciar"
@@ -3282,6 +4068,7 @@ paso_9b
 paso_9c
 paso_9d
 paso_9e
+paso_9f
 paso_10
 paso_11
 paso_12

@@ -8,6 +8,7 @@ import com.slowtown.launcher.apps.Folders
 import com.slowtown.launcher.apps.HabitKind
 import com.slowtown.launcher.apps.HabitPlan
 import com.slowtown.launcher.apps.Habits
+import java.time.DayOfWeek
 
 /** Lo que eligió el usuario. La contraseña vive aparte, en [com.slowtown.launcher.security.Password]. */
 class Prefs(context: Context) {
@@ -123,6 +124,17 @@ class Prefs(context: Context) {
         get() = prefs.getInt(KEY_BEDTIME_END, 7 * 60)
         set(value) = prefs.edit().putInt(KEY_BEDTIME_END, value).apply()
 
+    /**
+     * Qué noches rige, por el día en que empiezan (la del viernes va de viernes
+     * a sábado): de entrada, todas. Marcos quiere poder dejar libres el viernes
+     * y el sábado.
+     */
+    var bedtimeDays: Set<DayOfWeek>
+        get() = prefs.getStringSet(KEY_BEDTIME_DAYS, null)
+            ?.mapNotNullTo(mutableSetOf()) { day -> day.toIntOrNull()?.takeIf { it in 1..7 }?.let(DayOfWeek::of) }
+            ?: DayOfWeek.values().toSet()
+        set(value) = prefs.edit().putStringSet(KEY_BEDTIME_DAYS, value.mapTo(mutableSetOf()) { it.value.toString() }).apply()
+
     /** Cuándo termina la ráfaga de 5 minutos en curso; 0 si no hay. */
     var bedtimeBurstUntil: Long
         get() = prefs.getLong(KEY_BEDTIME_BURST_UNTIL, 0L)
@@ -151,6 +163,7 @@ class Prefs(context: Context) {
         const val KEY_BEDTIME_ENABLED = "bedtime_enabled"
         const val KEY_BEDTIME_START = "bedtime_start"
         const val KEY_BEDTIME_END = "bedtime_end"
+        const val KEY_BEDTIME_DAYS = "bedtime_days"
         const val KEY_BEDTIME_BURST_UNTIL = "bedtime_burst_until"
         const val KEY_HABIT_PREFIX = "habit_"
         const val KEY_HABIT_PLAN = "habit_plan"

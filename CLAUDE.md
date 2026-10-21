@@ -52,9 +52,13 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - **Hábitos** (`apps/Habits.kt`, `ui/Habits.kt`, `ui/HabitIcons.kt`): sin app
   aparte. Van en el lugar del widget, y vienen puestos (`Prefs.habitsWidget`,
   salvo que ya haya un widget de otra app); en el selector de widget son
-  «Hábitos de Slowtown». Una fila por hábito con los últimos 7 días, como los
-  cuadraditos de GitHub, hoy a la derecha; cuánto lleva contra la meta en esos
-  7 días; y a la derecha, pegado al día de hoy, el botón que lo marca. Tocar
+  «Hábitos de Slowtown». Una fila por hábito: a la izquierda, un fuego con la
+  racha (semanas seguidas, de lunes a domingo, con la meta cumplida,
+  `Habits.streak`), que pasa de brasa a fuego fuerte con las semanas; los
+  últimos 7 días, como los cuadraditos de GitHub, hoy a la derecha; cuánto
+  lleva contra la meta en esos 7 días; y a la derecha, pegado al día de hoy,
+  el botón que lo marca. En una pantalla angosta (el S10e) los cuadraditos se
+  achican para que entre todo. Tocar
   los cuadraditos abre «Hábitos», el resumen por semanas, donde se puede marcar
   un día pasado, y de ahí «Elegir hábitos»: un catálogo de 14 (`HabitKind`,
   cada uno con su dibujo hecho con Canvas, sin emojis), hasta 4 en Inicio, cada
@@ -62,15 +66,17 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   meditar 2 y ejercicio 3. Sin contraseña: no afloja nada. El plan se guarda en
   `habit_plan` (JSON) y los días como fechas ISO, por hábito (`habit_meditar`,
   `habit_leer`…): sacar un hábito no borra sus días.
-- **Tiempo de pantalla** (`apps/ScreenTime.kt`): «Hoy: 1 h 5 min de pantalla»
-  abajo de la fecha. Bienestar digital no comparte sus números, así que se
+- **Tiempo de pantalla** (`apps/ScreenTime.kt`): arriba a la derecha de
+  Inicio, sólo el número («1 h 5 min»; Marcos quiere menos texto en Inicio, y
+  el lector de pantalla dice «Hoy: 1 h 5 min de pantalla»). Bienestar digital no comparte sus números, así que se
   calcula igual que él, con los datos de uso de Android (sin contar Inicio).
   Necesita el acceso a los datos de uso, que da `provisionar.sh` por adb
   (`appops set … GET_USAGE_STATS allow`); sin eso, la línea no aparece.
 
-## Hora de dormir
+## Bedtime
 
-`admin/Bedtime.kt`, en la administración («Hora de dormir», con contraseña):
+`admin/Bedtime.kt`, en la administración («Bedtime», con contraseña; la hora
+se elige con dos ruedas, horas y minutos, `ui/NumberWheel.kt`):
 de noche (de entrada, de 23 a 7; Marcos quiere dejar de usar el teléfono tan
 tarde), con Slowtown activo, la lista de lock task se achica a lo esencial
 más el reloj y las alarmas (`Bedtime.apps`: lo que atiende `AlarmClock`, más
@@ -78,17 +84,40 @@ Alarmy, `droom.sleepIfUCan`, con la que Marcos se despierta, y los relojes de
 fábrica). Las alarmas están en la lista siempre, de día también: si no, con
 Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
 
-- **Ráfagas de 5 minutos** («Usar 5 minutos» en Inicio, sin contraseña y sin
-  tope: la fricción es volver a pedirla): vuelven las apps permitidas, y al
-  terminar el sistema cierra lo que quedó afuera.
+- **Qué noches** (`Prefs.bedtimeDays`, de entrada todas): un círculo por día
+  en la pantalla de Bedtime, para dejar libres, por ejemplo, el viernes y el
+  sábado (lo pidió Marcos). Cada noche es del día en que empieza
+  (`Bedtime.nightOf`): la del viernes va del viernes a las 23 al sábado a las
+  7, y una que empieza de madrugada es de la noche anterior. Los bordes se
+  agendan todos los días igual: al llegar, la revisión decide.
+
+- **Ráfagas de 5 minutos** (sin contraseña y sin tope: la fricción es volver
+  a pedirla): de noche Inicio dice «Es *Bedtime*, andá a dormir», y tocándolo
+  aparece «Usar 5 minutos» (Marcos no lo quiere siempre a la vista). Vuelven
+  las apps permitidas, y al terminar el sistema cierra lo que quedó afuera.
 - El principio y el final los agenda el sistema (`Bedtime.Tick`, alarma
   exacta: `provisionar.sh` da `SCHEDULE_EXACT_ALARM` por adb), así que llegan
   aunque haya otra app abierta. Al volver a Inicio, además,
   `Policies.refreshPackages` pone la lista al día (escribe sólo si cambió), y
   un reinicio vuelve a agendar desde `SlowtownApp`.
 - `Policies.effectivePackages` decide la lista: sesión en curso, todo; noche
-  sin ráfaga, lo esencial y las alarmas; si no, lo de siempre. Las sesiones de
-  administración y «Habilitar todo» siguen abriendo todo, también de noche.
+  sin ráfaga, con el teléfono en uso y sin llamada, lo esencial y las alarmas;
+  si no, lo de siempre. Las sesiones de administración y «Habilitar todo»
+  siguen abriendo todo, también de noche.
+- **No corta llamadas** (`admin/CallGuard.kt`, lo pidió Marcos). Las del
+  teléfono pasan siempre (`Essentials`), pero las de WhatsApp son de una app.
+  Mientras hay una llamada (el modo de audio, o una notificación de llamada
+  de una app permitida, que le pasa `WavesListener`), la noche espera y la app
+  de la llamada está en la lista; al cortar, a los 5 segundos se achica (el
+  margen es por las apps que cambian la notificación al atender). Mientras
+  dura, se vuelve a mirar cada minuto.
+- **Rige con el teléfono en uso** (`Bedtime.inUse`: pantalla prendida y
+  desbloqueado). Con la pantalla apagada Android abre la pantalla de una
+  llamada que entra antes de que el lector la vea, y con la lista de la noche
+  quedaba bloqueada (lo vio la prueba en el emulador). Al apagar la pantalla
+  vuelve la lista de siempre, y al desbloquear (`USER_PRESENT`) se achica.
+  Sin desbloquear sólo se abre lo que se muestra encima de la pantalla de
+  bloqueo, como la cámara segura.
 - En el emulador, el final de una ráfaga se dispara a mano con root:
   `adb shell "am broadcast -n 'com.slowtown.launcher/.admin.Bedtime\$Tick' --ez fin_de_rafaga true"`.
 
@@ -112,6 +141,24 @@ hacen llegar una notificación en el momento.
   sigue esperando.
 - El permiso lo da `provisionar.sh` por adb (`cmd notification
   allow_listener`); sin él, la pantalla lo avisa y no se retiene nada.
+- **Llegan en silencio**: Android 12 vuelve a publicar sin sonido todo lo que
+  sale de una posposición, también las entregas de las 12 y las 19.
+- **«Sólo los grupos»**, por app (para WhatsApp, lo pidió Marcos): esperan los
+  chats de grupo y los de a dos llegan en el momento. El grupo se reconoce por
+  `EXTRA_IS_GROUP_CONVERSATION`, por el JID de WhatsApp (`…@g.us` es un grupo,
+  `…@s.whatsapp.net` una persona) o por un título con mensajes de dos
+  personas o más; ante la duda, llega.
+- **El resumen del grupo** («5 mensajes de 3 chats»), visto en el emulador:
+  al posponer lo último que se ve de un grupo, Android pospone también su
+  resumen, y mientras el resumen está pospuesto todo lo nuevo de su grupo se
+  pospone con él antes de avisarle al lector. WhatsApp junta todos los chats
+  en un grupo: en modo normal, desde la primera que espera, lo que llega
+  después espera sin pasar por Slowtown (ni «pasan siempre» lo saca). Con
+  «sólo los grupos» el resumen se suelta enseguida, así los de a dos llegan,
+  pero queda a la vista con las últimas líneas de los grupos que esperan.
+- **App de prueba**: `scripts/prueba-avisos/` (`armar.sh DIR`, sin Gradle)
+  publica chats como los de WhatsApp, con su resumen, y llamadas con
+  pantalla completa, para probar todo esto en el emulador.
 
 ## Las dos maneras de abrir todo un rato
 

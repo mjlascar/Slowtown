@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  «Avisos de prueba»: publica chats como los de WhatsApp y una llamada por
+  internet, para probar en el emulador las oleadas de Slowtown y la guardia de
+  llamadas de la hora de dormir. Se arma con armar.sh, sin Gradle.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.slowtown.prueba.avisos">
+
+    <!-- 28: MessagingStyle con Person. -->
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="31" />
+
+    <!-- La pantalla de la llamada entrante. En Android 12 es un permiso común. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="Avisos de prueba">
+
+        <!-- Con ícono en el launcher: así Slowtown la lista, se puede permitir y elegir en Notificaciones. -->
+        <activity
+            android:name=".Principal"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Lo maneja adb con am broadcast: los comandos están en Publicar.java. -->
+        <receiver
+            android:name=".Publicar"
+            android:exported="true" />
+    </application>
+</manifest>

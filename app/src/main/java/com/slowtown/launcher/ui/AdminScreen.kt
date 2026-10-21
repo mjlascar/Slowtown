@@ -65,7 +65,7 @@ fun AdminScreen(
         OutlinedButton(onClick = onSites, modifier = wide) { Text("Páginas bloqueadas") }
         OutlinedButton(onClick = onChooseWidget, modifier = wide) { Text("Elegir el widget de Inicio") }
         OutlinedButton(onClick = onFolders, modifier = wide) { Text("Carpetas") }
-        OutlinedButton(onClick = onBedtime, modifier = wide) { Text("Hora de dormir") }
+        OutlinedButton(onClick = onBedtime, modifier = wide) { Text("Bedtime") }
         OutlinedButton(onClick = onNotifications, modifier = wide) { Text("Notificaciones") }
         Button(onClick = onToggleClosed, enabled = status.deviceOwner, modifier = wide) {
             Text(if (status.closed) "Pausar Slowtown" else "Activar Slowtown")

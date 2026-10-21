@@ -19,15 +19,18 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   versión nueva, instalada por cable: las políticas de Chrome, con la lista de
   bloqueo por defecto de la Universidad Toulouse Capitole, y las apps que no se
   abren nunca.
-- **Hora de dormir:** de noche sólo se abren el reloj y las alarmas (y las
+- **Bedtime:** de noche sólo se abren el reloj y las alarmas (y las
   llamadas, SMS y emergencias). Para usar el teléfono, ráfagas de 5 minutos.
+  Nunca corta una llamada, tampoco las de WhatsApp.
 - **Notificaciones por oleadas:** las de las apps que elijas esperan y llegan
-  todas juntas a ciertas horas, salvo las que traen una palabra de «pasan
-  siempre».
+  todas juntas, en silencio, a ciertas horas, salvo las que traen una palabra
+  de «pasan siempre». Con «sólo los grupos», de WhatsApp esperan los grupos y
+  los chats de a dos llegan en el momento.
 - **«Habilitar todo por 5 minutos»:** sin contraseña, hasta 2 veces cada 12
   horas, para actualizar apps.
 - **Hábitos como los cuadraditos de GitHub:** hasta 4 de un catálogo de 14,
-  cada uno con su dibujo y sus veces por semana. Se marcan desde Inicio.
+  cada uno con su dibujo y sus veces por semana. Se marcan desde Inicio, y un
+  fuego cuenta las semanas seguidas con la meta cumplida.
 - **Siempre hay una salida por cable:** `scripts/liberar.sh`.
 
 ## Capturas
@@ -39,7 +42,8 @@ Del emulador (Android 12, sin cuentas), por eso las apps están en inglés.
 | <img src="docs/capturas/01-inicio.png" width="240"><br>Inicio | <img src="docs/capturas/02-habitos.png" width="240"><br>El resumen de hábitos | <img src="docs/capturas/03-elegir-habitos.png" width="240"><br>Elegir hábitos y sus veces por semana |
 | <img src="docs/capturas/04-inicio-mas-habitos.png" width="240"><br>Inicio con más hábitos | <img src="docs/capturas/05-todas-las-apps.png" width="240"><br>Todas las apps | <img src="docs/capturas/06-contrasena.png" width="240"><br>La contraseña y «Habilitar todo» |
 | <img src="docs/capturas/07-administracion.png" width="240"><br>La administración | <img src="docs/capturas/08-paginas-bloqueadas.png" width="240"><br>Páginas bloqueadas | <img src="docs/capturas/09-widget.png" width="240"><br>El widget de Inicio |
-| <img src="docs/capturas/10-hora-de-dormir.png" width="240"><br>La hora de dormir | <img src="docs/capturas/11-de-noche.png" width="240"><br>De noche: sólo el reloj | <img src="docs/capturas/12-rafaga.png" width="240"><br>Una ráfaga de 5 minutos |
+| <img src="docs/capturas/10-bedtime.png" width="240"><br>Bedtime | <img src="docs/capturas/11-de-noche.png" width="240"><br>De noche: sólo el reloj | <img src="docs/capturas/12-rafaga.png" width="240"><br>Una ráfaga de 5 minutos |
+| <img src="docs/capturas/13-notificaciones.png" width="240"><br>Notificaciones: sólo los grupos | | |
 
 ## Cómo se prueba
 

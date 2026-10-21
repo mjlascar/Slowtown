@@ -43,6 +43,8 @@ object Waves {
         /** Ordenados, sin repetir, nunca vacíos. */
         val times: List<Int>,
         val alwaysPass: List<String>,
+        /** De estas apps esperan sólo los chats de grupo: los de a dos llegan en el momento. */
+        val groupsOnly: Set<String>,
     )
 
     /** Lo que hace falta saber de una notificación para decidir. */
@@ -58,6 +60,8 @@ object Waves {
         val category: String?,
         /** Título, texto y mensajes juntos: donde se buscan las palabras de «pasan siempre». */
         val text: String,
+        /** Si es de un chat de grupo. Sólo se averigua para las apps de [Config.groupsOnly]. */
+        val groupConversation: Boolean,
     )
 
     /** La próxima entrega, estrictamente después de [now]: si hoy ya no queda ninguna, la primera de mañana. */
@@ -98,6 +102,8 @@ object Waves {
         !config.enabled -> false
         n.own -> false
         n.packageName !in config.packages -> false
+        // «Sólo los grupos»: de esa app, lo que no es de un chat de grupo llega en el momento.
+        n.packageName in config.groupsOnly && !n.groupConversation -> false
         n.ongoing || n.foregroundService || n.media -> false
         n.category != null && n.category in NEVER_CATEGORIES -> false
         isDeliveryMinute(now, config.times) -> false
@@ -108,15 +114,21 @@ object Waves {
     /**
      * Un resumen de grupo («3 mensajes de 2 chats») espera sólo si no queda
      * nada a la vista de su grupo. Android, al posponer un resumen, pospone
-     * también a todo su grupo: si quedó algo que pasó (una palabra de «pasan
-     * siempre», algo en curso) o lo de la última oleada, el resumen se queda
-     * con eso. No retenerlo nunca lo dejaría solo en el panel, con su sonido.
+     * también lo que está a la vista de su grupo: si quedó algo que pasó (una
+     * palabra de «pasan siempre», algo en curso) o lo de la última oleada, el
+     * resumen se queda con eso. No retenerlo nunca lo dejaría solo en el
+     * panel, con su sonido.
+     *
+     * De una app de «sólo los grupos» no espera nunca, aunque quede solo en el
+     * panel: mientras un resumen está pospuesto, Android pospone con él todo lo
+     * nuevo de su grupo antes de avisarle a nadie, y WhatsApp junta todos los
+     * chats en un solo grupo, así que los de a dos esperarían también.
      *
      * @param visible cuántas del grupo quedan a la vista, sin contar el resumen
      *   ni las que se retienen en esta misma pasada.
      */
     fun shouldHoldSummary(config: Config, now: LocalDateTime, summary: Incoming, visible: Int): Boolean =
-        visible == 0 && shouldHold(config, now, summary)
+        visible == 0 && summary.packageName !in config.groupsOnly && shouldHold(config, now, summary)
 
     fun cleanTimes(times: List<Int>): List<Int> = times.filter { it in 0 until DAY }.distinct().sorted()
 
@@ -152,6 +164,7 @@ object Waves {
     private const val KEY_PACKAGES = "packages"
     private const val KEY_TIMES = "times"
     private const val KEY_ALWAYS_PASS = "always_pass"
+    private const val KEY_GROUPS_ONLY = "groups_only"
     private const val KEY_HELD = "held"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -172,6 +185,7 @@ object Waves {
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
                 .orEmpty(),
+            groupsOnly = prefs.getStringSet(KEY_GROUPS_ONLY, null)?.toSet().orEmpty(),
         )
     }
 
@@ -190,6 +204,10 @@ object Waves {
 
     fun setAlwaysPass(context: Context, value: List<String>) {
         prefs(context).edit().putString(KEY_ALWAYS_PASS, value.joinToString("\n")).apply()
+    }
+
+    fun setGroupsOnly(context: Context, value: Set<String>) {
+        prefs(context).edit().putStringSet(KEY_GROUPS_ONLY, value).apply()
     }
 
     fun held(context: Context): Map<String, Held> =

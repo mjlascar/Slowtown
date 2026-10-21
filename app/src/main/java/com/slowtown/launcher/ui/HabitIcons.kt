@@ -351,3 +351,25 @@ private fun Heart(color: Color, modifier: Modifier) {
         }
     }
 }
+
+/**
+ * El fuego de la racha, que no es un hábito: la silueta llena, con una lengua
+ * más chica a la izquierda para que se lea fuego y no una gota. Abajo queda
+ * la panza ancha, donde va el número de semanas.
+ */
+@Composable
+fun Flame(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        fillPath(color) {
+            move(0.56f, 0.03f)
+            curve(0.63f, 0.2f, 0.84f, 0.34f, 0.84f, 0.6f)
+            curve(0.84f, 0.81f, 0.69f, 0.96f, 0.5f, 0.96f)
+            curve(0.31f, 0.96f, 0.16f, 0.81f, 0.16f, 0.62f)
+            // La lengua de la izquierda: sube hasta su punta y baja a la muesca.
+            curve(0.16f, 0.5f, 0.21f, 0.4f, 0.28f, 0.3f)
+            curve(0.3f, 0.39f, 0.34f, 0.44f, 0.4f, 0.47f)
+            curve(0.39f, 0.31f, 0.46f, 0.16f, 0.56f, 0.03f)
+            close()
+        }
+    }
+}
