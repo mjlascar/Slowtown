@@ -108,6 +108,29 @@ class Prefs(context: Context) {
         get() = Habits.parsePlan(prefs.getString(KEY_HABIT_PLAN, null))
         set(value) = prefs.edit().putString(KEY_HABIT_PLAN, Habits.serializePlan(value)).apply()
 
+    /** Si la hora de dormir está prendida ([com.slowtown.launcher.admin.Bedtime]). Con contraseña. */
+    var bedtimeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BEDTIME_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_BEDTIME_ENABLED, value).apply()
+
+    /** Cuándo empieza la noche, en minutos del día (de entrada, las 23). */
+    var bedtimeStart: Int
+        get() = prefs.getInt(KEY_BEDTIME_START, 23 * 60)
+        set(value) = prefs.edit().putInt(KEY_BEDTIME_START, value).apply()
+
+    /** Cuándo termina, en minutos del día (de entrada, las 7). */
+    var bedtimeEnd: Int
+        get() = prefs.getInt(KEY_BEDTIME_END, 7 * 60)
+        set(value) = prefs.edit().putInt(KEY_BEDTIME_END, value).apply()
+
+    /** Cuándo termina la ráfaga de 5 minutos en curso; 0 si no hay. */
+    var bedtimeBurstUntil: Long
+        get() = prefs.getLong(KEY_BEDTIME_BURST_UNTIL, 0L)
+        // commit: es lo que decide si la noche manda, no se puede perder.
+        set(value) {
+            prefs.edit().putLong(KEY_BEDTIME_BURST_UNTIL, value).commit()
+        }
+
     /** El widget de Inicio, o [AppWidgetManager.INVALID_APPWIDGET_ID] si no hay. */
     var widgetId: Int
         get() = prefs.getInt(KEY_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -125,6 +148,10 @@ class Prefs(context: Context) {
         const val KEY_FREE_SESSION_USES = "free_session_uses"
         const val KEY_WIDGET_ID = "widget_id"
         const val KEY_HABITS_WIDGET = "habits_widget"
+        const val KEY_BEDTIME_ENABLED = "bedtime_enabled"
+        const val KEY_BEDTIME_START = "bedtime_start"
+        const val KEY_BEDTIME_END = "bedtime_end"
+        const val KEY_BEDTIME_BURST_UNTIL = "bedtime_burst_until"
         const val KEY_HABIT_PREFIX = "habit_"
         const val KEY_HABIT_PLAN = "habit_plan"
     }

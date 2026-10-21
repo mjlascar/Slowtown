@@ -11,9 +11,11 @@
 # y vuelve a poner una app en Inicio, marca hábitos (los botones de hoy y un
 # día en el resumen), cambia el pie de Inicio entre el widget del Reloj y los
 # hábitos, arma y borra una carpeta, usa las dos veces de «Habilitar todo»,
-# prueba el nivel 2, abre Ajustes desde la administración, reinicia (y los
-# hábitos siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes y
-# usa la salida por cable.
+# prueba el nivel 2, prende la hora de dormir (de noche sólo el Reloj, una
+# ráfaga de 5 minutos sin contraseña, el final de la ráfaga y la alarma del
+# final de la noche, y apagada vuelve todo), abre Ajustes desde la
+# administración, reinicia (y los hábitos siguen), cuenta las reglas de
+# Inicio fijo, fuerza tres crashes y usa la salida por cable.
 #
 # El nivel 2: el navegador del emulador (WebView Browser Tester) pausado por
 # el Device Owner, sin abrirse, sin aparecer en ninguna lista y sin poder
@@ -133,6 +135,17 @@ TXT_HABITOS_TOPE='Ya hay 4 en Inicio: sacá uno para sumar otro.'
 TXT_HABITOS_UNO='Tiene que quedar al menos uno.'
 TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
 TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
+TXT_DORMIR='Hora de dormir'                  # el botón de la administración y el título de su pantalla
+TXT_DORMIR_PRENDIDA=Prendida                 # su interruptor
+TXT_EMPIEZA=Empieza                          # sus dos filas de hora, de a 15 minutos con − y +
+TXT_TERMINA=Termina
+TXT_MAS_TEMPRANO='Más temprano: '            # el − y el + de cada fila, por su descripción: «Más temprano: Empieza»
+TXT_MAS_TARDE='Más tarde: '
+TXT_DORMIR_HASTA='Hora de dormir hasta las ' # el aviso de Inicio de noche
+TXT_USAR_5='Usar 5 minutos'                  # la ráfaga, en Inicio, sin contraseña
+TXT_RAFAGA='Ráfaga de 5 minutos: hasta las ' # el aviso de Inicio mientras dura
+DORMIR_DESDE=$((23 * 60))                    # la noche de fábrica, en minutos del día: de 23:00...
+DORMIR_HASTA=$((7 * 60))                     # ...a 07:00
 INICIALES=LMXJVSD                            # los días del widget de hábitos, de lunes a domingo
 DIAS_ES=(lunes martes miércoles jueves viernes sábado domingo)   # las celdas del resumen:
 MESES_ES=(enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre)   # «Meditar, domingo 18 de octubre: no»
@@ -158,7 +171,9 @@ APP_AJUSTES=Settings                         # ni en el selector de apps ni, act
 APP_CALENDARIO=Calendar                      # instalada y no permitida: con Slowtown activo, no se lista
 BUSQUEDA=clo                                 # lo que se escribe en el buscador: deja sólo APP_RELOJ
 WIDGET_RELOJ='Analog clock'                  # widget del Reloj de AOSP, sin pantalla de configuración
-PAQUETE_RELOJ=com.android.deskclock          # el que dibuja ese widget
+PAQUETE_RELOJ=com.android.deskclock          # el que dibuja ese widget (y el reloj que queda de noche)
+PAQUETE_CAMARA=com.android.camera2           # el de APP_QUITAR, que de noche no se abre
+CAMARA_ACTIVIDAD=$PAQUETE_CAMARA/com.android.camera.CameraLauncher
 # El nivel 2 pausa todo navegador que no sea Chrome, y esta imagen no trae
 # Chrome: el único es éste, el que trae AOSP para probar WebView.
 NAVEGADOR=org.chromium.webview_shell
@@ -233,6 +248,7 @@ RESTRICCIONES=''   # las últimas políticas de Chrome que leyó politicas_chrom
 N_POLITICAS=0
 HABITO_HOY=''      # lo que marca el paso 8b: ejercicio hoy y meditar ayer (fechas ISO)
 HABITO_AYER=''
+FALTA=''           # lo último que vio esperar_sin_faltas que no estaba como tenía que estar
 declare -A CAMBIAR=() VISTAS=()
 
 # ── Lectura de pantallas ────────────────────────────────────────────────────
@@ -470,6 +486,7 @@ c_pausada() { echo "dumpsys package $1 | grep -q 'User 0: .*suspended=true'"; }
 # Una sesión de administración agranda la lista de lock task a todo lo
 # instalado: con Ajustes adentro («u0:[..., com.android.settings, ...]»), hay sesión.
 c_sesion() { echo "dumpsys activity activities | grep -q 'u0:\[.*com\.android\.settings[],]'"; }
+c_en_lock_task() { echo "dumpsys activity activities | grep -q 'u0:\[.*${1//./\\.}[],]'"; }   # ese paquete en la lista de lock task (mLockTaskPackages)
 
 foco() {      # la ventana con foco, p. ej. Window{1a2b u0 com.slowtown.launcher/...HomeActivity}
   local out
@@ -2542,6 +2559,279 @@ nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se 
   afirmar_en_inicio "de vuelta en Inicio: Slowtown y LOCKED"
 }
 
+# ── 9e. Hora de dormir ──────────────────────────────────────────────────────
+# De noche, con Slowtown activo, sólo el reloj (y lo de siempre); ráfagas de
+# 5 minutos sin contraseña desde Inicio. La noche se corre para que incluya la
+# hora del emulador, con margen, y al final vuelve a la de fábrica. El final
+# de la ráfaga se dispara como lo hace la alarma, con root.
+minutos_hhmm() { [[ $1 =~ ^([0-9]{2}):([0-9]{2})$ ]] && echo $((10#${BASH_REMATCH[1]} * 60 + 10#${BASH_REMATCH[2]})); }   # «23:00» → 1380
+hhmm() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }   # 1380 → «23:00»
+en_la_noche() {   # en_la_noche MINUTO DESDE HASTA: como Bedtime.inWindow, cruzando la medianoche
+  local m=$1 d=$2 h=$3
+  if (( d == h )); then return 1; elif (( d < h )); then (( m >= d && m < h )); else (( m >= d || m < h )); fi
+}
+hora_de_fila() {   # hora_de_fila FILA: la hora («23:00») de la fila «Empieza» o «Termina» en el último volcado
+  ui textos | awk -F'\t' -v f="$1" '
+    $5 == f { y = $2 }
+    $5 ~ /^[0-9][0-9]:[0-9][0-9]$/ { n++; h[n] = $5; hy[n] = $2 }
+    END { for (i = 1; i <= n; i++) { d = hy[i] - y; if (d < 0) d = -d; if (y != "" && d < 40) { print h[i]; exit } } }'
+}
+poner_hora() {   # poner_hora FILA MINUTOS: con «Más temprano» o «Más tarde» (lo más corto), hasta que la fila muestre esa hora
+  local fila=$1 meta=$2 vuelta actual dif boton n xy x y
+  for vuelta in 1 2 3; do
+    volcar_ui || return 1
+    actual=$(minutos_hhmm "$(hora_de_fila "$fila")") || return 1
+    dif=$(( ((meta - actual) % 1440 + 1440) % 1440 ))   # cuántos minutos más tarde
+    (( dif == 0 )) && return 0
+    if (( dif <= 720 )); then boton="$TXT_MAS_TARDE$fila"; n=$(( (dif + 14) / 15 ))
+    else boton="$TXT_MAS_TEMPRANO$fila"; n=$(( (1440 - dif + 14) / 15 )); fi
+    xy=$(ui texto "$boton") || return 1
+    read -r x y <<<"$xy"
+    # Un toque por vez y con un respiro: cada uno suma 15 minutos a la hora que
+    # muestra la pantalla, así que dos juntos antes de redibujar contarían uno.
+    # Si igual se perdió alguno, la vuelta siguiente lo corrige.
+    adb_t $((n * 2 + 30)) shell "for i in \$(seq $n); do input tap $x $y; sleep 0.2; done" >/dev/null 2>&1
+    sleep 1
+  done
+  volcar_ui && [ "$(hora_de_fila "$fila")" = "$(hhmm "$meta")" ]
+}
+abrir_dormir() {   # desde Inicio hasta la pantalla «Hora de dormir» de la administración
+  entrar_admin && tocar_desplazando texto "$TXT_DORMIR" && esperar_ui 10 texto "$TXT_DORMIR_PRENDIDA"
+}
+resumida() {   # la pantalla en primer plano, p. ej. com.slowtown.launcher/.HomeActivity
+  local out
+  out=$(disp dumpsys activity activities)
+  sed -n '/ResumedActivity/{s/.*ResumedActivity[^{]*{[^ ]* [^ ]* //;s/ .*//;p;q}' <<<"$out"
+}
+alarma_de_dormir() {   # si Android tiene agendada una alarma RTC_WAKEUP para Bedtime$Tick (el próximo borde de la noche)
+  local out
+  out=$(disp dumpsys alarm)
+  # En «dumpsys alarm», cada alarma es una línea «RTC_WAKEUP #0: Alarm{…}» y,
+  # unas líneas más abajo, su «tag=*walarm*:paquete/.Clase».
+  awk -v c="$PAQUETE/.admin.Bedtime\$Tick" '
+    /^ *[A-Z_]+ #[0-9]+: Alarm\{/ { tipo = $1 }
+    index($0, "tag=") && index($0, c) && tipo == "RTC_WAKEUP" { hay = 1 }
+    END { exit !hay }' <<<"$out"
+}
+falta_de_noche() {   # en el último volcado de Inicio, lo que no está como de noche (nada si está todo)
+  local falta=''
+  ui regex "^$TXT_DORMIR_HASTA" >/dev/null || falta+=" sin «$TXT_DORMIR_HASTA…»"
+  ui texto "$TXT_USAR_5" >/dev/null || falta+=" sin «$TXT_USAR_5»"
+  ui texto "$APP_RELOJ" >/dev/null || falta+=" sin $APP_RELOJ"
+  ui texto "$APP_QUITAR" >/dev/null && falta+=" con $APP_QUITAR"
+  echo "$falta"
+}
+falta_de_rafaga() {   # lo mismo, durante la ráfaga
+  local falta=''
+  ui regex "^$TXT_RAFAGA" >/dev/null || falta+=" sin «$TXT_RAFAGA…»"
+  ui texto "$APP_QUITAR" >/dev/null || falta+=" sin $APP_QUITAR"
+  echo "$falta"
+}
+falta_de_dia() {   # lo mismo, con la hora de dormir apagada
+  local falta=''
+  ui texto "$APP_QUITAR" >/dev/null || falta+=" sin $APP_QUITAR"
+  ui texto "$APP_RELOJ" >/dev/null || falta+=" sin $APP_RELOJ"
+  ui texto "$TXT_USAR_5" >/dev/null && falta+=" con «$TXT_USAR_5»"
+  ui regex "^$TXT_DORMIR_HASTA" >/dev/null && falta+=" con «$TXT_DORMIR_HASTA…»"
+  echo "$falta"
+}
+esperar_sin_faltas() {   # esperar_sin_faltas SEGUNDOS FUNCIÓN: hasta que FUNCIÓN no diga nada del volcado; lo último que dijo queda en FALTA
+  local fin=$((SECONDS + $1))
+  while :; do
+    if volcar_ui; then
+      FALTA=$($2)
+      [ -z "$FALTA" ] && return 0
+    else
+      FALTA=' no pude volcar la pantalla'
+    fi
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+
+paso_9e() {
+  titulo 9e "«$TXT_DORMIR»: de noche sólo el reloj, y ráfagas de 5 minutos sin contraseña"
+  local ahora min desde=$DORMIR_DESDE hasta=$DORMIR_HASTA i f uid root=0 r
+  ir_a_inicio
+  if ! abrir_dormir; then
+    mal "Administración no lleva a «$TXT_DORMIR»"
+    ir_a_inicio
+    return
+  fi
+  if ui texto "$TXT_DORMIR" >/dev/null; then
+    ok "«$TXT_DORMIR» en la administración abre su pantalla, con «$TXT_DORMIR_PRENDIDA», «$TXT_EMPIEZA» y «$TXT_TERMINA»"
+  else
+    mal "la pantalla de «$TXT_DORMIR_PRENDIDA» no tiene el título «$TXT_DORMIR»"
+  fi
+  if [ "$(ui marcado "$TXT_DORMIR_PRENDIDA")" = "true true" ]; then
+    nota "estaba prendida de una corrida anterior: la apago para arrancar de fábrica"
+    tocar texto "$TXT_DORMIR_PRENDIDA"
+    esperar_marcado "$TXT_DORMIR_PRENDIDA" false || mal "no pude apagar la hora de dormir que había quedado prendida"
+  fi
+  volcar_ui
+  i=$(hora_de_fila "$TXT_EMPIEZA")
+  f=$(hora_de_fila "$TXT_TERMINA")
+  if [ "$i" = "$(hhmm "$DORMIR_DESDE")" ] && [ "$f" = "$(hhmm "$DORMIR_HASTA")" ]; then
+    ok "de fábrica, la noche va de $i a $f"
+  else
+    # Una corrida anterior pudo cortarse con la noche corrida.
+    mal "la noche tendría que ir de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA") y va de ${i:-?} a ${f:-?}: la vuelvo a la de fábrica"
+    poner_hora "$TXT_EMPIEZA" "$DORMIR_DESDE" && poner_hora "$TXT_TERMINA" "$DORMIR_HASTA" ||
+      { mal "no pude volverla a la de fábrica"; ir_a_inicio; return; }
+  fi
+
+  # Que la noche tenga adentro la hora del emulador, con margen: si falta poco
+  # para que termine (o terminó hace poco), se corre el final media hora más
+  # allá de ahora; si no es de noche, se adelanta el principio hasta ahora.
+  ahora=$(disp date +%H:%M)
+  if ! min=$(minutos_hhmm "$ahora"); then
+    mal "no entiendo la hora del emulador («$ahora»)"
+    ir_a_inicio
+    return
+  fi
+  if (( min >= DORMIR_HASTA - 30 && min < DORMIR_HASTA + 30 )); then
+    hasta=$(( (min + 30 + 14) / 15 * 15 ))
+  elif ! en_la_noche "$min" "$DORMIR_DESDE" "$DORMIR_HASTA"; then
+    desde=$(( min / 15 * 15 ))
+  fi
+  if (( desde != DORMIR_DESDE )) && ! poner_hora "$TXT_EMPIEZA" "$desde"; then
+    mal "no pude correr el principio de la noche a las $(hhmm "$desde") (dice ${i:-?})"
+  fi
+  if (( hasta != DORMIR_HASTA )) && ! poner_hora "$TXT_TERMINA" "$hasta"; then
+    mal "no pude correr el final de la noche a las $(hhmm "$hasta")"
+  fi
+  volcar_ui
+  i=$(hora_de_fila "$TXT_EMPIEZA")
+  f=$(hora_de_fila "$TXT_TERMINA")
+  if [ "$i" = "$(hhmm "$desde")" ] && [ "$f" = "$(hhmm "$hasta")" ]; then
+    ok "en el emulador son las $ahora: la noche queda de $i a $f, con los botones de a 15 minutos"
+  else
+    mal "la noche tendría que quedar de $(hhmm "$desde") a $(hhmm "$hasta") y quedó de ${i:-?} a ${f:-?}"
+  fi
+  tocar texto "$TXT_DORMIR_PRENDIDA"
+  if esperar_marcado "$TXT_DORMIR_PRENDIDA" true; then
+    ok "«$TXT_DORMIR_PRENDIDA» la prende"
+  else
+    mal "tocar «$TXT_DORMIR_PRENDIDA» no la prendió ($(ui marcado "$TXT_DORMIR_PRENDIDA"))"
+  fi
+  captura hora-de-dormir
+
+  # De noche, la lista de lock task se achica al reloj (y lo de siempre).
+  if esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "de noche, $APP_QUITAR ($PAQUETE_CAMARA) sale de la lista de lock task"
+  else
+    mal "de noche, $APP_QUITAR sigue en la lista de lock task"
+  fi
+  if esperar 5 "$(c_en_lock_task "$PAQUETE_RELOJ")"; then
+    ok "y el reloj ($PAQUETE_RELOJ) sigue, para que suene la alarma"
+  else
+    mal "de noche, el reloj ($PAQUETE_RELOJ) salió de la lista de lock task"
+  fi
+  r=$(estado)
+  if [ "$r" = LOCKED ]; then ok "y Slowtown sigue LOCKED"; else mal "prender la hora de dormir dejó el lock task en ${r:-?}"; fi
+
+  ir_a_inicio
+  if esperar_sin_faltas 15 falta_de_noche; then
+    ok "Inicio de noche: «$TXT_DORMIR_HASTA…», «$TXT_USAR_5» y $APP_RELOJ, sin $APP_QUITAR"
+  else
+    mal "Inicio de noche no está como tendría que estar:$FALTA"
+  fi
+  captura inicio-de-noche
+  disp am start -n "$CAMARA_ACTIVIDAD" >/dev/null
+  if esperar 10 "$(c_resumida "$FOCO_BLOQUEO")" && ! esperar 1 "$(c_resumida "$PAQUETE_CAMARA/")"; then
+    ok "de noche, abrir $APP_QUITAR con am start da «App is not available» ($FOCO_BLOQUEO)"
+  else
+    mal "de noche, am start de $APP_QUITAR dejó en primer plano $(resumida)"
+  fi
+  adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+  sleep 1
+  ir_a_inicio
+
+  # La ráfaga: sin contraseña, vuelven las permitidas.
+  if ! tocar_en_inicio texto "$TXT_USAR_5"; then
+    mal "no encuentro «$TXT_USAR_5» en Inicio"
+  else
+    if esperar_sin_faltas 15 falta_de_rafaga; then
+      ok "«$TXT_USAR_5»: Inicio dice «$TXT_RAFAGA…» y vuelve $APP_QUITAR"
+    else
+      mal "después de «$TXT_USAR_5», Inicio no está como tendría que estar:$FALTA"
+    fi
+    captura rafaga
+    if esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+      ok "durante la ráfaga, $APP_QUITAR vuelve a la lista de lock task"
+    else
+      mal "durante la ráfaga, $APP_QUITAR no vuelve a la lista de lock task"
+    fi
+    disp am start -n "$CAMARA_ACTIVIDAD" >/dev/null
+    # Si es la primera vez, la cámara puede abrir encima el pedido de permisos.
+    if esperar 10 "dumpsys activity activities | grep -qE 'ResumedActivity.*($PAQUETE_CAMARA/|permissioncontroller)'"; then
+      ok "durante la ráfaga, $APP_QUITAR abre ($(resumida))"
+    else
+      mal "durante la ráfaga, am start de $APP_QUITAR dejó en primer plano $(resumida)"
+    fi
+
+    # El final, como lo dispara la alarma: con root, que el receptor no se exporta.
+    uid=$(uid_adb)
+    if [ "$uid" = 0 ] || adb_como 0; then
+      root=1
+    else
+      mal "no pude pasar adb a root: sin eso no puedo terminar la ráfaga antes de los 5 minutos"
+    fi
+    if (( root )); then
+      disp "am broadcast -n '$PAQUETE/.admin.Bedtime\$Tick' --ez fin_de_rafaga true" >/dev/null
+      if esperar 10 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+        ok "al terminar la ráfaga, $APP_QUITAR sale otra vez de la lista de lock task"
+      else
+        mal "terminada la ráfaga, $APP_QUITAR sigue en la lista de lock task"
+      fi
+      if esperar 10 "$(c_resumida "$PAQUETE/.HomeActivity")"; then
+        ok "y Android cierra $APP_QUITAR: queda Inicio de Slowtown"
+      else
+        mal "terminada la ráfaga, en primer plano quedó $(resumida)"
+      fi
+      if [ "$uid" != 0 ]; then adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"; fi
+    fi
+    cerrar_cartel_bloqueo
+    ir_a_inicio
+  fi
+  if alarma_de_dormir; then
+    ok "Android tiene agendada una alarma RTC_WAKEUP de $PAQUETE/.admin.Bedtime\$Tick: el final de la noche"
+  else
+    mal "dumpsys alarm no tiene ninguna alarma RTC_WAKEUP de $PAQUETE/.admin.Bedtime\$Tick"
+  fi
+
+  # Apagarla devuelve el día, y la noche vuelve a la de fábrica para lo que sigue.
+  if ! abrir_dormir; then
+    mal "no pude volver a «$TXT_DORMIR» para apagarla"
+    ir_a_inicio
+    return
+  fi
+  tocar texto "$TXT_DORMIR_PRENDIDA"
+  if esperar_marcado "$TXT_DORMIR_PRENDIDA" false; then
+    ok "«$TXT_DORMIR_PRENDIDA» la apaga"
+  else
+    mal "tocar «$TXT_DORMIR_PRENDIDA» no la apagó ($(ui marcado "$TXT_DORMIR_PRENDIDA"))"
+  fi
+  if esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "apagada, $APP_QUITAR vuelve a la lista de lock task"
+  else
+    mal "apagada, $APP_QUITAR no vuelve a la lista de lock task"
+  fi
+  if poner_hora "$TXT_EMPIEZA" "$DORMIR_DESDE" && poner_hora "$TXT_TERMINA" "$DORMIR_HASTA"; then
+    (( desde != DORMIR_DESDE || hasta != DORMIR_HASTA )) &&
+      ok "la noche vuelve a la de fábrica: de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA")"
+  else
+    mal "no pude volver la noche a la de fábrica (de $(hhmm "$DORMIR_DESDE") a $(hhmm "$DORMIR_HASTA"))"
+  fi
+  ir_a_inicio
+  if esperar_sin_faltas 15 falta_de_dia; then
+    ok "Inicio apagada: vuelve $APP_QUITAR, sin «$TXT_USAR_5»"
+  else
+    mal "con la hora de dormir apagada, Inicio no está como tendría que estar:$FALTA"
+  fi
+  afirmar_en_inicio "la hora de dormir apagada deja todo como antes: Slowtown y LOCKED"
+}
+
 # ── 10. Ajustes desde la administración ─────────────────────────────────────
 paso_10() {
   titulo 10 "Ajustes desde la administración"
@@ -2991,6 +3281,7 @@ paso_9
 paso_9b
 paso_9c
 paso_9d
+paso_9e
 paso_10
 paso_11
 paso_12

@@ -18,6 +18,11 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- La hora de dormir empieza y termina a horario: provisionar.sh da el
+         permiso por adb (appops SCHEDULE_EXACT_ALARM); sin él, la alarma es
+         aproximada. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:name=".SlowtownApp"
         android:allowBackup="false"
@@ -56,6 +61,25 @@
         <receiver
             android:name=".admin.FreeSession$End"
             android:exported="false" />
+
+        <!-- La hora de dormir: empieza, termina o se acaba una ráfaga. Sólo lo
+             disparan las alarmas de Slowtown: no se exporta. -->
+        <receiver
+            android:name=".admin.Bedtime$Tick"
+            android:exported="false" />
+
+        <!-- Las notificaciones por oleadas: lee las notificaciones de las apps
+             elegidas y las pospone hasta la próxima entrega. El permiso lo da
+             provisionar.sh por adb (cmd notification allow_listener). -->
+        <service
+            android:name=".notif.WavesListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <!-- La salida por cable (scripts/liberar.sh). Exportado sin permiso a
              propósito: `adb shell content call` corre como shell, y el propio

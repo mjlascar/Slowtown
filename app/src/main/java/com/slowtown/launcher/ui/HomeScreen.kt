@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +46,8 @@ fun HomeScreen(
     safeMode: Boolean,
     /** Un aviso corto abajo de la fecha, por ejemplo «Todo habilitado hasta las 17:52». */
     notice: String?,
+    /** De noche: la ráfaga de 5 minutos con las apps de siempre. */
+    onBurst: (() -> Unit)?,
     /** «Hoy: 1 h 5 min de pantalla», o null sin acceso a los datos de uso. */
     screenTime: String?,
     widget: (@Composable () -> Unit)?,
@@ -75,6 +78,10 @@ fun HomeScreen(
         if (notice != null) {
             Spacer(Modifier.height(12.dp))
             Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+        }
+        if (onBurst != null) {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
         }
         if (safeMode) {
             Spacer(Modifier.height(16.dp))

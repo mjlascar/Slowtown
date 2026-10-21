@@ -68,6 +68,51 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   Necesita el acceso a los datos de uso, que da `provisionar.sh` por adb
   (`appops set … GET_USAGE_STATS allow`); sin eso, la línea no aparece.
 
+## Hora de dormir
+
+`admin/Bedtime.kt`, en la administración («Hora de dormir», con contraseña):
+de noche (de entrada, de 23 a 7; Marcos quiere dejar de usar el teléfono tan
+tarde), con Slowtown activo, la lista de lock task se achica a lo esencial
+más el reloj y las alarmas (`Bedtime.apps`: lo que atiende `AlarmClock`, más
+Alarmy, `droom.sleepIfUCan`, con la que Marcos se despierta, y los relojes de
+fábrica). Las alarmas están en la lista siempre, de día también: si no, con
+Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
+
+- **Ráfagas de 5 minutos** («Usar 5 minutos» en Inicio, sin contraseña y sin
+  tope: la fricción es volver a pedirla): vuelven las apps permitidas, y al
+  terminar el sistema cierra lo que quedó afuera.
+- El principio y el final los agenda el sistema (`Bedtime.Tick`, alarma
+  exacta: `provisionar.sh` da `SCHEDULE_EXACT_ALARM` por adb), así que llegan
+  aunque haya otra app abierta. Al volver a Inicio, además,
+  `Policies.refreshPackages` pone la lista al día (escribe sólo si cambió), y
+  un reinicio vuelve a agendar desde `SlowtownApp`.
+- `Policies.effectivePackages` decide la lista: sesión en curso, todo; noche
+  sin ráfaga, lo esencial y las alarmas; si no, lo de siempre. Las sesiones de
+  administración y «Habilitar todo» siguen abriendo todo, también de noche.
+- En el emulador, el final de una ráfaga se dispara a mano con root:
+  `adb shell "am broadcast -n 'com.slowtown.launcher/.admin.Bedtime\$Tick' --ez fin_de_rafaga true"`.
+
+## Notificaciones por oleadas
+
+`notif/Waves.kt`, `notif/WavesListener.kt` y «Notificaciones» en la
+administración (con contraseña: apagarlas o sacar una app afloja). Las de las
+apps elegidas no llegan apenas salen: `WavesListener` (un lector de
+notificaciones) le pide a Android que posponga la original
+(`snoozeNotification`) hasta la próxima entrega (de entrada, 12 y 19), y a esa
+hora Android la vuelve a publicar: se toca y se responde como siempre. Nunca
+esperan las llamadas, las alarmas, las llamadas perdidas, la música ni lo que
+está en curso. «Pasan siempre»: palabras enteras (un nombre, «urgente») que
+hacen llegar una notificación en el momento.
+
+- Tiene su propio archivo de preferencias (`slowtown_notif`), y anota lo que
+  pospuso para reconocer su entrega aunque llegue tarde.
+- Límites de Android 12: avisa después de hacerla sonar (una retenida puede
+  sonar un instante); lo pospuesto vive en memoria y un reinicio lo borra (la
+  app la vuelve a publicar o se pierde); si la app actualiza una ya pospuesta,
+  sigue esperando.
+- El permiso lo da `provisionar.sh` por adb (`cmd notification
+  allow_listener`); sin él, la pantalla lo avisa y no se retiene nada.
+
 ## Las dos maneras de abrir todo un rato
 
 - **Sesión de administración** (`AdminSession`, con contraseña): «Ir a

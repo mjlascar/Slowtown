@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.admin.AdminSession
+import com.slowtown.launcher.admin.Bedtime
 import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.LockTaskEvents
@@ -47,6 +48,8 @@ import com.slowtown.launcher.security.Password
 import com.slowtown.launcher.ui.AdminScreen
 import com.slowtown.launcher.ui.AdminStatus
 import com.slowtown.launcher.ui.AppActions
+import com.slowtown.launcher.ui.BedtimeScreen
+import com.slowtown.launcher.ui.NotificationsScreen
 import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
 import com.slowtown.launcher.ui.DrawerScreen
@@ -87,7 +90,7 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker, Bedtime, Notifications }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -107,6 +110,10 @@ class HomeActivity : ComponentActivity() {
     private var homeHint by mutableStateOf("")
     private var notice by mutableStateOf<String?>(null)
     private var freeInfo by mutableStateOf<FreeSessionInfo?>(null)
+
+    /** Si ahora manda la noche (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
+    private var night by mutableStateOf(false)
+    private var bedtimeSettings by mutableStateOf(Triple(false, 23 * 60, 7 * 60))
 
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
@@ -171,7 +178,9 @@ class HomeActivity : ComponentActivity() {
             override fun handleOnBackPressed() = when (screen) {
                 Screen.Folder -> screen = Screen.Drawer
                 Screen.HabitsPicker -> screen = Screen.Habits
-                Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders -> screen = Screen.Admin
+                Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders, Screen.Bedtime,
+                Screen.Notifications ->
+                    screen = Screen.Admin
                 else -> goHome()
             }
         })
@@ -182,6 +191,23 @@ class HomeActivity : ComponentActivity() {
                 while (true) {
                     refreshHabits()
                     delay(untilMidnight())
+                }
+            }
+        }
+
+        // Si la noche empieza o termina con Inicio a la vista, el aviso y las
+        // apps cambian solos. Consulta barata: una vez cada medio minuto.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var was = Bedtime.restricts(this@HomeActivity)
+                while (true) {
+                    delay(30_000L)
+                    val now = Bedtime.restricts(this@HomeActivity)
+                    if (now != was) {
+                        was = now
+                        refreshStatus()
+                        refreshApps()
+                    }
                 }
             }
         }
@@ -211,6 +237,7 @@ class HomeActivity : ComponentActivity() {
                         hint = homeHint,
                         safeMode = status.safeMode,
                         notice = notice,
+                        onBurst = if (night) ::startBurst else null,
                         screenTime = screenTime,
                         widget = if (showHabits) {
                             @Composable {
@@ -273,6 +300,11 @@ class HomeActivity : ComponentActivity() {
                         },
                         onChooseWidget = ::openWidgetPicker,
                         onFolders = { screen = Screen.Folders },
+                        onBedtime = {
+                            bedtimeSettings = Triple(prefs.bedtimeEnabled, prefs.bedtimeStart, prefs.bedtimeEnd)
+                            screen = Screen.Bedtime
+                        },
+                        onNotifications = { screen = Screen.Notifications },
                         onToggleClosed = ::toggleClosed,
                         onOpenSettings = { startAdminSession(Intent(Settings.ACTION_SETTINGS)) },
                         onOpenPlayStore = {
@@ -286,6 +318,17 @@ class HomeActivity : ComponentActivity() {
                         apps = permittable,
                         chosen = prefs.allowed,
                         onDone = ::saveChosen,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.Notifications -> NotificationsScreen(
+                        apps = permittable,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.Bedtime -> BedtimeScreen(
+                        enabled = bedtimeSettings.first,
+                        start = bedtimeSettings.second,
+                        end = bedtimeSettings.third,
+                        onChange = ::saveBedtime,
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Sites -> SitesScreen(
@@ -348,6 +391,9 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
                 AdminSession.endIfExpired(this@HomeActivity)
+                Bedtime.endBurstIfExpired(this@HomeActivity)
+                // Por si la alarma de la noche se atrasó: escribe sólo si cambió.
+                if (shouldBeClosed()) Policies.refreshPackages(this@HomeActivity, prefs.allowedPackages)
                 FreeSession.endIfExpired(this@HomeActivity)
             }
             refreshStatus()
@@ -507,6 +553,34 @@ class HomeActivity : ComponentActivity() {
      * «Habilitar todo por 5 minutos», sin contraseña y con tope. No se corta
      * al volver a Inicio: al terminar, se rearma la lista de siempre.
      */
+    /** Cinco minutos con las apps de siempre, de noche. Sin contraseña. */
+    private fun startBurst() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { Bedtime.startBurst(this@HomeActivity) }
+            refreshStatus()
+            refreshApps()
+            delay(Bedtime.BURST_MS + 1_000L)
+            refreshStatus()
+            refreshApps()
+        }
+    }
+
+    /** La hora de dormir: rige desde ya (si es de noche, la lista se achica) y se agenda el próximo cambio. */
+    private fun saveBedtime(enabled: Boolean, start: Int, end: Int) {
+        prefs.bedtimeEnabled = enabled
+        prefs.bedtimeStart = start
+        prefs.bedtimeEnd = end
+        bedtimeSettings = Triple(enabled, start, end)
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                Bedtime.schedule(this@HomeActivity)
+                Bedtime.refresh(this@HomeActivity)
+            }
+            refreshStatus()
+            refreshApps()
+        }
+    }
+
     private fun startFreeSession() {
         lifecycleScope.launch {
             withContext(Dispatchers.Default) { FreeSession.start(this@HomeActivity, prefs.allowedPackages) }
@@ -707,7 +781,15 @@ class HomeActivity : ComponentActivity() {
             safeMode = CrashGuard.inSafeMode(this),
         )
         val freeUntil = FreeSession.until(this)
-        notice = if (freeUntil > 0) "Todo habilitado hasta las ${hhmm(freeUntil)}" else null
+        val burstUntil = Bedtime.burstUntil(this)
+        val bedtime = shouldBeClosed() && Bedtime.isNight(this)
+        night = bedtime && burstUntil == 0L
+        notice = when {
+            freeUntil > 0 -> "Todo habilitado hasta las ${hhmm(freeUntil)}"
+            bedtime && burstUntil > 0 -> "Ráfaga de 5 minutos: hasta las ${hhmm(burstUntil)}"
+            night -> "Hora de dormir hasta las ${com.slowtown.launcher.ui.dayTime(prefs.bedtimeEnd)}"
+            else -> null
+        }
         // El botón sólo tiene sentido con Slowtown activo y sin una sesión en curso.
         freeInfo = if (isLocked() && freeUntil == 0L) {
             FreeSessionInfo(FreeSession.remaining(this), FreeSession.nextAt(this)?.let(::whenText))
@@ -738,18 +820,21 @@ class HomeActivity : ComponentActivity() {
                 .filterNot { it.packageName in vetoed }
             val active = shouldBeClosed()
             val allowed = prefs.allowed
-            // Con «Habilitar todo» en curso se ven todas, como sin Slowtown.
-            val visible = if (active && !FreeSession.isActive(this@HomeActivity)) {
-                all.filter { it.key in allowed }
-            } else {
-                all
+            // Con «Habilitar todo» en curso se ven todas, como sin Slowtown. De
+            // noche, sólo el reloj y las alarmas.
+            val nightNow = active && Bedtime.restricts(this@HomeActivity)
+            val nightApps = if (nightNow) withContext(Dispatchers.Default) { Bedtime.apps(this@HomeActivity) } else emptySet()
+            val visible = when {
+                !active || FreeSession.isActive(this@HomeActivity) -> all
+                nightNow -> all.filter { it.packageName in nightApps }
+                else -> all.filter { it.key in allowed }
             }
             val chosen = prefs.favorites
             permittable = AppCatalog.permittable(all)
             openable = visible
             favorites = chosen
             folders = prefs.folders
-            homeApps = visible.filter { it.key in chosen }
+            homeApps = if (nightNow) visible else visible.filter { it.key in chosen }
             homeHint = if (active && visible.isEmpty()) {
                 "Mantené apretada la hora para elegir las apps permitidas."
             } else {

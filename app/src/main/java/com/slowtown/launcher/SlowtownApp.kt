@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
+import com.slowtown.launcher.admin.Bedtime
 import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.security.CrashGuard
@@ -87,6 +88,9 @@ class SlowtownApp : Application() {
         thread(name = "nivel-2") {
             runCatching { Fixed.enforce(this) }
                 .onFailure { Log.e(TAG, "No pude poner el nivel 2", it) }
+            // Un reinicio borra las alarmas: la hora de dormir se vuelve a agendar.
+            runCatching { Bedtime.schedule(this) }
+                .onFailure { Log.e(TAG, "No pude agendar la hora de dormir", it) }
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)

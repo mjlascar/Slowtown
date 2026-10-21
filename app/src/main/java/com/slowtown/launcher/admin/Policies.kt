@@ -103,11 +103,7 @@ object Policies {
         // task sin pantalla de bloqueo y sacar el PIN (le pasó a otro proyecto
         // con este mismo diseño).
         if (dpm.getLockTaskFeatures(admin) != FEATURES) dpm.setLockTaskFeatures(admin, FEATURES)
-        // Con una sesión en curso (administración o «Habilitar todo»), la
-        // lista sigue abierta: rearmar la política no la puede cortar antes.
-        val session = AdminSession.isActive(context) || FreeSession.isActive(context)
-        val allowed = allowlist(context, packages)
-        setPackages(context, if (session) allowed + installed(context) else allowed)
+        setPackages(context, effectivePackages(context, packages))
         dpm.clearPackagePersistentPreferredActivities(admin, context.packageName)
         dpm.addPersistentPreferredActivity(
             admin,
@@ -116,6 +112,29 @@ object Policies {
         )
         val current = dpm.getUserRestrictions(admin)
         RESTRICTIONS.filterNot(current::getBoolean).forEach { dpm.addUserRestriction(admin, it) }
+    }
+
+    /**
+     * Sólo la lista, cuando cambia algo que depende de la hora (empieza o
+     * termina la noche, o una ráfaga): escribe sólo si cambió, así que se
+     * puede llamar en cada vuelta a Inicio.
+     */
+    @Synchronized
+    fun refreshPackages(context: Context, packages: Collection<String>) {
+        if (!isDeviceOwner(context)) return
+        setPackages(context, effectivePackages(context, packages))
+    }
+
+    /**
+     * La lista que corresponde ahora. Con una sesión en curso (administración
+     * o «Habilitar todo»), todo lo instalado: rearmar la política no la puede
+     * cortar antes. De noche, sin ráfaga, sólo lo de siempre ([allowlist]
+     * suma el reloj y las alarmas), sin las apps permitidas.
+     */
+    private fun effectivePackages(context: Context, packages: Collection<String>): Set<String> {
+        val session = AdminSession.isActive(context) || FreeSession.isActive(context)
+        val allowed = allowlist(context, if (Bedtime.restricts(context)) emptySet() else packages)
+        return if (session) allowed + installed(context) else allowed
     }
 
     /**
@@ -173,11 +192,16 @@ object Policies {
         dpm(context).clearDeviceOwnerApp(context.packageName)
     }
 
-    /** Slowtown, las apps de Inicio y lo que no puede faltar. */
+    /**
+     * Slowtown, las apps de Inicio y lo que no puede faltar: lo esencial y el
+     * reloj y las alarmas, de día y de noche (la alarma de la mañana tiene que
+     * poder mostrar su pantalla con Slowtown activo).
+     */
     private fun allowlist(context: Context, packages: Collection<String>): Set<String> = buildSet {
         add(context.packageName)
         addAll(packages)
         addAll(Essentials.packages(context))
+        addAll(Bedtime.apps(context))
     }
 
     /** Cada escritura guarda a disco y avisa a todo el sistema: sólo si cambió. */

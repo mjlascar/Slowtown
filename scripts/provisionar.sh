@@ -31,6 +31,12 @@ herramienta() {
 permitir_widgets() {
   adb shell appwidget grantbind --package "$PAQUETE" --user 0 >/dev/null
   adb shell appops set "$PAQUETE" GET_USAGE_STATS allow >/dev/null
+  # La hora de dormir empieza y termina a horario, no «más o menos».
+  adb shell appops set "$PAQUETE" SCHEDULE_EXACT_ALARM allow >/dev/null
+  # Las notificaciones por oleadas: leer y posponer las de las apps elegidas.
+  # Si falla (un APK sin el lector), Slowtown anda igual: sólo no hay oleadas.
+  adb shell cmd notification allow_listener "$PAQUETE/.notif.WavesListener" >/dev/null 2>&1 ||
+    echo "  ⚠️  no pude habilitar el lector de notificaciones (las oleadas no van a andar)"
 }
 
 if [ "$(adb get-state 2>/dev/null)" != device ]; then
