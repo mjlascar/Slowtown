@@ -37,6 +37,9 @@ permitir_widgets() {
   # Si falla (un APK sin el lector), Slowtown anda igual: sólo no hay oleadas.
   adb shell cmd notification allow_listener "$PAQUETE/.notif.WavesListener" >/dev/null 2>&1 ||
     echo "  ⚠️  no pude habilitar el lector de notificaciones (las oleadas no van a andar)"
+  # Esconder la hora de la barra en Inicio, que ya muestra la grande.
+  adb shell pm grant "$PAQUETE" android.permission.WRITE_SECURE_SETTINGS >/dev/null 2>&1 ||
+    echo "  ⚠️  no pude dar el permiso para esconder la hora de la barra"
 }
 
 if [ "$(adb get-state 2>/dev/null)" != device ]; then

@@ -37,6 +37,46 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_FAVORITES, null)?.toSet() ?: allowed
         set(value) = prefs.edit().putStringSet(KEY_FAVORITES, value).apply()
 
+    /**
+     * Las que no se ven al recorrer la lista de todas las apps, pero sí al
+     * buscarlas: las que tienen que estar instaladas y andar de fondo, como el
+     * teclado, sin ocupar lugar (lo pidió Marcos). Como componentes, igual que
+     * [favorites]. Sin contraseña: no aflojan nada.
+     */
+    var hiddenApps: Set<String>
+        get() = prefs.getStringSet(KEY_HIDDEN_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_HIDDEN_APPS, value).apply()
+
+    /**
+     * El tamaño de Inicio, en por ciento (de 70 a 100): achica todo junto,
+     * letras, márgenes y hábitos. Marcos lo ve grande en el S10e.
+     */
+    var homeScalePercent: Int
+        get() = prefs.getInt(KEY_HOME_SCALE, 100).coerceIn(MIN_HOME_SCALE, 100)
+        set(value) = prefs.edit().putInt(KEY_HOME_SCALE, value.coerceIn(MIN_HOME_SCALE, 100)).apply()
+
+    /**
+     * Si Inicio muestra la hora grande. De entrada sí, y entonces la de la
+     * barra de arriba se esconde en Inicio ([StatusBarClock]): Marcos no la
+     * quiere repetida.
+     */
+    var showClock: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_CLOCK, true)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_CLOCK, value).apply()
+
+    /** Si Slowtown escondió la hora de la barra ([StatusBarClock]) y tiene que devolverla. */
+    val statusClockHidden: Boolean
+        get() = prefs.getBoolean(KEY_STATUS_CLOCK_HIDDEN, false)
+
+    /** Cómo estaba la lista de íconos escondidos antes de esconder la hora; null si no estaba puesta. */
+    val savedStatusIcons: String?
+        get() = prefs.getString(KEY_STATUS_ICONS, null)
+
+    /** commit: si se pierde, la hora de la barra quedaría escondida en todas las apps. */
+    fun saveStatusIcons(value: String?, hidden: Boolean = true) {
+        prefs.edit().putBoolean(KEY_STATUS_CLOCK_HIDDEN, hidden).putString(KEY_STATUS_ICONS, value).commit()
+    }
+
     /** Las carpetas de la lista de todas las apps. Sin contraseña: son sólo orden. */
     var folders: List<Folder>
         get() = Folders.parse(prefs.getString(KEY_FOLDERS, null))
@@ -152,6 +192,12 @@ class Prefs(context: Context) {
         const val KEY_ALLOWED = "allowed"
         const val KEY_FAVORITES = "favorites"
         const val KEY_FOLDERS = "folders"
+        const val KEY_HIDDEN_APPS = "hidden_apps"
+        const val KEY_HOME_SCALE = "home_scale_percent"
+        const val KEY_SHOW_CLOCK = "show_clock"
+        const val KEY_STATUS_CLOCK_HIDDEN = "status_clock_hidden"
+        const val KEY_STATUS_ICONS = "status_icons"
+        const val MIN_HOME_SCALE = 70
         const val KEY_BLOCKED_SITES = "blocked_sites"
         const val KEY_VETOED = "vetoed"
         const val KEY_CLOSED = "closed"

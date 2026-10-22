@@ -21,7 +21,7 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - el panel de notificaciones queda, pero sin ajustes rápidos ni engranaje;
 - no hay Recientes, e Inicio es siempre Slowtown;
 - Ajustes y todo lo demás se alcanza sólo desde la administración, que pide
-  la contraseña (mantener apretada la hora).
+  la contraseña (mantener apretada la hora o la fecha, arriba de todo).
 
 ## Inicio
 
@@ -39,8 +39,31 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   Con Slowtown activo lista sólo las permitidas.
 - **Carpetas** (`Prefs.folders`, JSON): se crean, renombran y borran en la
   configuración, no en la lista: Marcos quiere menos botones en el uso
-  diario. Una app se mueve a una carpeta manteniéndola apretada en la lista.
-  Son sólo orden: sin contraseña.
+  diario. Una app se mueve a una carpeta manteniéndola apretada en la lista
+  («Mover a una carpeta» y después cuál). Son sólo orden: sin contraseña.
+- **Mantener apretada una app** en la lista: Inicio, carpeta, ocultar,
+  «Información de la app» y «Desinstalar». La información es una pantalla de
+  Ajustes: con Slowtown activo pide la contraseña y se abre en una sesión de
+  administración. Desinstalar no la pide (sacar una app no afloja nada) y no
+  se ofrece para las apps de sistema (desinstalarles las actualizaciones
+  borraría la pausa del nivel 2) ni para las que tienen la desinstalación
+  bloqueada. Siendo Device Owner pregunta Slowtown y desinstala sin el
+  diálogo de Android, que con lock task no se abre.
+- **Ocultas** (`Prefs.hiddenApps`): no aparecen al recorrer la lista ni
+  adentro de las carpetas, pero sí al buscarlas. Para las que tienen que
+  estar y andar de fondo sin ocupar lugar, como el teclado (lo pidió Marcos).
+  Sin contraseña.
+- **Cómo se ve Inicio** (en la administración): el tamaño de todo Inicio junto
+  (70, 80, 90 o 100 %, `Prefs.homeScalePercent`, con una vista previa ahí
+  mismo) y la hora grande (`Prefs.showClock`, prendida de entrada).
+- **Una sola hora en Inicio** (`StatusBarClock`): con la hora grande a la
+  vista, la de la barra de arriba se esconde mientras Inicio está al frente, y
+  vuelve en cualquier otra pantalla (Marcos no la quiere repetida). Android no
+  deja que una app esconda sólo la hora de la barra: se usa la lista de íconos
+  escondidos de SystemUI (`icon_blacklist`), un ajuste seguro, con
+  `WRITE_SECURE_SETTINGS` que da `provisionar.sh` por adb. Guarda cómo estaba
+  la lista y la deja igual al mostrarla; la salida por cable también. Sin la
+  hora grande, la fecha encabeza Inicio y la barra queda como siempre.
 - **Widget**: uno, pegado al borde de abajo (`AppWidgetHost`). Se elige en la
   administración y se arma en una sesión de administración, porque la
   configuración del widget es de su app. `provisionar.sh` corre `appwidget

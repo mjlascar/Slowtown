@@ -45,16 +45,29 @@ import com.slowtown.launcher.apps.normalize
 class AppActions(
     val folders: List<Folder>,
     val favorites: Set<String>,
+    /** Las que no se ven en la lista ni en las carpetas: aparecen sólo buscándolas. */
+    val hidden: Set<String>,
+    /**
+     * Si antes de desinstalar pregunta Slowtown: con Device Owner desinstala
+     * él, sin el diálogo de Android. Sin Device Owner pregunta Android.
+     */
+    val confirmsUninstall: Boolean,
     val onToggleFavorite: (LaunchableApp) -> Unit,
     /** Mueve la app a una carpeta, o la saca de la que tenga si es null. */
     val onMoveToFolder: (LaunchableApp, String?) -> Unit,
+    val onToggleHidden: (LaunchableApp) -> Unit,
+    val onAppInfo: (LaunchableApp) -> Unit,
+    /** Si se ofrece desinstalarla: nunca a las de sistema ni a Slowtown. */
+    val canUninstall: (LaunchableApp) -> Boolean,
+    val onUninstall: (LaunchableApp) -> Unit,
 )
 
 /**
  * Todas las apps que se pueden abrir (con Slowtown activo, sólo las
- * permitidas). Arriba las carpetas, debajo las apps que no están en ninguna.
- * Buscando, las carpetas se ocultan y aparecen todas las que coinciden, estén
- * donde estén. Se llega deslizando para arriba en Inicio.
+ * permitidas). Arriba las carpetas, debajo las apps que no están en ninguna,
+ * sin las ocultas. Buscando, no van las carpetas y aparecen todas las que
+ * coinciden, estén donde estén, también las ocultas. Se llega deslizando para
+ * arriba en Inicio.
  */
 @Composable
 fun DrawerScreen(
@@ -67,9 +80,9 @@ fun DrawerScreen(
     var query by rememberSaveable { mutableStateOf("") }
     val wanted = normalize(query.trim())
     val searching = wanted.isNotEmpty()
-    val loose = remember(apps, actions.folders) {
+    val loose = remember(apps, actions.folders, actions.hidden) {
         val inFolders = actions.folders.flatMap { it.apps }.toSet()
-        apps.filter { it.key !in inFolders }
+        apps.filter { it.key !in inFolders && it.key !in actions.hidden }
     }
     val shown = if (searching) apps.filter { wanted in it.searchKey } else loose
 
@@ -119,7 +132,8 @@ fun DrawerScreen(
                 when {
                     searching -> "No hay ninguna app con ese nombre."
                     apps.isEmpty() -> "Todavía no hay apps permitidas."
-                    else -> "Todas las apps están en carpetas."
+                    apps.none { it.key in actions.hidden } -> "Todas las apps están en carpetas."
+                    else -> "Todas las apps están en carpetas u ocultas."
                 },
             )
         }
@@ -127,7 +141,7 @@ fun DrawerScreen(
     }
 }
 
-/** Una carpeta abierta: sus apps, con las mismas acciones que en la lista. */
+/** Una carpeta abierta: sus apps sin las ocultas, con las mismas acciones que en la lista. */
 @Composable
 fun FolderScreen(
     folder: Folder,
@@ -136,7 +150,9 @@ fun FolderScreen(
     onOpen: (LaunchableApp) -> Unit,
     onBack: () -> Unit,
 ) {
-    val inside = remember(apps, folder) { apps.filter { it.key in folder.apps } }
+    val inside = remember(apps, folder, actions.hidden) {
+        apps.filter { it.key in folder.apps && it.key !in actions.hidden }
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -145,7 +161,15 @@ fun FolderScreen(
     ) {
         Text(folder.name.uppercase(), style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
-        if (inside.isEmpty()) HintText("Está vacía. Mantené apretada una app en la lista para moverla acá.")
+        if (inside.isEmpty()) {
+            HintText(
+                if (apps.none { it.key in folder.apps }) {
+                    "Está vacía. Mantené apretada una app en la lista para moverla acá."
+                } else {
+                    "Sus apps están ocultas: aparecen buscándolas en la lista."
+                },
+            )
+        }
         LazyColumn(Modifier.weight(1f)) {
             items(inside, key = { it.key }) { app -> AppRow(app, actions, onOpen) }
         }
@@ -173,9 +197,10 @@ private fun FolderTile(folder: Folder, modifier: Modifier, onClick: () -> Unit) 
 }
 
 /**
- * Una app de la lista. Tocándola se abre; manteniéndola apretada, se pone o
- * se saca de Inicio y se mueve entre las carpetas que ya existen (crearlas es
- * de la configuración: en el uso diario, nada de botones de más).
+ * Una app de la lista. Tocándola se abre. Manteniéndola apretada: ponerla o
+ * sacarla de Inicio, moverla a una de las carpetas que ya existen (crearlas es
+ * de la configuración: en el uso diario, nada de botones de más), ocultarla de
+ * la lista, ver su información o desinstalarla.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -186,8 +211,9 @@ private fun AppRow(
     detail: String? = null,
 ) {
     val haptics = LocalHapticFeedback.current
-    var menu by remember { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf(AppDialog.None) }
     val favorite = app.key in actions.favorites
+    val hidden = app.key in actions.hidden
     Row(
         Modifier
             .fillMaxWidth()
@@ -195,30 +221,65 @@ private fun AppRow(
                 onClick = { onOpen(app) },
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    menu = true
+                    dialog = AppDialog.Actions
                 },
             )
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(app.label, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        val note = listOfNotNull(detail?.uppercase(), "en Inicio".takeIf { favorite }).joinToString(" · ")
+        // «en Inicio» siempre al final: la prueba del emulador la busca ahí.
+        val note = listOfNotNull(detail?.uppercase(), "oculta".takeIf { hidden }, "en Inicio".takeIf { favorite })
+            .joinToString(" · ")
         if (note.isNotEmpty()) {
             Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    if (menu) {
-        val current = Folders.folderOf(actions.folders, app.key)
-        ActionsDialog(
-            title = app.label,
-            actions = buildList {
-                add((if (favorite) "Sacar de Inicio" else "Poner en Inicio") to { actions.onToggleFavorite(app) })
-                actions.folders.filter { it.id != current?.id }.forEach { folder ->
-                    add("Mover a ${folder.name}" to { actions.onMoveToFolder(app, folder.id) })
-                }
-                if (current != null) add("Sacar de ${current.name}" to { actions.onMoveToFolder(app, null) })
-            },
-            onDismiss = { menu = false },
+    when (dialog) {
+        AppDialog.None -> {}
+        AppDialog.Actions -> {
+            val current = Folders.folderOf(actions.folders, app.key)
+            // Una consulta al sistema: una vez por menú, no en cada fila.
+            val removable = remember(app) { actions.canUninstall(app) }
+            val uninstall: () -> Unit = {
+                if (actions.confirmsUninstall) dialog = AppDialog.ConfirmUninstall else actions.onUninstall(app)
+            }
+            ActionsDialog(
+                title = app.label,
+                actions = buildList {
+                    add((if (favorite) "Sacar de Inicio" else "Poner en Inicio") to { actions.onToggleFavorite(app) })
+                    // Las carpetas, en un segundo diálogo: con varias, el menú se llenaba.
+                    if (actions.folders.any { it.id != current?.id }) {
+                        add("Mover a una carpeta" to { dialog = AppDialog.ChooseFolder })
+                    }
+                    if (current != null) add("Sacar de ${current.name}" to { actions.onMoveToFolder(app, null) })
+                    val hide = if (hidden) "Mostrar en la lista" else "Ocultar de la lista"
+                    add(hide to { actions.onToggleHidden(app) })
+                    add("Información de la app" to { actions.onAppInfo(app) })
+                    if (removable) add("Desinstalar" to uninstall)
+                },
+                onDismiss = { dialog = AppDialog.None },
+            )
+        }
+        AppDialog.ChooseFolder -> {
+            val current = Folders.folderOf(actions.folders, app.key)
+            ActionsDialog(
+                title = "Mover a una carpeta",
+                actions = actions.folders.filter { it.id != current?.id }.map { folder ->
+                    folder.name to { actions.onMoveToFolder(app, folder.id) }
+                },
+                onDismiss = { dialog = AppDialog.None },
+            )
+        }
+        AppDialog.ConfirmUninstall -> ConfirmDialog(
+            title = "¿Desinstalar ${app.label}?",
+            text = "Se borran sus datos.",
+            confirm = "Desinstalar",
+            onConfirm = { actions.onUninstall(app) },
+            onDismiss = { dialog = AppDialog.None },
         )
     }
 }
+
+/** El diálogo abierto de una app: de a uno por vez. */
+private enum class AppDialog { None, Actions, ChooseFolder, ConfirmUninstall }

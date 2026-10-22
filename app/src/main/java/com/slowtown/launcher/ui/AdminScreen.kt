@@ -25,6 +25,7 @@ fun AdminScreen(
     onChooseApps: () -> Unit,
     onSites: () -> Unit,
     onChooseWidget: () -> Unit,
+    onHomeLook: () -> Unit,
     onFolders: () -> Unit,
     onBedtime: () -> Unit,
     onNotifications: () -> Unit,
@@ -64,6 +65,7 @@ fun AdminScreen(
         Button(onClick = onChooseApps, modifier = wide) { Text("Elegir las apps permitidas") }
         OutlinedButton(onClick = onSites, modifier = wide) { Text("Páginas bloqueadas") }
         OutlinedButton(onClick = onChooseWidget, modifier = wide) { Text("Elegir el widget de Inicio") }
+        OutlinedButton(onClick = onHomeLook, modifier = wide) { Text("Cómo se ve Inicio") }
         OutlinedButton(onClick = onFolders, modifier = wide) { Text("Carpetas") }
         OutlinedButton(onClick = onBedtime, modifier = wide) { Text("Bedtime") }
         OutlinedButton(onClick = onNotifications, modifier = wide) { Text("Notificaciones") }

@@ -8,9 +8,11 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
 
 ## Qué hace
 
-- **Inicio en texto:** la hora, el tiempo de pantalla del día, las apps que
-  elegiste y tus hábitos. Deslizando para arriba, todas las apps, con carpetas
-  y buscador.
+- **Inicio en texto:** la hora (una sola: la de la barra se esconde), el
+  tiempo de pantalla del día, las apps que elegiste y tus hábitos, del tamaño
+  que quieras. Deslizando para arriba,
+  todas las apps, con carpetas, buscador y apps ocultas que sólo aparecen al
+  buscarlas.
 - **Slowtown activo:** con Device Owner y lock task sólo se abren las apps
   permitidas. No hay Recientes ni ajustes rápidos, e Inicio es siempre
   Slowtown. La configuración pide una contraseña larga.

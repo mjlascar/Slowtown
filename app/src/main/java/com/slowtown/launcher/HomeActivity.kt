@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -26,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -60,6 +62,8 @@ import com.slowtown.launcher.ui.FoldersScreen
 import com.slowtown.launcher.ui.HabitsPickerScreen
 import com.slowtown.launcher.ui.HabitsScreen
 import com.slowtown.launcher.ui.HabitsWidget
+import com.slowtown.launcher.ui.HomeLook
+import com.slowtown.launcher.ui.HomeLookScreen
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.SitesScreen
 import com.slowtown.launcher.ui.SlowtownTheme
@@ -91,7 +95,7 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker, Bedtime, Notifications }
+    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker, Bedtime, Notifications, HomeLook }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -112,9 +116,18 @@ class HomeActivity : ComponentActivity() {
     private var notice by mutableStateOf<String?>(null)
     private var freeInfo by mutableStateOf<FreeSessionInfo?>(null)
 
+    /** Las ocultas de la lista de todas las apps: aparecen sólo buscándolas. */
+    private var hidden by mutableStateOf<Set<String>>(emptySet())
+
+    /** Lo que se abre al poner la contraseña, en vez de la administración: la información de una app. */
+    private var adminTarget: Intent? = null
+
     /** Si ahora manda la noche (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
     private var night by mutableStateOf(false)
     private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
+
+    /** Cómo se ve Inicio: el tamaño y si va la hora grande. */
+    private var homeLook by mutableStateOf(HomeLook(100, false))
 
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
@@ -138,6 +151,15 @@ class HomeActivity : ComponentActivity() {
         if (it.resultCode == RESULT_OK) configureOrKeepWidget(pendingWidgetId) else discardPendingWidget()
     }
 
+    /**
+     * Sin Device Owner, desinstalar es el diálogo de Android. Abierto esperando
+     * un resultado, Android vuelve recién cuando terminó de desinstalar: la
+     * lista ya no la tiene.
+     */
+    private val uninstallDialog = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        refreshApps()
+    }
+
     /** Apagar la pantalla termina la sesión de administración. */
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = endAdminSession()
@@ -155,6 +177,16 @@ class HomeActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         prefs = Prefs(this)
+        homeLook = HomeLook(prefs.homeScalePercent, prefs.showClock)
+        // Con Inicio al frente y la hora grande, la de la barra se esconde; al
+        // ir a otra pantalla de Slowtown, vuelve. Escribir el ajuste es una
+        // llamada corta: en el hilo principal, para que no se crucen.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                snapshotFlow { screen == Screen.Home && homeLook.showClock }
+                    .collect { StatusBarClock.setHidden(this@HomeActivity, it) }
+            }
+        }
         widgetHost = AppWidgetHost(applicationContext, WIDGET_HOST_ID)
         pendingWidgetId = savedInstanceState?.getInt(KEY_PENDING_WIDGET, AppWidgetManager.INVALID_APPWIDGET_ID)
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
@@ -180,7 +212,7 @@ class HomeActivity : ComponentActivity() {
                 Screen.Folder -> screen = Screen.Drawer
                 Screen.HabitsPicker -> screen = Screen.Habits
                 Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders, Screen.Bedtime,
-                Screen.Notifications ->
+                Screen.Notifications, Screen.HomeLook ->
                     screen = Screen.Admin
                 else -> goHome()
             }
@@ -228,8 +260,14 @@ class HomeActivity : ComponentActivity() {
             val appActions = AppActions(
                 folders = folders,
                 favorites = favorites,
+                hidden = hidden,
+                confirmsUninstall = status.deviceOwner,
                 onToggleFavorite = ::toggleFavorite,
                 onMoveToFolder = ::moveToFolder,
+                onToggleHidden = ::toggleHidden,
+                onAppInfo = ::openAppInfo,
+                canUninstall = { AppCatalog.canUninstall(this@HomeActivity, it.packageName) },
+                onUninstall = ::uninstall,
             )
             SlowtownTheme {
                 when (screen) {
@@ -240,6 +278,8 @@ class HomeActivity : ComponentActivity() {
                         notice = notice,
                         onBurst = if (night) ::startBurst else null,
                         screenTime = screenTime,
+                        showClock = homeLook.showClock,
+                        scalePercent = homeLook.scalePercent,
                         widget = if (showHabits) {
                             @Composable {
                                 HabitsWidget(
@@ -253,6 +293,7 @@ class HomeActivity : ComponentActivity() {
                         } else {
                             widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } }
                         },
+                        scaleWidget = showHabits,
                         onOpen = ::launch,
                         onAdmin = ::askForAdmin,
                         onDrawer = { screen = Screen.Drawer },
@@ -283,13 +324,13 @@ class HomeActivity : ComponentActivity() {
                         }
                     }
                     Screen.Unlock -> UnlockScreen(
-                        onUnlocked = { showIfStarted(Screen.Admin) },
+                        onUnlocked = ::unlocked,
                         onBack = ::goHome,
                         freeSession = freeInfo,
                         onFreeSession = ::startFreeSession,
                     )
                     Screen.CreatePassword -> CreatePasswordScreen(
-                        onCreated = { showIfStarted(Screen.Admin) },
+                        onCreated = ::unlocked,
                         onBack = ::goHome,
                     )
                     Screen.Admin -> AdminScreen(
@@ -300,6 +341,7 @@ class HomeActivity : ComponentActivity() {
                             screen = Screen.Sites
                         },
                         onChooseWidget = ::openWidgetPicker,
+                        onHomeLook = { screen = Screen.HomeLook },
                         onFolders = { screen = Screen.Folders },
                         onBedtime = {
                             bedtimeSettings = BedtimeSettings(
@@ -333,6 +375,11 @@ class HomeActivity : ComponentActivity() {
                     Screen.Bedtime -> BedtimeScreen(
                         settings = bedtimeSettings,
                         onChange = ::saveBedtime,
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.HomeLook -> HomeLookScreen(
+                        look = homeLook,
+                        onChange = ::saveHomeLook,
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Sites -> SitesScreen(
@@ -382,6 +429,13 @@ class HomeActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         widgetHost.startListening()
+    }
+
+    // La hora de la barra vuelve apenas Inicio deja de estar al frente: otra
+    // app, la pantalla apagada, un cuelgue que reinicia. Ver StatusBarClock.
+    override fun onPause() {
+        StatusBarClock.setHidden(this, false)
+        super.onPause()
     }
 
     override fun onDestroy() {
@@ -452,6 +506,7 @@ class HomeActivity : ComponentActivity() {
     }
 
     private fun askForAdmin() {
+        adminTarget = null
         screen = if (Password.isSet(this)) Screen.Unlock else Screen.CreatePassword
     }
 
@@ -461,6 +516,13 @@ class HomeActivity : ComponentActivity() {
      */
     private fun showIfStarted(next: Screen) {
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) screen = next
+    }
+
+    /** Con la contraseña puesta: la administración, o lo que se pidió con ella ([adminTarget]). */
+    private fun unlocked() {
+        val target = adminTarget ?: return showIfStarted(Screen.Admin)
+        adminTarget = null
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startAdminSession(target)
     }
 
     private fun launch(app: LaunchableApp) {
@@ -489,6 +551,52 @@ class HomeActivity : ComponentActivity() {
         val current = prefs.favorites
         prefs.favorites = if (app.key in current) current - app.key else current + app.key
         refreshApps()
+    }
+
+    /** Ocultar de la lista tampoco: buscándola aparece igual, y sigue andando de fondo. */
+    private fun toggleHidden(app: LaunchableApp) {
+        val current = prefs.hiddenApps
+        val updated = if (app.key in current) current - app.key else current + app.key
+        prefs.hiddenApps = updated
+        hidden = updated
+    }
+
+    /**
+     * La información de una app es una pantalla de Ajustes: con Slowtown
+     * activo, con la contraseña y en una sesión de administración. Con Slowtown
+     * en pausa, o con «Habilitar todo», que ya abre Ajustes, directo.
+     */
+    private fun openAppInfo(app: LaunchableApp) {
+        val info = AppCatalog.infoIntent(app.packageName)
+        if (isLocked() && !FreeSession.isActive(this)) {
+            askForAdmin()
+            adminTarget = info
+            return
+        }
+        runCatching { startActivity(info) }
+            .onFailure { Log.w(TAG, "No pude abrir la información de ${app.packageName}", it) }
+    }
+
+    /**
+     * Desinstalar no pide contraseña: sacar una app no afloja nada. Sin Device
+     * Owner pregunta Android, con su diálogo. Con Device Owner ya preguntó
+     * Slowtown, y desinstala sin el diálogo de Android, que con Slowtown activo
+     * quedaría bloqueado: el instalador no está en la lista.
+     */
+    private fun uninstall(app: LaunchableApp) {
+        if (!Policies.isDeviceOwner(this)) {
+            runCatching { uninstallDialog.launch(AppCatalog.uninstallIntent(app.packageName)) }
+                .onFailure { Log.w(TAG, "No pude abrir el diálogo para desinstalar ${app.packageName}", it) }
+            return
+        }
+        AppCatalog.uninstall(this, app.packageName) { ok ->
+            // Falla, por ejemplo, si es administradora del teléfono.
+            if (!ok) {
+                Toast.makeText(applicationContext, "No se pudo desinstalar ${app.label}.", Toast.LENGTH_LONG).show()
+            }
+            refreshApps()
+            refreshWidget()
+        }
     }
 
     private fun shouldBeClosed(): Boolean =
@@ -584,6 +692,13 @@ class HomeActivity : ComponentActivity() {
             refreshStatus()
             refreshApps()
         }
+    }
+
+    /** Cómo se ve Inicio: no hay nada que rearmar, Inicio lo toma al volver. */
+    private fun saveHomeLook(look: HomeLook) {
+        prefs.homeScalePercent = look.scalePercent
+        prefs.showClock = look.showClock
+        homeLook = look
     }
 
     private fun startFreeSession() {
@@ -838,10 +953,12 @@ class HomeActivity : ComponentActivity() {
             permittable = AppCatalog.permittable(all)
             openable = visible
             favorites = chosen
+            // Ocultar es sólo de la lista de todas: Inicio las muestra igual.
+            hidden = prefs.hiddenApps
             folders = prefs.folders
             homeApps = if (nightNow) visible else visible.filter { it.key in chosen }
             homeHint = if (active && visible.isEmpty()) {
-                "Mantené apretada la hora para elegir las apps permitidas."
+                "Mantené apretada ${if (prefs.showClock) "la hora" else "la fecha"} para elegir las apps permitidas."
             } else {
                 "Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá."
             }

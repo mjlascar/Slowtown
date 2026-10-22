@@ -23,6 +23,18 @@
          aproximada. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- «Desinstalar» en la lista de todas las apps. Sin Device Owner abre el
+         diálogo de Android, que sin este permiso no se muestra; con Device
+         Owner, Slowtown desinstala sin el diálogo (ya preguntó él). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <!-- Para esconder la hora de la barra en Inicio (StatusBarClock): Android
+         no lo deja hacer de otra manera. No se da al instalar: lo da
+         provisionar.sh por adb, y sin él la barra queda como está. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:name=".SlowtownApp"
         android:allowBackup="false"

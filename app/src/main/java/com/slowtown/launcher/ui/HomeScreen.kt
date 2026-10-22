@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
 import kotlinx.coroutines.delay
@@ -39,9 +42,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Hora, fecha, las apps de Inicio en texto y, abajo de todo, el widget si hay uno.
- * Manteniendo apretada la hora se abre la administración; deslizando para
- * arriba, todas las apps.
+ * La fecha (y la hora grande, si se eligió), las apps de Inicio en texto y,
+ * abajo de todo, el widget si hay uno. Manteniendo apretada la cabecera se
+ * abre la administración; deslizando para arriba, todas las apps.
  *
  * @param apps las apps de Inicio, o null mientras se cargan (para no mostrar
  *   el cartel de ayuda un instante en cada vuelta a Inicio).
@@ -61,100 +64,122 @@ fun HomeScreen(
     onBurst: (() -> Unit)?,
     /** El tiempo de pantalla de hoy, corto («1 h 5 min»), o null sin acceso a los datos de uso. */
     screenTime: String?,
+    /** Si va la hora grande arriba. De entrada no: la barra de arriba ya la muestra. */
+    showClock: Boolean,
+    /** El tamaño de todo Inicio, en por ciento (de 70 a 100). */
+    scalePercent: Int,
     widget: (@Composable () -> Unit)?,
+    /**
+     * Si [widget] se achica con el resto: los hábitos sí, que son de Slowtown.
+     * El de otra app no: lo dibuja su app con la densidad de Android, y con la
+     * de Inicio se le avisaría un tamaño que no es.
+     */
+    scaleWidget: Boolean,
     onOpen: (LaunchableApp) -> Unit,
     onAdmin: () -> Unit,
     onDrawer: () -> Unit,
 ) {
     var dragged by remember { mutableFloatStateOf(0f) }
-    val threshold = with(LocalDensity.current) { 80.dp.toPx() }
+    val density = LocalDensity.current
+    // El gesto, en medidas de verdad: el dedo no se achica con Inicio.
+    val threshold = with(density) { 80.dp.toPx() }
+    // Todo Inicio de una vez (letras, márgenes, hábitos): con una densidad
+    // menor, cada dp y cada sp de adentro ocupa menos. La lista de todas las
+    // apps y la administración no pasan por acá.
+    val scaled = remember(density, scalePercent) {
+        if (scalePercent == 100) density else Density(density.density * scalePercent / 100f, density.fontScale)
+    }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { dragged = 0f },
-                    onDragEnd = { if (dragged < -threshold) onDrawer() },
-                ) { _, amount -> dragged += amount }
+    CompositionLocalProvider(LocalDensity provides scaled) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = { dragged = 0f },
+                        onDragEnd = { if (dragged < -threshold) onDrawer() },
+                    ) { _, amount -> dragged += amount }
+                }
+                .safeDrawingPadding()
+                .padding(horizontal = 28.dp, vertical = 32.dp),
+        ) {
+            HomeHeader(showClock = showClock, screenTime = screenTime, onLongPress = onAdmin)
+            if (notice != null) {
+                Spacer(Modifier.height(12.dp))
+                Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
             }
-            .safeDrawingPadding()
-            .padding(horizontal = 28.dp, vertical = 32.dp),
-    ) {
-        Clock(onLongPress = onAdmin, screenTime = screenTime)
-        if (notice != null) {
-            Spacer(Modifier.height(12.dp))
-            Text(notice, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-        }
-        if (onBurst != null) {
-            // La ráfaga no está siempre a la vista (lo pidió Marcos): hay que
-            // tocar el aviso. Al irse de Inicio o al terminar la noche, se esconde.
-            var burstShown by remember { mutableStateOf(false) }
-            Spacer(Modifier.height(12.dp))
+            if (onBurst != null) {
+                // La ráfaga no está siempre a la vista (lo pidió Marcos): hay que
+                // tocar el aviso. Al irse de Inicio o al terminar la noche, se esconde.
+                var burstShown by remember { mutableStateOf(false) }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    BEDTIME_NOTICE,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .clickable { burstShown = !burstShown }
+                        .padding(vertical = 4.dp),
+                )
+                if (burstShown) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
+                }
+            }
+            if (safeMode) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Slowtown se colgó varias veces seguidas y se pausó solo. " +
+                        "Mantené apretada ${if (showClock) "la hora" else "la fecha"} para revisarlo.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+            Spacer(Modifier.height(40.dp))
+            if (apps != null && apps.isEmpty()) {
+                Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+            }
+            // Una columna común y no una lista con scroll: así deslizar para arriba
+            // en cualquier lado abre todas las apps, sin pelearse con el scroll.
+            apps.orEmpty().forEach { app ->
+                Text(
+                    app.label,
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpen(app) }
+                        .padding(vertical = 12.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
             Text(
-                BEDTIME_NOTICE,
+                "↑ todas las apps",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
-                    .clickable { burstShown = !burstShown }
-                    .padding(vertical = 4.dp),
+                    .align(Alignment.CenterHorizontally)
+                    .clickable(onClick = onDrawer)
+                    .padding(12.dp),
             )
-            if (burstShown) {
+            // El widget va pegado al borde de abajo (lo pidió Marcos): arriba
+            // quedan la fecha y las apps, como en un teléfono de teclas.
+            if (widget != null) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
+                if (scaleWidget) widget() else CompositionLocalProvider(LocalDensity provides density, content = widget)
             }
-        }
-        if (safeMode) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Slowtown se colgó varias veces seguidas y se pausó solo. " +
-                    "Mantené apretada la hora para revisarlo.",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
-        Spacer(Modifier.height(40.dp))
-        if (apps != null && apps.isEmpty()) {
-            Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-        }
-        // Una columna común y no una lista con scroll: así deslizar para arriba
-        // en cualquier lado abre todas las apps, sin pelearse con el scroll.
-        apps.orEmpty().forEach { app ->
-            Text(
-                app.label,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpen(app) }
-                    .padding(vertical = 12.dp),
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        Text(
-            "↑ todas las apps",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .clickable(onClick = onDrawer)
-                .padding(12.dp),
-        )
-        // El widget va pegado al borde de abajo (lo pidió Marcos): arriba
-        // queda la hora y las apps, como en un teléfono de teclas.
-        if (widget != null) {
-            Spacer(Modifier.height(8.dp))
-            widget()
         }
     }
 }
 
 /**
- * La hora y la fecha. Arriba a la derecha, el tiempo de pantalla de hoy, sin
- * explicación (lo pidió Marcos: menos texto, y la cabecera más pareja); la
- * explicación queda para quien lee la pantalla en voz alta.
+ * La cabecera: la hora grande, si se eligió verla, y la fecha. Arriba a la
+ * derecha, el tiempo de pantalla de hoy, sin explicación (lo pidió Marcos:
+ * menos texto, y la cabecera más pareja); la explicación queda para quien lee
+ * la pantalla en voz alta. Se mantiene apretada entera para abrir la
+ * administración: sin la hora, es la fecha.
  */
 @Composable
-private fun Clock(onLongPress: () -> Unit, screenTime: String?) {
+internal fun HomeHeader(showClock: Boolean, screenTime: String?, onLongPress: () -> Unit) {
     val now by produceState(LocalDateTime.now()) {
         while (true) {
             value = LocalDateTime.now()
@@ -162,28 +187,49 @@ private fun Clock(onLongPress: () -> Unit, screenTime: String?) {
             delay(60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
-    Column(Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) }) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Text(now.format(HOUR), style = MaterialTheme.typography.displayLarge)
-            Spacer(Modifier.weight(1f))
-            if (screenTime != null) {
+    val date = now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) },
+    ) {
+        if (showClock) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Text(now.format(HOUR), style = MaterialTheme.typography.displayLarge)
+                Spacer(Modifier.weight(1f))
+                // A la altura de lo alto de los números de la hora.
+                if (screenTime != null) ScreenTimeText(screenTime, Modifier.padding(top = 10.dp))
+            }
+            Text(date, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            // Sin la hora, la fecha encabeza y el tiempo de pantalla va en su renglón.
+            Row(Modifier.fillMaxWidth()) {
                 Text(
-                    screenTime,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    date,
                     style = MaterialTheme.typography.titleLarge,
-                    // A la altura de lo alto de los números de la hora.
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(top = 10.dp)
-                        .semantics { contentDescription = "Hoy: $screenTime de pantalla" },
+                        .weight(1f)
+                        .alignByBaseline(),
                 )
+                if (screenTime != null) {
+                    Spacer(Modifier.width(12.dp))
+                    ScreenTimeText(screenTime, Modifier.alignByBaseline())
+                }
             }
         }
-        Text(
-            now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) },
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
+}
+
+/** El tiempo de pantalla de hoy, sólo el número: la explicación, para el lector de pantalla. */
+@Composable
+private fun ScreenTimeText(screenTime: String, modifier: Modifier = Modifier) {
+    Text(
+        screenTime,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = modifier.semantics { contentDescription = "Hoy: $screenTime de pantalla" },
+    )
 }
 
 private val SPANISH = Locale.forLanguageTag("es-AR")

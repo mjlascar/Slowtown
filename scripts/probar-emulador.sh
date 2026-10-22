@@ -6,28 +6,32 @@
 #
 # En orden: instala y provisiona, activa Slowtown con cuatro apps, intenta
 # escaparse, abre una app permitida, mira el tiempo de pantalla de Inicio
-# (sube con un rato en el Reloj, y sin el acceso al uso no está), atiende una
-# llamada, recibe un SMS, busca y abre una app desde la lista de todas, saca
-# y vuelve a poner una app en Inicio, marca hábitos (los botones de hoy, un
-# día en el resumen y el fuego de la racha), cambia el pie de Inicio entre el
-# widget del Reloj y los hábitos, arma y borra una carpeta, usa las dos veces
-# de «Habilitar todo», prueba el nivel 2, prende Bedtime (la noche se elige
-# con las ruedas, y sin la de hoy en «Qué noches» no rige; de noche sólo el
-# Reloj, una ráfaga de 5 minutos sin contraseña, su final y la alarma del
-# final de la noche, y apagada vuelve todo), prueba que la noche no corte
-# llamadas (una del teléfono en plena ráfaga, la pantalla apagada o
+# (sube con un rato en el Reloj, y sin el acceso al uso no está), cambia cómo
+# se ve Inicio (al 80 % se achica, sin la hora grande encabeza la fecha, y con
+# ella la hora de la barra de arriba se esconde mientras Inicio está al
+# frente), atiende una llamada, recibe un SMS, busca y abre una app desde la
+# lista de todas, saca y vuelve a poner una app en Inicio, marca hábitos (los
+# botones de hoy, un día en el resumen y el fuego de la racha), cambia el pie
+# de Inicio entre el widget del Reloj y los hábitos, arma y borra una carpeta,
+# usa las dos veces de «Habilitar todo», prueba el nivel 2, prende Bedtime (la
+# noche se elige con las ruedas, y sin la de hoy en «Qué noches» no rige; de
+# noche sólo el Reloj, una ráfaga de 5 minutos sin contraseña, su final y la
+# alarma del final de la noche, y apagada vuelve todo), prueba que la noche no
+# corte llamadas (una del teléfono en plena ráfaga, la pantalla apagada o
 # bloqueada, y una por internet que abre su pantalla con el teléfono
 # apagado), prueba las notificaciones por oleadas con «Sólo los grupos» (los
 # chats de grupo esperan la entrega y vuelven solos a su hora, los de a dos
-# llegan en el momento), abre Ajustes desde la administración, reinicia (y
-# los hábitos siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes
-# y usa la salida por cable.
+# llegan en el momento), usa el menú de una app en la lista de todas (la
+# oculta y la vuelve a mostrar, abre su información con la contraseña y la
+# desinstala), abre Ajustes desde la administración, reinicia (y los hábitos
+# siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes y usa la
+# salida por cable.
 #
 # Las llamadas por internet y las oleadas se prueban con «Avisos de prueba»
 # (scripts/prueba-avisos/, se arma con javac, d8 y aapt2), que imita a
 # WhatsApp: los chats en un solo grupo con su resumen, y una llamada de
-# pantalla completa. Se instala para los pasos 9e y 9f y se desinstala al
-# terminarlos.
+# pantalla completa. Se instala para los pasos 9e y 9f, y en el 9g se la
+# desinstala con el menú de la lista de todas.
 #
 # El nivel 2: el navegador del emulador (WebView Browser Tester) pausado por
 # el Device Owner, sin abrirse, sin aparecer en ninguna lista y sin poder
@@ -90,11 +94,16 @@ ATENDER_XY="${SLOWTOWN_ATENDER_XY:-542,459}"
 # Copiados de app/src/main/java/com/slowtown/launcher/ui/ y de HomeActivity.kt
 # (los carteles de Inicio sin apps). Si cambia la redacción en la app, se
 # cambia acá y en ningún otro lado.
-TXT_HORA_RE='^[0-9]{1,2}:[0-9]{2}$'          # la hora de Inicio, que se mantiene apretada
+TXT_HORA_RE='^[0-9]{1,2}:[0-9]{2}$'          # la hora grande de Inicio: viene prendida, y se apaga en «Cómo se ve Inicio»
+# La fecha está siempre, con la hora grande o sin ella, y es parte de la
+# cabecera que se mantiene apretada para entrar a la administración.
 TXT_FECHA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+$'   # «Lunes 19 de octubre»
 TXT_INICIO_SIN_APPS='Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá.'
-TXT_INICIO_SIN_PERMITIDAS='Mantené apretada la hora para elegir las apps permitidas.'   # activo y sin permitidas
+# Activo y sin permitidas. Nombra lo que se ve arriba: la hora grande o, sin ella, la fecha.
+TXT_INICIO_SIN_PERMITIDAS_RE='^Mantené apretada la (hora|fecha) para elegir las apps permitidas\.$'
 TXT_INICIO_FALLOS='se colgó varias veces seguidas y se pausó solo'   # un pedazo del aviso en Inicio
+TXT_REVISAR_HORA='Mantené apretada la hora para revisarlo.'     # el final de ese aviso, con la hora grande...
+TXT_REVISAR_FECHA='Mantené apretada la fecha para revisarlo.'   # ...y sin ella
 TXT_TODAS='↑ todas las apps'                 # al pie de Inicio: abre la lista de todas las apps
 TXT_CREAR_CLAVE='Elegí una contraseña'
 TXT_GUARDAR='Guardar'
@@ -111,11 +120,19 @@ TXT_PAUSAR='Pausar Slowtown'
 TXT_IR_AJUSTES='Ir a Ajustes'
 TXT_APPS_TITULO='Apps permitidas'
 TXT_APPS_PISTA='Con Slowtown activo, las que no marques no se abren. Las llamadas y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, deslizando para arriba en Inicio.'
+# La flecha de arriba de cada pantalla de la administración: no tiene texto,
+# y «Volver» es su descripción (ui la compara igual que un texto).
 TXT_VOLVER='Volver'
 TXT_LISTO_RE='^Listo \(([0-9]+)\)$'
-TXT_EN_INICIO='en Inicio'                    # la nota de las apps de Inicio en la lista de todas
+TXT_EN_INICIO='en Inicio'                    # la nota de las apps de Inicio en la lista de todas, siempre al final
+TXT_OCULTA='oculta'                          # la de las ocultas, que aparecen sólo buscándolas
 TXT_PONER_EN_INICIO='Poner en Inicio'        # el diálogo de una app mantenida apretada en esa lista
 TXT_SACAR_DE_INICIO='Sacar de Inicio'
+TXT_OCULTAR='Ocultar de la lista'
+TXT_MOSTRAR='Mostrar en la lista'
+TXT_INFO_APP='Información de la app'         # con Slowtown activo, pide la contraseña: es de Ajustes
+TXT_DESINSTALAR=Desinstalar                  # la opción y el botón de su pregunta, «¿Desinstalar Clock?»
+TXT_SE_BORRAN='Se borran sus datos.'         # el texto de esa pregunta
 TXT_CANCELAR='Cancelar'
 TXT_WIDGET_TITULO='Widget de Inicio'
 TXT_SACAR_WIDGET='Sacar el widget'
@@ -123,7 +140,9 @@ TXT_CARPETAS='Carpetas'                      # en Administración
 TXT_NUEVA_CARPETA='Nueva carpeta'
 TXT_CREAR='Crear'
 TXT_BORRAR='Borrar'
-TXT_MOVER_A='Mover a '                       # el diálogo de una app: «Mover a Utilitario»
+# En el diálogo de una app, y el título del segundo, que lista las carpetas
+# con el nombre como se escribió («Utilitario»).
+TXT_MOVER_A_CARPETA='Mover a una carpeta'
 TXT_HABILITAR='Habilitar todo por 5 minutos' # en la pantalla de la contraseña, sin contraseña
 TXT_YA_USASTE='Ya usaste las 2 de estas 12 horas'
 TXT_HABILITADO='Todo habilitado hasta las'   # el aviso de Inicio mientras dura
@@ -137,10 +156,17 @@ TXT_YA_FIJA='Ésa ya está bloqueada siempre.'
 TXT_SOLTAR='Dejar de ser Device Owner'       # el botón que ya no está en la administración
 TXT_SOLO_CABLE='sólo por cable'              # un pedazo de lo que dice ahora, al pie de la administración
 TXT_SIN_COINCIDENCIAS='No hay ninguna app con ese nombre.'   # el buscador de la lista de todas
-# El tiempo de pantalla, con acceso al uso: arriba a la derecha de la hora dice
-# sólo «1 h 5 min» (o «0 min»), y la descripción, «Hoy: 1 h 5 min de pantalla».
+# El tiempo de pantalla, con acceso al uso: arriba a la derecha, en el renglón
+# de la hora grande (o, sin ella, en el de la fecha), dice sólo «1 h 5 min» (o
+# «0 min»), y la descripción, «Hoy: 1 h 5 min de pantalla».
 TXT_PANTALLA_RE='^Hoy: (.+) de pantalla$'
 TXT_PANTALLA_CORTO_RE='^([0-9]+ h( [0-9]+ min)?|[0-9]+ min)$'
+TXT_COMO_SE_VE='Cómo se ve Inicio'           # el botón de la administración y el título de su pantalla
+TXT_HORA_GRANDE='La hora grande'             # su interruptor, que viene prendido
+TXT_VISTA_PREVIA='Vista previa de Inicio'    # la descripción de su muestra (lo de adentro no se lee)
+TAMANIOS=(70 80 90 100)                      # sus botones de tamaño, que dicen «80 %»
+TAMANIO_ENTRADA=100                          # el de entrada
+TAMANIO_CHICO=80                             # el que se prueba
 TXT_HOY_MEDITAR='Meditación de hoy'          # los botones de hoy de los hábitos, por su descripción
 TXT_HOY_EJERCICIO='Ejercicio de hoy'
 TXT_FILA_HABITO=', últimos 7 días: '         # «Meditar, últimos 7 días: 1 de 2. Ver el resumen»
@@ -220,6 +246,7 @@ BUSQUEDA_VETADA=newpipe
 # sin eso no recibe nada.
 AVISOS=com.slowtown.prueba.avisos
 AVISOS_NOMBRE='Avisos de prueba'
+BUSQUEDA_AVISOS=avis                         # un pedazo de su nombre: buscándolo aparece aunque esté oculta
 AVISOS_PANTALLA=$AVISOS/.Principal           # la de la llamada: la abre la pantalla completa
 AVISOS_ORDEN="am broadcast -n $AVISOS/.Publicar -f 0x20"
 TXT_ATENDER=Answer                           # el aviso de llamada (en pantalla dice ANSWER)
@@ -560,6 +587,10 @@ c_pausada() { echo "dumpsys package $1 | grep -q 'User 0: .*suspended=true'"; }
 # instalado: con Ajustes adentro («u0:[..., com.android.settings, ...]»), hay sesión.
 c_sesion() { echo "dumpsys activity activities | grep -q 'u0:\[.*com\.android\.settings[],]'"; }
 c_en_lock_task() { echo "dumpsys activity activities | grep -q 'u0:\[.*${1//./\\.}[],]'"; }   # ese paquete en la lista de lock task (mLockTaskPackages)
+# La hora de la barra de arriba, escondida: Slowtown suma «clock» a la lista
+# de íconos escondidos (icon_blacklist, un ajuste seguro) mientras Inicio está
+# al frente con la hora grande, y la saca al irse.
+c_barra_sin_hora() { echo "settings get secure icon_blacklist | grep -qE '(^|,)clock(,|\$)'"; }
 
 foco() {      # la ventana con foco, p. ej. Window{1a2b u0 com.slowtown.launcher/...HomeActivity}
   local out
@@ -838,8 +869,8 @@ tocar_celda() {   # tocar_celda REGEX FAMILIA: toca, donde se dibuja, un día de
 }
 tocar_en_inicio() {   # tocar_en_inicio TIPO CONSULTA [MS]: toca (o mantiene MS) algo de Inicio
   # Un aviso del sistema (el del SMS, una llamada perdida) se dibuja encima de
-  # la hora y se llevaría el toque: se espera a que se vaya solo. Sirve igual
-  # en la lista de todas las apps, que es la misma ventana.
+  # la cabecera y se llevaría el toque: se espera a que se vaya solo. Sirve
+  # igual en la lista de todas las apps, que es la misma ventana.
   local tipo=$1 consulta=$2 ms=${3:-} fin=$((SECONDS + 25)) xy='' r x y
   while :; do
     if volcar_ui --windows; then
@@ -879,9 +910,8 @@ afirmar_en_inicio() {   # afirmar_en_inicio QUÉ [ESTADO]: foco en Slowtown y lo
 
 escribir_clave() { adb_t 20 shell input text "$CLAVE" >/dev/null 2>&1; }
 
-entrar_admin() {   # desde Inicio hasta «Administración»: mantener apretada la hora y la contraseña
+poner_clave() {   # cuando Slowtown pide la contraseña (o, la primera vez, que se elija): la escribe y sigue
   local fin pantalla=''
-  tocar_en_inicio regex "$TXT_HORA_RE" 1500 || { nota "no encuentro la hora en Inicio"; return 1; }
   fin=$((SECONDS + 15))
   while (( SECONDS < fin )); do
     if volcar_ui; then
@@ -901,10 +931,17 @@ entrar_admin() {   # desde Inicio hasta «Administración»: mantener apretada l
         tocar_desplazando texto "$TXT_ENTRAR" || return 1
       ;;
     *)
-      nota "mantener apretada la hora no abrió la contraseña"
+      nota "no apareció la pantalla de la contraseña"
       return 1
       ;;
   esac
+}
+
+entrar_admin() {   # desde Inicio hasta «Administración»: mantener apretada la fecha y la contraseña
+  # Se mantiene apretada la cabecera entera: la fecha está con la hora grande
+  # y sin ella.
+  tocar_en_inicio regex "$TXT_FECHA_RE" 1500 || { nota "no encuentro la fecha en Inicio"; return 1; }
+  poner_clave || return 1
   # La contraseña se deriva con PBKDF2 a propósito lento: puede tardar.
   esperar_ui 20 texto "$TXT_ADMIN" && return 0
   if ui texto "$TXT_CLAVE_MAL" >/dev/null || ui contiene "$TXT_CLAVE_ESPERA" >/dev/null; then
@@ -935,7 +972,7 @@ etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una po
   while IFS=$'\t' read -r x y arriba abajo t; do
     [[ -n $pie ]] && (( arriba >= pie )) && continue
     [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE || $t =~ $TXT_PANTALLA_CORTO_RE ]] && continue
-    [[ $t == "$TXT_INICIO_SIN_APPS" || $t == "$TXT_INICIO_SIN_PERMITIDAS" || $t == "$TXT_TODAS" ]] && continue
+    [[ $t == "$TXT_INICIO_SIN_APPS" || $t =~ $TXT_INICIO_SIN_PERMITIDAS_RE || $t == "$TXT_TODAS" ]] && continue
     [[ $t == "$TXT_ES_DE_NOCHE" || $t == "$TXT_USAR_5" ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
@@ -948,7 +985,7 @@ esperar_lista_inicio() {   # hasta que Inicio muestre sus apps o el cartel de ay
   local fin=$((SECONDS + 15))
   while (( SECONDS < fin )); do
     if volcar_ui && { [ -n "$(etiquetas_inicio)" ] || ui texto "$TXT_INICIO_SIN_APPS" >/dev/null ||
-      ui texto "$TXT_INICIO_SIN_PERMITIDAS" >/dev/null; }; then
+      ui regex "$TXT_INICIO_SIN_PERMITIDAS_RE" >/dev/null; }; then
       return 0
     fi
     sleep 0.5
@@ -987,14 +1024,15 @@ recorrer_selector() {
   VISTAS=()
   for vuelta in $(seq 1 20); do
     volcar_ui || return 1
-    # La franja de la lista: entre la pista de arriba y la fila de «Volver» y
-    # «Listo». Sólo se toca lo que está entero adentro: algo que asoma a medias
-    # podría caer sobre esos botones.
+    # La franja de la lista: entre la pista de arriba y «Listo (N)», al pie.
+    # Sólo se toca lo que está entero adentro: algo que asoma a medias podría
+    # caer sobre la pista o sobre «Listo». «Volver» no cuenta: es la flecha de
+    # arriba, en el renglón del título.
     lo=0
     hi=$ALTO
     while IFS=$'\t' read -r x y arriba abajo t; do
       if [[ $t == "$TXT_APPS_TITULO" || $t == "$TXT_APPS_PISTA" ]] && (( abajo > lo )); then lo=$abajo; fi
-      if [[ $t == "$TXT_VOLVER" || $t =~ $TXT_LISTO_RE ]] && (( arriba < hi )); then hi=$arriba; fi
+      if [[ $t =~ $TXT_LISTO_RE ]] && (( arriba < hi )); then hi=$arriba; fi
     done < <(ui textos)
     nuevas=0
     while IFS=$'\t' read -r x y arriba abajo t; do
@@ -1163,18 +1201,34 @@ abrir_cajon() {   # desde Inicio, con «↑ todas las apps», hasta la lista de 
 etiquetas_cajon() { ui filas | cut -f1; }   # las apps de la lista en el último volcado
 
 favoritas_en_cajon() {   # las que la lista marca «en Inicio» en el último volcado
-  # Buscando, la nota lleva antes la carpeta: «BILLETERAS · en Inicio».
+  # Buscando, la nota lleva antes la carpeta, y en las ocultas «oculta», pero
+  # «en Inicio» va siempre al final: «BILLETERAS · oculta · en Inicio».
   local nombre nota
   while IFS=$'\t' read -r nombre nota; do
     [[ $nota == *"$TXT_EN_INICIO" ]] && printf '%s\n' "$nombre"
   done < <(ui filas)
 }
+nota_en_cajon() { ui filas | awk -F'\t' -v a="$1" '$1 == a { print $2; exit }'; }   # nota_en_cajon APP: la nota de APP en el último volcado de la lista
 
 accion_en_cajon() {   # accion_en_cajon APP ACCIÓN: mantiene apretada APP en la lista y elige ACCIÓN
   tocar_en_inicio texto "$1" 1500 || return 1
   # El diálogo lleva de título el nombre de la app. Si no ofrece ACCIÓN, se
   # cierra con «Cancelar» para que no quede tapando la lista.
   if esperar_ui 10 texto "$2" && ui texto "$1" >/dev/null && tocar texto "$2"; then
+    return 0
+  fi
+  tocar texto "$TXT_CANCELAR"
+  return 1
+}
+
+mover_a_carpeta() {   # mover_a_carpeta APP CARPETA: mantiene apretada APP en la lista, «Mover a una carpeta» y CARPETA
+  # Las carpetas van en un segundo diálogo, sin el nombre de la app: su título
+  # es «Mover a una carpeta», y cada una va con el nombre como se escribió. Se
+  # busca con regex, que distingue mayúsculas: el «UTILITARIO» de la lista de
+  # abajo no calza.
+  accion_en_cajon "$1" "$TXT_MOVER_A_CARPETA" || return 1
+  if esperar_ui 10 regex "^$2\$" && ui texto "$TXT_MOVER_A_CARPETA" >/dev/null && ! ui texto "$1" >/dev/null &&
+    tocar regex "^$2\$"; then
     return 0
   fi
   tocar texto "$TXT_CANCELAR"
@@ -1399,13 +1453,16 @@ texto_pantalla() {   # el tiempo de pantalla del último volcado, por su descrip
   done < <(ui textos)
   return 1
 }
-pantalla_junto_a_la_hora() {   # pantalla_junto_a_la_hora TIEMPO: si en el último volcado se lee «TIEMPO» a la derecha de la hora, en su renglón y en una línea
+pantalla_en_la_cabecera() {   # pantalla_en_la_cabecera TIEMPO: si en el último volcado se lee «TIEMPO» a la derecha de la hora grande (sin ella, de la fecha), en su renglón y en una línea
   # Una línea: no más alta que la fecha, que tiene la misma letra.
   ui textos | awk -F'\t' -v t="$1" -v hora="$TXT_HORA_RE" -v fecha="$TXT_FECHA_RE" '
     $5 ~ hora && hx == "" { hx = $1; harr = $3; hab = $4 }
-    $5 ~ fecha && falto == "" { falto = $4 - $3 }
+    $5 ~ fecha && fx == "" { fx = $1; farr = $3; fab = $4 }
     $5 == t && tx == "" { tx = $1; ty = $2; talto = $4 - $3 }
-    END { exit !(hx != "" && tx != "" && falto != "" && tx > hx && ty >= harr && ty <= hab && talto <= falto * 1.3) }'
+    END {
+      if (hx == "") { hx = fx; harr = farr; hab = fab }
+      exit !(hx != "" && tx != "" && fx != "" && tx > hx && ty >= harr && ty <= hab && talto <= (fab - farr) * 1.3)
+    }'
 }
 minutos_de() {   # minutos_de TIEMPO: «1 h 5 min» → 65, «2 h» → 120, «45 min» → 45, «0 min» → 0
   local h m
@@ -1532,7 +1589,7 @@ paso_2() {
   done
 
   entrar_admin || abortar "no pude entrar a la administración"
-  ok "mantener apretada la hora y la contraseña llevan a la administración"
+  ok "mantener apretada la fecha y la contraseña llevan a la administración"
   if ui texto "$TXT_SALIR_FALLOS" >/dev/null; then
     nota "quedó en modo a prueba de fallos de una corrida anterior: salgo antes de empezar"
     tocar_desplazando texto "$TXT_SALIR_FALLOS"
@@ -1656,13 +1713,15 @@ paso_4() {
 }
 
 # ── 4b. Tiempo de pantalla ──────────────────────────────────────────────────
-# Arriba a la derecha de la hora, corto («1 h 5 min»), y en la descripción
-# «Hoy: 1 h 5 min de pantalla»: la misma cuenta que Bienestar digital, con
-# UsageStatsManager. Necesita el acceso al uso, que da provisionar.sh (appops
-# GET_USAGE_STATS); sin él, no está.
+# Arriba a la derecha, en el renglón de la hora grande (sin ella, en el de la
+# fecha), corto («1 h 5 min»), y en la descripción «Hoy: 1 h 5 min de
+# pantalla»: la misma cuenta que Bienestar digital, con UsageStatsManager.
+# Necesita el acceso al uso, que da provisionar.sh (appops GET_USAGE_STATS);
+# sin él, no está.
+lo_de_arriba() { if ui regex "$TXT_HORA_RE" >/dev/null; then echo 'la hora grande'; else echo 'la fecha'; fi; }   # qué encabeza Inicio en el último volcado
 paso_4b() {
   titulo 4b "Tiempo de pantalla en Inicio"
-  local out t1 t2 m1 m2
+  local out t1 t2 m1 m2 arriba
   out=$(disp appops get "$PAQUETE" GET_USAGE_STATS)
   if grep -q 'GET_USAGE_STATS: allow' <<<"$out"; then
     ok "provisionar.sh le dio a Slowtown el acceso al uso (appops GET_USAGE_STATS allow)"
@@ -1680,10 +1739,11 @@ paso_4b() {
     return
   fi
   ok "Inicio muestra el tiempo de pantalla: «Hoy: $t1 de pantalla»"
-  if pantalla_junto_a_la_hora "$t1"; then
-    ok "arriba a la derecha de la hora, en una línea, dice sólo «$t1»"
+  arriba=$(lo_de_arriba)
+  if pantalla_en_la_cabecera "$t1"; then
+    ok "arriba a la derecha, en el renglón de $arriba y en una línea, dice sólo «$t1»"
   else
-    mal "«$t1» no se lee a la derecha de la hora, en su renglón y en una línea"
+    mal "«$t1» no se lee a la derecha de $arriba, en su renglón y en una línea"
   fi
 
   # Un rato en una app permitida (la pantalla no se apaga: svc power stayon, del paso 0).
@@ -1724,6 +1784,189 @@ paso_4b() {
     mal "con el acceso de vuelta, Inicio no muestra el tiempo de pantalla"
   fi
   afirmar_en_inicio "nada de esto toca el cierre: Slowtown y LOCKED"
+}
+
+# ── 4c. Cómo se ve Inicio ───────────────────────────────────────────────────
+# En la administración: el tamaño de todo Inicio (de 70 a 100 %) y la hora
+# grande, que viene prendida. Se pasa a 80 %, se apaga la hora grande y se
+# vuelve a lo de entrada, mirando Inicio cada vez; los tamaños se comparan en
+# píxeles del volcado. Con la hora grande e Inicio al frente, Slowtown esconde
+# la hora de la barra de arriba (icon_blacklist, con el WRITE_SECURE_SETTINGS
+# que da provisionar.sh), y al irse la devuelve.
+inicio_guardado() {   # «tamaño hora» como lo tiene guardado Slowtown, p. ej. «80 true» (sin nada guardado, «100 true»)
+  local prefs
+  prefs=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml)
+  awk -v d="$TAMANIO_ENTRADA" '
+    function valor(v) { v = $0; sub(/.*value="/, "", v); sub(/".*/, "", v); return v }
+    /name="home_scale_percent"/ { s = valor() }
+    /name="show_clock"/ { c = valor() }
+    END { print (s == "" ? d : s), (c == "" ? "true" : c) }' <<<"$prefs"
+}
+esperar_inicio_guardado() {   # esperar_inicio_guardado «TAMAÑO HORA»: hasta que Slowtown lo tenga guardado así (guarda con apply)
+  local fin=$((SECONDS + 10))
+  until [ "$(inicio_guardado)" = "$1" ]; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+abrir_como_se_ve() {   # desde Inicio hasta «Cómo se ve Inicio» de la administración
+  entrar_admin && tocar_desplazando texto "$TXT_COMO_SE_VE" && esperar_ui 10 texto "$TXT_HORA_GRANDE"
+}
+elegir_tamanio() {   # elegir_tamanio 80: en «Cómo se ve Inicio», toca «80 %» y espera que quede elegido
+  asomar texto "$1 %" arriba && tocar_quieto texto "$1 %" && esperar_marcado "$1 %" true
+}
+inicio_de_entrada() {   # en «Cómo se ve Inicio»: al 100 % y con la hora grande, como viene
+  elegir_tamanio "$TAMANIO_ENTRADA" && marcar_casilla "$TXT_HORA_GRANDE" true arriba &&
+    esperar_inicio_guardado "$TAMANIO_ENTRADA true"
+}
+alto_de() {   # alto_de REGEX: el alto, en píxeles, del primer texto del último volcado que calza con REGEX
+  ui textos | awk -F'\t' -v r="$1" '$5 ~ r { print $4 - $3; exit }'
+}
+puede_esconder_la_hora() {   # si Slowtown tiene WRITE_SECURE_SETTINGS (pm grant, de provisionar.sh): sin él no toca la barra
+  local out
+  out=$(disp dumpsys package "$PAQUETE")
+  grep -q 'android.permission.WRITE_SECURE_SETTINGS: granted=true' <<<"$out"
+}
+iconos_de_la_barra() { disp settings get secure icon_blacklist; }   # para los mensajes: «rotate,headset,clock», o «null»
+
+paso_4c() {
+  titulo 4c "«$TXT_COMO_SE_VE»: el tamaño y la hora grande"
+  local barra=0 t e h falta='' guardado f80='' a80='' f100='' a100=''
+  ir_a_inicio
+  if puede_esconder_la_hora; then
+    barra=1
+    ok "provisionar.sh le dio a Slowtown WRITE_SECURE_SETTINGS, para esconder la hora de la barra en Inicio"
+  else
+    mal "Slowtown no tiene WRITE_SECURE_SETTINGS (pm grant, de provisionar.sh): no puede esconder la hora de la barra"
+  fi
+  if ! abrir_como_se_ve; then
+    mal "Administración no lleva a «$TXT_COMO_SE_VE»"
+    ir_a_inicio
+    return
+  fi
+  # Lo de arriba se lee antes de correr el formulario hasta la muestra, al pie.
+  volcar_quieto
+  for t in "${TAMANIOS[@]}"; do ui texto "$t %" >/dev/null || falta+=" «$t %»"; done
+  e=$(ui marcado "$TAMANIO_ENTRADA %")
+  h=$(ui marcado "$TXT_HORA_GRANDE")
+  asomar texto "$TXT_VISTA_PREVIA" || falta+=" la muestra («$TXT_VISTA_PREVIA»)"
+  if [ -z "$falta" ]; then
+    ok "abre «$TXT_COMO_SE_VE», con los tamaños de ${TAMANIOS[0]} a ${TAMANIOS[-1]} %, «$TXT_HORA_GRANDE» y la muestra"
+  else
+    mal "a «$TXT_COMO_SE_VE» le falta:$falta"
+  fi
+  guardado=$(inicio_guardado)
+  if [ "$guardado" = "$TAMANIO_ENTRADA true" ] && [ "$e" = 'true true' ] && [ "$h" = 'true true' ]; then
+    ok "de entrada, Inicio al $TAMANIO_ENTRADA % y con la hora grande, y la pantalla lo muestra así"
+  elif (( LIMPIO )) || [ "$guardado" = "$TAMANIO_ENTRADA true" ]; then
+    mal "de entrada tendría que ser $TAMANIO_ENTRADA % con la hora grande: guardado «$guardado»; en pantalla, $TAMANIO_ENTRADA % «${e:-?}» y la hora grande «${h:-?}»"
+  else
+    nota "quedó «$guardado» de una corrida anterior: lo vuelvo a lo de entrada"
+  fi
+  if [ "$guardado" != "$TAMANIO_ENTRADA true" ] && ! inicio_de_entrada; then
+    mal "no pude volver Inicio a lo de entrada (guardado: $(inicio_guardado))"
+    ir_a_inicio
+    return
+  fi
+
+  # Más chico: todo Inicio junto.
+  if elegir_tamanio "$TAMANIO_CHICO" && esperar_inicio_guardado "$TAMANIO_CHICO true"; then
+    ok "«$TAMANIO_CHICO %» queda elegido, y Slowtown lo guarda"
+  else
+    mal "«$TAMANIO_CHICO %» no quedó elegido ($(ui marcado "$TAMANIO_CHICO %")) o guardado ($(inicio_guardado))"
+  fi
+  captura como-se-ve-inicio
+  ir_a_inicio
+  if esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}" && ui regex "$TXT_HORA_RE" >/dev/null &&
+    ui regex "$TXT_FECHA_RE" >/dev/null; then
+    f80=$(alto_de "$TXT_FECHA_RE")
+    a80=$(alto_de "^$APP_RELOJ\$")
+    ok "al $TAMANIO_CHICO %, Inicio sigue con la hora grande, la fecha y ${APPS_INICIO[*]}"
+  else
+    mal "al $TAMANIO_CHICO %, Inicio no muestra la hora grande, la fecha y ${APPS_INICIO[*]} (apps: $LISTA)"
+  fi
+  captura "inicio-al-$TAMANIO_CHICO"
+
+  # Sin la hora grande.
+  if abrir_como_se_ve && marcar_casilla "$TXT_HORA_GRANDE" false && esperar_inicio_guardado "$TAMANIO_CHICO false"; then
+    ok "al $TAMANIO_CHICO % también se entra por la fecha, y «$TXT_HORA_GRANDE» se apaga y se guarda"
+  else
+    mal "no pude apagar «$TXT_HORA_GRANDE» (guardado: $(inicio_guardado))"
+  fi
+  ir_a_inicio
+  if esperar_que_no 10 regex "$TXT_HORA_RE" && esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}" &&
+    ui regex "$TXT_FECHA_RE" >/dev/null; then
+    ok "sin la hora grande, Inicio encabeza con la fecha, y siguen ${APPS_INICIO[*]}"
+  else
+    mal "sin la hora grande, Inicio no está como tendría que estar (apps: $(etiquetas_inicio | en_una_linea); hora grande: $(ui textos | cut -f5 | grep -Em1 "$TXT_HORA_RE" || echo no))"
+  fi
+  t=$(texto_pantalla)
+  if [ -n "$t" ] && pantalla_en_la_cabecera "$t"; then
+    ok "y el tiempo de pantalla, «$t», va a la derecha, en el renglón de la fecha"
+  else
+    mal "sin la hora grande, el tiempo de pantalla («${t:-no está}») no va a la derecha de la fecha, en su renglón y en una línea"
+  fi
+  if (( barra )); then
+    if esperar 5 "! $(c_barra_sin_hora)"; then
+      ok "y la hora de la barra de arriba se ve (icon_blacklist: $(iconos_de_la_barra))"
+    else
+      mal "sin la hora grande, la de la barra sigue escondida (icon_blacklist: $(iconos_de_la_barra))"
+    fi
+  fi
+  captura inicio-sin-la-hora-grande
+
+  # Y de vuelta a lo de entrada, entrando sin la hora grande.
+  if abrir_como_se_ve && inicio_de_entrada; then
+    ok "sin la hora grande se entra igual, por la fecha; Inicio vuelve al $TAMANIO_ENTRADA % con la hora grande, y se guarda"
+  else
+    mal "no pude volver Inicio a lo de entrada (guardado: $(inicio_guardado)): lo que sigue lo ve distinto"
+  fi
+  ir_a_inicio
+  if esperar_ui 10 regex "$TXT_HORA_RE" && esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}"; then
+    f100=$(alto_de "$TXT_FECHA_RE")
+    a100=$(alto_de "^$APP_RELOJ\$")
+    ok "Inicio vuelve a la hora grande, con ${APPS_INICIO[*]}"
+  else
+    mal "Inicio no vuelve a la hora grande con ${APPS_INICIO[*]} (apps: $(etiquetas_inicio | en_una_linea))"
+  fi
+  # Achica todo junto: la letra de la fecha y el renglón de cada app, con su margen.
+  if [[ $f80 =~ ^[0-9]+$ && $f100 =~ ^[0-9]+$ && $a80 =~ ^[0-9]+$ && $a100 =~ ^[0-9]+$ ]] &&
+    (( f80 * 10 <= f100 * 9 && a80 * 10 <= a100 * 9 )); then
+    ok "al $TAMANIO_CHICO % se achica: la fecha mide $f80 px de alto ($f100 al $TAMANIO_ENTRADA %), y $APP_RELOJ, $a80 ($a100)"
+  else
+    mal "al $TAMANIO_CHICO % no se achica, o no lo pude medir: la fecha ${f80:-?} px de alto contra ${f100:-?} al $TAMANIO_ENTRADA %, $APP_RELOJ ${a80:-?} contra ${a100:-?}"
+  fi
+
+  # La hora de la barra: escondida con Inicio al frente; en la lista de todas
+  # y en otra app, de vuelta.
+  if (( barra )); then
+    if esperar 5 "$(c_barra_sin_hora)"; then
+      ok "con la hora grande e Inicio al frente, la de la barra de arriba se esconde (icon_blacklist: $(iconos_de_la_barra))"
+    else
+      mal "con la hora grande e Inicio al frente, la de la barra no se esconde (icon_blacklist: $(iconos_de_la_barra))"
+    fi
+    if abrir_cajon && esperar 5 "! $(c_barra_sin_hora)"; then
+      ok "en la lista de todas las apps, la hora de la barra vuelve"
+    else
+      mal "en la lista de todas las apps, la hora de la barra sigue escondida (icon_blacklist: $(iconos_de_la_barra))"
+    fi
+    volver_del_cajon || ir_a_inicio
+    esperar 5 "$(c_barra_sin_hora)" ||
+      mal "de vuelta de la lista, la hora de la barra no se vuelve a esconder (icon_blacklist: $(iconos_de_la_barra))"
+    disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+    if esperar 10 "$(c_foco "$FOCO_RELOJ")" && esperar 5 "! $(c_barra_sin_hora)"; then
+      ok "con otra app al frente ($APP_RELOJ), también vuelve"
+    else
+      mal "con $APP_RELOJ al frente, la hora de la barra sigue escondida (icon_blacklist: $(iconos_de_la_barra); foco: $(foco))"
+    fi
+    ir_a_inicio
+    if esperar 5 "$(c_barra_sin_hora)"; then
+      ok "y de vuelta en Inicio, se esconde otra vez"
+    else
+      mal "de vuelta en Inicio, la hora de la barra no se esconde (icon_blacklist: $(iconos_de_la_barra))"
+    fi
+  fi
+  afirmar_en_inicio "cómo se ve Inicio no toca el cierre: Slowtown y LOCKED"
 }
 
 # ── 5. Llamada entrante ─────────────────────────────────────────────────────
@@ -2069,9 +2312,10 @@ paso_8b() {
     fi
   done
   captura habitos-resumen
-  # «Volver» vuelve a Inicio.
-  if tocar_desplazando texto "$TXT_VOLVER" && esperar_ui 10 texto "$TXT_TODAS"; then
-    ok "«$TXT_VOLVER» vuelve a Inicio"
+  # «Volver», la flecha de arriba, vuelve a Inicio. Queda fija: se toca sin
+  # correr el resumen, aunque se haya bajado hasta las cuentas.
+  if tocar texto "$TXT_VOLVER" && esperar_ui 10 texto "$TXT_TODAS"; then
+    ok "«$TXT_VOLVER», arriba, vuelve a Inicio"
   else
     mal "«$TXT_VOLVER» no vuelve del resumen a Inicio ($(foco))"
     ir_a_inicio
@@ -2082,8 +2326,8 @@ paso_8b() {
   afirmar_en_inicio "los hábitos no piden contraseña: Slowtown sigue activo (LOCKED)"
 }
 
-# Atrás, como lo haría cualquiera: en las pantallas largas (el resumen con
-# cuatro hábitos, la lista para elegirlos) «Volver» queda muy abajo.
+# Atrás, como lo haría cualquiera. La flecha de «Volver», arriba, la prueba el
+# paso 8b.
 atras() { adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1; }
 
 # ── 8c. Elegir hábitos ──────────────────────────────────────────────────────
@@ -2316,10 +2560,10 @@ paso_9b() {
   else
     mal "la lista de todas no muestra la carpeta $mayus"
   fi
-  if ! accion_en_cajon "$APP_CARPETA" "$TXT_MOVER_A$CARPETA"; then
-    mal "mantener apretada $APP_CARPETA no ofrece «$TXT_MOVER_A$CARPETA»"
+  if ! mover_a_carpeta "$APP_CARPETA" "$CARPETA"; then
+    mal "mantener apretada $APP_CARPETA no ofrece «$TXT_MOVER_A_CARPETA» o, en el segundo diálogo, «$CARPETA»"
   elif esperar_apps 10 etiquetas_cajon "${sueltas[@]}"; then
-    ok "«$TXT_MOVER_A$CARPETA» saca $APP_CARPETA de la lista suelta: quedan ${sueltas[*]}"
+    ok "«$TXT_MOVER_A_CARPETA» y, en el segundo diálogo, «$CARPETA» sacan $APP_CARPETA de la lista suelta: quedan ${sueltas[*]}"
   else
     mal "después de moverla, la lista suelta muestra «$LISTA»"
   fi
@@ -2367,7 +2611,7 @@ paso_9c() {
   titulo 9c "«$TXT_HABILITAR»: sin contraseña, 2 veces cada 12 horas"
   local vez quedan
   ir_a_inicio
-  tocar_en_inicio regex "$TXT_HORA_RE" 1500 || { mal "no encuentro la hora en Inicio"; return; }
+  tocar_en_inicio regex "$TXT_FECHA_RE" 1500 || { mal "no encuentro la fecha en Inicio"; return; }
   if esperar_ui 4 contiene "$TXT_YA_USASTE"; then
     aviso "ya se usaron las 2 de estas 12 horas (corré con --limpio): salteo este paso"
     ir_a_inicio
@@ -2380,7 +2624,7 @@ paso_9c() {
   fi
   for vez in 1 2; do
     quedan=$((3 - vez))
-    tocar_en_inicio regex "$TXT_HORA_RE" 1500 || { mal "no encuentro la hora en Inicio"; break; }
+    tocar_en_inicio regex "$TXT_FECHA_RE" 1500 || { mal "no encuentro la fecha en Inicio"; break; }
     if ! esperar_ui 10 texto "$TXT_HABILITAR"; then
       mal "la pantalla de la contraseña no ofrece «$TXT_HABILITAR»"
       ir_a_inicio
@@ -2418,7 +2662,7 @@ paso_9c() {
     sleep 3
     intento_am_start "vez $vez, después del final: Ajustes" "$FOCO_AJUSTES" -a android.settings.SETTINGS
   done
-  tocar_en_inicio regex "$TXT_HORA_RE" 1500
+  tocar_en_inicio regex "$TXT_FECHA_RE" 1500
   if esperar_ui 10 contiene "$TXT_YA_USASTE"; then
     ok "la tercera no se puede: «$TXT_YA_USASTE» y cuándo vuelve a haber"
   else
@@ -2553,7 +2797,8 @@ paso_9d() {
 nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se ve desde la administración
   local root=$1 vistos='' vuelta busqueda
   # La lista de apps permitidas: ni se puede permitir. Se recorre sin tocar
-  # nada y se sale con «Volver».
+  # nada y se sale con «Volver», la flecha de arriba, que no se corre con la
+  # lista.
   if tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; then
     CAMBIAR=()
     if ! recorrer_selector; then
@@ -3257,7 +3502,7 @@ paso_9e_llamadas() {
       mal "cortada la llamada, al frente quedó $(resumida)"
     fi
   fi
-  # Como estaba: prendida, sin bloqueo. La app de prueba queda para 9f.
+  # Como estaba: prendida, sin bloqueo. La app de prueba queda para 9f y 9g.
   prender_pantalla
   desbloquear
   sacar_bloqueo
@@ -3558,8 +3803,9 @@ paso_9f() {
   afirmar_en_inicio "las oleadas no tocan el cierre: Slowtown y LOCKED"
 }
 
-salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Notificaciones» como estaba (PRENDIDAS, sin la entrega MINUTO) y desinstala la app de prueba
-  # CLAVES: lo ya entregado, que no tiene que volver a esconderse.
+salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Notificaciones» como estaba (PRENDIDAS, sin la entrega MINUTO)
+  # CLAVES: lo ya entregado, que no tiene que volver a esconderse. La app de
+  # prueba queda instalada: 9g la desinstala con el menú de la lista de todas.
   local prendidas=$1 hm=$2 entregadas=${3:-} k bien=1
   ir_a_inicio
   if ! abrir_notificaciones; then
@@ -3594,10 +3840,130 @@ salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Noti
     fi
     ir_a_inicio
   fi
-  if desinstalar_avisos; then
-    ok "«$AVISOS_NOMBRE» se desinstala: lo que sigue ve las mismas apps que antes"
+}
+
+# ── 9g. El menú de una app en la lista de todas ─────────────────────────────
+# Con «Avisos de prueba», que quedó instalada y permitida de 9e y 9f.
+# «Ocultar de la lista» la saca de la lista, pero buscándola aparece igual,
+# con la nota «oculta»; «Mostrar en la lista» la devuelve. «Información de la
+# app» es una pantalla de Ajustes: con Slowtown activo pide la contraseña y la
+# abre en una sesión de administración. «Desinstalar», con Device Owner, lo
+# pregunta Slowtown y desinstala sin el diálogo de Android, que con Slowtown
+# activo quedaría bloqueado. Así se va la app de prueba, y lo que sigue ve las
+# mismas apps que antes.
+esperar_oculta() {   # esperar_oculta si|no: hasta que «Avisos de prueba» esté (o no) entre las ocultas que guardó Slowtown (guarda con apply)
+  local fin=$((SECONDS + 10)) esta
+  while :; do
+    if grep -q "^$AVISOS/" <<<"$(conjunto hidden_apps)"; then esta=si; else esta=no; fi
+    [ "$esta" = "$1" ] && return 0
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+
+paso_9g() {
+  titulo 9g "El menú de una app en la lista de todas: ocultarla, su información y desinstalarla"
+  local con=("${APPS_INICIO[@]}" "$AVISOS_NOMBRE") nota_vista=''
+  ir_a_inicio
+  if ! instalar_avisos || ! permitir_avisos; then
+    mal "no pude instalar o permitir «$AVISOS_NOMBRE»: sin ella no hay qué ocultar ni desinstalar"
+    desinstalar_avisos
+    ir_a_inicio
+    return
+  fi
+  # Que lo que publicó en 9f no tape nada.
+  avisos "--es que borrar" >/dev/null
+
+  # Ocultarla: sale de la lista, pero buscándola aparece.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
   else
-    mal "no pude desinstalar «$AVISOS_NOMBRE»"
+    if ! esperar_apps 10 etiquetas_cajon "${con[@]}"; then
+      if grep -q "^$AVISOS/" <<<"$(conjunto hidden_apps)"; then
+        # Una corrida cortada en el medio: lo que sigue la vuelve a mostrar.
+        nota "«$AVISOS_NOMBRE» quedó oculta de una corrida anterior"
+      else
+        mal "antes de ocultarla, la lista tendría que tener ${con[*]}, y tiene «$LISTA»"
+      fi
+    elif accion_en_cajon "$AVISOS_NOMBRE" "$TXT_OCULTAR" && esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}" &&
+      esperar_oculta si; then
+      ok "«$TXT_OCULTAR» saca a «$AVISOS_NOMBRE» de la lista (quedan ${APPS_INICIO[*]}), y Slowtown la guarda entre las ocultas"
+    else
+      mal "«$TXT_OCULTAR» no sacó a «$AVISOS_NOMBRE» de la lista: «$LISTA» (ocultas: $(conjunto hidden_apps | en_una_linea))"
+    fi
+    tocar campo 1
+    esperar 5 "$(c_teclado)"
+    sleep 1
+    adb_t 20 shell input text "$BUSQUEDA_AVISOS" >/dev/null 2>&1
+    if esperar_apps 10 etiquetas_cajon "$AVISOS_NOMBRE" && nota_vista=$(nota_en_cajon "$AVISOS_NOMBRE") &&
+      [[ $nota_vista == *"$TXT_OCULTA"* ]]; then
+      ok "buscando «$BUSQUEDA_AVISOS» aparece igual, con la nota «$nota_vista»"
+    else
+      mal "buscando «$BUSQUEDA_AVISOS», la lista dice «$LISTA» (nota: «$nota_vista»), y tendría que estar «$AVISOS_NOMBRE» con «$TXT_OCULTA»"
+    fi
+    captura buscar-oculta
+    # El teclado podría tapar el diálogo: se cierra, y la búsqueda queda.
+    cerrar_teclado
+    if ! accion_en_cajon "$AVISOS_NOMBRE" "$TXT_MOSTRAR"; then
+      mal "buscándola, mantener apretada «$AVISOS_NOMBRE» no ofrece «$TXT_MOSTRAR»"
+      volver_del_cajon || ir_a_inicio
+    else
+      # Irse de la lista borra la búsqueda.
+      volver_del_cajon || ir_a_inicio
+      if abrir_cajon && esperar_apps 10 etiquetas_cajon "${con[@]}" && esperar_oculta no; then
+        ok "«$TXT_MOSTRAR» la devuelve a la lista"
+      else
+        mal "después de «$TXT_MOSTRAR», la lista dice «$LISTA» (ocultas: $(conjunto hidden_apps | en_una_linea))"
+      fi
+      volver_del_cajon || ir_a_inicio
+    fi
+  fi
+
+  # Su información, que es de Ajustes: con la contraseña, en una sesión.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+  else
+    if accion_en_cajon "$AVISOS_NOMBRE" "$TXT_INFO_APP" && poner_clave && esperar 20 "$(c_foco "$FOCO_AJUSTES")" &&
+      [ "$(estado)" = LOCKED ]; then
+      ok "«$TXT_INFO_APP» pide la contraseña y abre la de Ajustes en una sesión, con Slowtown activo ($(resumida))"
+    else
+      mal "«$TXT_INFO_APP» no llegó, con la contraseña, a la información de Ajustes ($(foco); lock task: $(estado))"
+    fi
+    captura informacion-de-la-app
+    ir_a_inicio
+  fi
+  intento_am_start "Ajustes con am start después de la información de la app" "$FOCO_AJUSTES" -a android.settings.SETTINGS
+
+  # Desinstalarla: pregunta Slowtown y, con Device Owner, sin el diálogo de Android.
+  if ! abrir_cajon; then
+    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    ir_a_inicio
+  elif ! { accion_en_cajon "$AVISOS_NOMBRE" "$TXT_DESINSTALAR" && esperar_ui 10 texto "¿$TXT_DESINSTALAR $AVISOS_NOMBRE?"; }; then
+    mal "mantener apretada «$AVISOS_NOMBRE» no ofrece «$TXT_DESINSTALAR», o no pregunta «¿$TXT_DESINSTALAR $AVISOS_NOMBRE?»"
+    tocar texto "$TXT_CANCELAR"
+    volver_del_cajon || ir_a_inicio
+  else
+    if ui texto "$TXT_SE_BORRAN" >/dev/null && ui texto "$TXT_CANCELAR" >/dev/null; then
+      ok "«$TXT_DESINSTALAR» lo pregunta Slowtown: «¿$TXT_DESINSTALAR $AVISOS_NOMBRE?», «$TXT_SE_BORRAN», con «$TXT_CANCELAR»"
+    else
+      mal "la pregunta de Slowtown no dice «$TXT_SE_BORRAN» o no ofrece «$TXT_CANCELAR»"
+    fi
+    captura desinstalar
+    if tocar texto "$TXT_DESINSTALAR" && esperar 30 "! pm path $AVISOS 2>/dev/null | grep -q '^package:'" &&
+      esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
+      ok "confirmado, la desinstala sin el diálogo de Android: $AVISOS ya no está, y la lista vuelve a ser ${APPS_INICIO[*]}"
+    else
+      mal "confirmado «$TXT_DESINSTALAR», $AVISOS $(hay_paquete "$AVISOS" && echo 'sigue instalada' || echo 'ya no está'), y la lista dice «$LISTA»"
+    fi
+    volver_del_cajon || ir_a_inicio
+  fi
+  afirmar_en_inicio "el menú no abrió nada de Android: sigue en Slowtown y LOCKED"
+  # Si no se fue por el menú, se va por adb: lo que sigue no la tiene que ver.
+  if hay_paquete "$AVISOS"; then
+    if desinstalar_avisos; then nota "«$AVISOS_NOMBRE» la saqué con adb, para lo que sigue"
+    else mal "no pude desinstalar «$AVISOS_NOMBRE» ni con adb"; fi
   fi
 }
 
@@ -3749,7 +4115,7 @@ paso_12() {
 # ── 13. Guardia de crashes ──────────────────────────────────────────────────
 paso_13() {
   titulo 13 "Guardia de crashes"
-  local i pid crashes=0 solo=1
+  local i pid crashes=0 solo=1 revisar
   ir_a_inicio
   for i in 1 2 3; do
     # am crash sólo le llega a un proceso vivo que ya terminó de arrancar: se
@@ -3803,7 +4169,13 @@ paso_13() {
     mal "no aparece el selector de Inicio ($(foco))"
   fi
   if esperar_ui 10 contiene "$TXT_INICIO_FALLOS"; then
-    ok "Inicio avisa que Slowtown se pausó solo"
+    # Y dice qué mantener apretado: lo que se ve arriba.
+    if ui regex "$TXT_HORA_RE" >/dev/null; then revisar=$TXT_REVISAR_HORA; else revisar=$TXT_REVISAR_FECHA; fi
+    if ui contiene "$revisar" >/dev/null; then
+      ok "Inicio avisa que Slowtown se pausó solo: «… $revisar»"
+    else
+      mal "el aviso del modo a prueba de fallos no dice «$revisar» ($(ui textos | cut -f5 | grep -m1 -F "$TXT_INICIO_FALLOS"))"
+    fi
   else
     mal "Inicio no muestra el aviso del modo a prueba de fallos"
   fi
@@ -4057,6 +4429,7 @@ paso_2
 paso_3
 paso_4
 paso_4b
+paso_4c
 paso_5
 paso_6
 paso_7
@@ -4069,6 +4442,7 @@ paso_9c
 paso_9d
 paso_9e
 paso_9f
+paso_9g
 paso_10
 paso_11
 paso_12

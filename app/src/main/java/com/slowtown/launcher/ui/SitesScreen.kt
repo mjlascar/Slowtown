@@ -24,8 +24,8 @@ import com.slowtown.launcher.admin.Fixed
 
 /**
  * Las páginas que Chrome no abre. Las que se suman acá son el nivel 1 (con la
- * contraseña, porque ya se está en la administración); las fijas, el nivel 2,
- * se muestran pero no se tocan.
+ * contraseña, porque ya se está en la administración); de las fijas, el nivel
+ * 2, se dice sólo cuántas son, y no se tocan.
  */
 @Composable
 fun SitesScreen(
@@ -80,16 +80,10 @@ fun SitesScreen(
         }
 
         Text("Siempre bloqueadas", style = MaterialTheme.typography.titleMedium)
+        // Sin nombrar qué bloquea (lo pidió Marcos): quien navega se da cuenta solo.
         HintText(
-            "No se cambian desde acá, ni con la contraseña: sólo con una versión " +
-                "nueva de Slowtown, instalada por cable desde la compu.",
-        )
-        HintText(
-            "$fixedCount en total: YouTube, TikTok, Instagram, Facebook, X, Reddit, " +
-                "Twitch y el streaming, más las más visitadas de eróticas, apuestas, " +
-                "juegos online, video, redes y citas (listas de la Universidad " +
-                "Toulouse Capitole), y dominios enteros de adultos y de apuestas, " +
-                "como bet.ar. Chrome además filtra solo los sitios para adultos. " +
+            "Son $fixedCount. No se cambian desde acá, ni con la contraseña: sólo " +
+                "con una versión nueva de Slowtown, instalada por cable desde la compu. " +
                 "Para saber si una página ya está, probá agregarla.",
         )
     }

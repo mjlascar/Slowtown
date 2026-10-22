@@ -8,6 +8,7 @@ import android.os.Binder
 import android.os.Bundle
 import android.util.Log
 import com.slowtown.launcher.Prefs
+import com.slowtown.launcher.StatusBarClock
 
 /**
  * La salida por cable desde adentro: `scripts/liberar.sh` le pide a Slowtown
@@ -34,6 +35,8 @@ class CableProvider : ContentProvider() {
                 val restored = Fixed.release(context)
                 // En pausa: si se la vuelve a provisionar, no se cierra sola.
                 Prefs(context).closed = false
+                // Y la hora de la barra, si la había escondido, vuelve en todas las apps.
+                StatusBarClock.setHidden(context, false)
                 Log.i(TAG, "Soltado por cable; vuelven: $restored")
                 Bundle().apply {
                     putBoolean("ok", !Policies.isDeviceOwner(context))
