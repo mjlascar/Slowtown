@@ -18,6 +18,20 @@ val firma: Properties? = File(
     "firma.properties",
 ).takeIf { it.isFile }?.let { archivo -> Properties().apply { archivo.inputStream().use { load(it) } } }
 
+/**
+ * La clave de las releases públicas (`scripts/firma-releases.sh`), otra que la
+ * del S10e: ésta vive en los secretos de GitHub y la usa el workflow de
+ * releases (variables de entorno); en esta compu, desde su carpeta. Sin ella,
+ * la variante release sale sin firmar.
+ */
+val releases: Pair<File, String>? = run {
+    val carpeta = File("${System.getProperty("user.home")}/slowtown-firma-releases")
+    val archivo = System.getenv("SLOWTOWN_RELEASE_KEYSTORE")?.let(::File) ?: File(carpeta, "releases.keystore")
+    val contrasena = System.getenv("SLOWTOWN_RELEASE_PASSWORD")
+        ?: File(carpeta, "contrasena.txt").takeIf { it.isFile }?.readText()?.trim()
+    if (archivo.isFile && !contrasena.isNullOrEmpty()) archivo to contrasena else null
+}
+
 android {
     namespace = "com.slowtown.launcher"
     compileSdk = 37
@@ -32,9 +46,9 @@ android {
         minSdk = 31
         targetSdk = 37
         // En CI es el número de corrida, para que cada build instale encima
-        // de la anterior.
+        // de la anterior; en una release sale de la etiqueta (vX.Y.Z).
         versionCode = System.getenv("SLOWTOWN_VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = "0.1.0"
+        versionName = System.getenv("SLOWTOWN_VERSION_NAME") ?: "0.1.0"
     }
 
     signingConfigs {
@@ -46,6 +60,14 @@ android {
                 keyPassword = firma.getProperty("keyPassword")
             }
         }
+        if (releases != null) {
+            create("releases") {
+                storeFile = releases.first
+                storePassword = releases.second
+                keyAlias = "slowtown-releases"
+                keyPassword = releases.second
+            }
+        }
     }
 
     buildTypes {
@@ -53,8 +75,12 @@ android {
         debug {
             if (firma != null) signingConfig = signingConfigs.getByName("estable")
         }
+        // La de las releases públicas, para cualquiera: sin testOnly, así se
+        // instala tocando el APK. Para cerrar el teléfono (Device Owner) se
+        // usa la de debug, que liberar.sh puede sacar por cable.
         release {
             isMinifyEnabled = false
+            if (releases != null) signingConfig = signingConfigs.getByName("releases")
         }
     }
 

@@ -35,6 +35,32 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   fuego cuenta las semanas seguidas con la meta cumplida.
 - **Siempre hay una salida por cable:** `scripts/liberar.sh`.
 
+## Descargar
+
+La última versión está en
+[Releases](https://github.com/mjlascar/Slowtown/releases/latest). Hace
+falta Android 12 o más nuevo.
+
+1. Desde el teléfono, bajá `Slowtown-X.Y.Z.apk` y abrilo.
+2. Aceptá instalar apps de esa fuente: Android lo pregunta la primera vez.
+3. Apretá Inicio y elegí Slowtown, o andá a Ajustes → Aplicaciones →
+   Aplicaciones predeterminadas → Aplicación de inicio. Para volver al de
+   antes, se elige otro en el mismo lugar.
+
+Así es un launcher: Inicio en texto, hábitos, carpetas y apps ocultas. El
+tiempo de pantalla y las notificaciones por oleadas piden un permiso que
+Android da desde Ajustes: «Acceso a datos de uso» y «Acceso a
+notificaciones».
+
+Lo que cierra el teléfono de verdad (Device Owner: sólo las apps permitidas,
+Bedtime y el nivel 2) se activa por cable, con una compu y
+`scripts/provisionar.sh`, y exige sacar un rato las cuentas del teléfono. Ese
+camino usa la variante de prueba, que la salida por cable siempre puede
+sacar, y no la de las releases.
+
+Todas las releases salen firmadas con el mismo certificado, de huella SHA-256
+`3ef7e1d4a3e180864607d49a7c2ac38b0190d03b94f0c3e95d897e066bb25559` (también en `scripts/firma-releases.sha256`).
+
 ## Capturas
 
 Del emulador (Android 12, sin cuentas), por eso las apps están en inglés.

@@ -1,0 +1,127 @@
+name: Release
+
+# Una release por etiqueta vX.Y.Z: compila la variante release, la firma con
+# la clave de las releases (scripts/firma-releases.sh, en los secretos del
+# repo) y la publica en GitHub, para que cualquiera la baje e instale tocando
+# el APK. Se dispara sólo con una etiqueta, que sólo puede subir quien escribe
+# en el repo.
+on:
+  push:
+    tags: ["v*"]
+
+# Escribir releases es lo único que necesita.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publicar
+    runs-on: ubuntu-latest
+    steps:
+      # Las mismas acciones que CI, fijadas por commit (ver ci.yml). Con toda
+      # la historia, para listar los cambios desde la etiqueta anterior.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Sin caché: la que dejan otras corridas no tiene que poder meterse en un
+      # APK firmado.
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-disabled: true
+
+      - name: Preparar el SDK
+        run: |
+          set -euo pipefail
+          sdkmanager=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+          "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0"
+
+      # v0.2.0 → versionName 0.2.0, versionCode 200: crece con cada release,
+      # y así cada una se instala encima de la anterior.
+      - name: Versión
+        run: |
+          set -euo pipefail
+          if [[ ! $GITHUB_REF_NAME =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::La etiqueta tiene que ser vX.Y.Z (es $GITHUB_REF_NAME)"
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+          {
+            echo "SLOWTOWN_VERSION_NAME=$major.$minor.$patch"
+            echo "SLOWTOWN_VERSION_CODE=$((10#$major * 10000 + 10#$minor * 100 + 10#$patch))"
+          } >> "$GITHUB_ENV"
+
+      # La clave sale de los secretos sólo para este paso y el siguiente, a un
+      # archivo del runner que se borra al terminar.
+      - name: La clave de las releases
+        env:
+          KEYSTORE_B64: ${{ secrets.SLOWTOWN_RELEASE_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Falta el secreto SLOWTOWN_RELEASE_KEYSTORE_B64 (ver scripts/firma-releases.sh)"
+            exit 1
+          fi
+          umask 077
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/releases.keystore"
+          echo "SLOWTOWN_RELEASE_KEYSTORE=$RUNNER_TEMP/releases.keystore" >> "$GITHUB_ENV"
+
+      - name: Compilar
+        env:
+          SLOWTOWN_RELEASE_PASSWORD: ${{ secrets.SLOWTOWN_RELEASE_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      # Que esté firmado, y con la clave de siempre: con otra, nadie podría
+      # instalarla encima de la que tiene.
+      - name: Verificar la firma
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/releases.keystore"
+          apk=app/build/outputs/apk/release/app-release.apk
+          esperada=$(tr -d '[:space:]' < scripts/firma-releases.sha256)
+          huella=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          if [ "$huella" != "$esperada" ]; then
+            echo "::error::El APK tiene la firma ${huella:-ninguna} y tendría que ser $esperada"
+            exit 1
+          fi
+          cp "$apk" "Slowtown-$SLOWTOWN_VERSION_NAME.apk"
+          echo "HUELLA=$huella" >> "$GITHUB_ENV"
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          anterior=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo "Slowtown $SLOWTOWN_VERSION_NAME, para Android 12 o más nuevo."
+            echo
+            echo "**Cómo se instala:** bajá \`Slowtown-$SLOWTOWN_VERSION_NAME.apk\` desde el teléfono, abrilo y"
+            echo "aceptá instalar apps de esa fuente. Después apretá Inicio y elegí Slowtown, o andá a"
+            echo "Ajustes → Aplicaciones → Aplicaciones predeterminadas → Aplicación de inicio."
+            echo
+            echo "Así es un launcher: Inicio en texto, hábitos, tiempo de pantalla, carpetas y"
+            echo "notificaciones por oleadas. Lo que cierra el teléfono de verdad (Device Owner) se"
+            echo "activa por cable: está en el README."
+            echo
+            echo "**Firma:** todas las releases salen con el mismo certificado, de huella SHA-256"
+            echo "\`$HUELLA\`."
+            if [ -n "$anterior" ]; then
+              echo
+              echo "**Cambios desde $anterior:**"
+              echo
+              git log --no-merges --pretty='- %s' "$anterior..$GITHUB_REF_NAME"
+            fi
+          } > notas.md
+          gh release create "$GITHUB_REF_NAME" "Slowtown-$SLOWTOWN_VERSION_NAME.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Slowtown $SLOWTOWN_VERSION_NAME" \
+            --notes-file notas.md

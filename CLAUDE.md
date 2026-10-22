@@ -343,6 +343,27 @@ hacen falta coordenadas).
 computadora»** en el diálogo de adb: con lock task activo no se puede
 autorizar una computadora nueva, y sin eso `liberar.sh` no llega.
 
+## Releases
+
+Para los amigos de Marcos y quien quiera (lo pidió el 22/10): la variante
+release, sin testOnly (se instala tocando el APK), firmada con la clave de
+releases. Es otra clave que la del S10e: `scripts/firma-releases.sh` la creó
+el 22/10 en `~/slowtown-firma-releases/` (copia en el pendrive, junto a la
+otra), y vive en los secretos del repo `SLOWTOWN_RELEASE_KEYSTORE_B64` y
+`SLOWTOWN_RELEASE_PASSWORD`. La del S10e no sale nunca de la compu. Perder la
+de releases deja sin actualizaciones a todos los que la instalaron.
+
+- Publicar: `git tag vX.Y.Z && git push origin vX.Y.Z`. El workflow
+  `.github/workflows/release.yml` compila, compara la huella con
+  `scripts/firma-releases.sha256` y publica `Slowtown-X.Y.Z.apk` con notas
+  (cómo se instala y los cambios desde la etiqueta anterior). El versionCode
+  sale de la etiqueta: X·10000 + Y·100 + Z.
+- En esta compu, `./gradlew assembleRelease` firma desde
+  `~/slowtown-firma-releases/` (para probar antes de etiquetar).
+- El S10e sigue con la variante debug (testOnly, clave personal): una
+  release no se instala encima, y para Device Owner no sirve, porque
+  `liberar.sh --forzar` necesita testOnly.
+
 ## La red contra el peor caso
 
 El peor caso es Slowtown colgándose en loop mientras es el Inicio fijo y el
