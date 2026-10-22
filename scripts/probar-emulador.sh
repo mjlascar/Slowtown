@@ -130,7 +130,7 @@ TXT_PONER_EN_INICIO='Poner en Inicio'        # el diálogo de una app mantenida 
 TXT_SACAR_DE_INICIO='Sacar de Inicio'
 TXT_OCULTAR='Ocultar de la lista'
 TXT_MOSTRAR='Mostrar en la lista'
-TXT_INFO_APP='Información de la app'         # con Slowtown activo, pide la contraseña: es de Ajustes
+TXT_INFO_APP='Información de la app'         # sin contraseña: una sesión chica, que suma sólo Ajustes
 TXT_DESINSTALAR=Desinstalar                  # la opción y el botón de su pregunta, «¿Desinstalar Clock?»
 TXT_SE_BORRAN='Se borran sus datos.'         # el texto de esa pregunta
 TXT_CANCELAR='Cancelar'
@@ -3920,16 +3920,23 @@ paso_9g() {
     fi
   fi
 
-  # Su información, que es de Ajustes: con la contraseña, en una sesión.
+  # Su información, que es de Ajustes: sin contraseña (lo decidió Marcos el
+  # 22/10), en una sesión chica que suma sólo Ajustes. El Calendario, que no
+  # está permitido, tiene que seguir afuera.
   if ! abrir_cajon; then
     mal "«$TXT_TODAS» no abre la lista de todas las apps"
     ir_a_inicio
   else
-    if accion_en_cajon "$AVISOS_NOMBRE" "$TXT_INFO_APP" && poner_clave && esperar 20 "$(c_foco "$FOCO_AJUSTES")" &&
+    if accion_en_cajon "$AVISOS_NOMBRE" "$TXT_INFO_APP" && esperar 20 "$(c_foco "$FOCO_AJUSTES")" &&
       [ "$(estado)" = LOCKED ]; then
-      ok "«$TXT_INFO_APP» pide la contraseña y abre la de Ajustes en una sesión, con Slowtown activo ($(resumida))"
+      ok "«$TXT_INFO_APP» abre la de Ajustes sin contraseña, con Slowtown activo ($(resumida))"
+      if esperar 5 "$(c_sesion)" && ! esperar 2 "$(c_en_lock_task com.android.calendar)"; then
+        ok "la sesión suma sólo Ajustes: el Calendario, que no está permitido, sigue afuera"
+      else
+        mal "la sesión de la información de la app no es la chica: tendría que sumar Ajustes y nada más"
+      fi
     else
-      mal "«$TXT_INFO_APP» no llegó, con la contraseña, a la información de Ajustes ($(foco); lock task: $(estado))"
+      mal "«$TXT_INFO_APP» no llegó, sin contraseña, a la información de Ajustes ($(foco); lock task: $(estado))"
     fi
     captura informacion-de-la-app
     ir_a_inicio

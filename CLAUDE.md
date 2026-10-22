@@ -21,13 +21,17 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - el panel de notificaciones queda, pero sin ajustes rápidos ni engranaje;
 - no hay Recientes, e Inicio es siempre Slowtown;
 - Ajustes y todo lo demás se alcanza sólo desde la administración, que pide
-  la contraseña (mantener apretada la hora o la fecha, arriba de todo).
+  la contraseña (mantener apretada la hora o la fecha, arriba de todo). La
+  excepción es la información de una app (ver Inicio).
 
 ## Inicio
 
 - **Permitidas** (`Prefs.allowed`): las que se pueden abrir con Slowtown
   activo. Se eligen en la administración, con contraseña, porque aflojan las
-  reglas. La contraseña es larga, Marcos no la memoriza y la deja anotada
+  reglas. Ajustes y la Galaxy Store no se pueden elegir; la Play Store sí,
+  desde el 22/10 (Marcos la quiere a mano para bajar una app fuera de casa):
+  lo que se instala no abre hasta permitirlo, y lo del nivel 2 se pausa
+  apenas se instala. La contraseña es larga, Marcos no la memoriza y la deja anotada
   en papel en su casa (decisión suya): aflojar algo exige estar ahí.
 - **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
   Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
@@ -43,8 +47,10 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   («Mover a una carpeta» y después cuál). Son sólo orden: sin contraseña.
 - **Mantener apretada una app** en la lista: Inicio, carpeta, ocultar,
   «Información de la app» y «Desinstalar». La información es una pantalla de
-  Ajustes: con Slowtown activo pide la contraseña y se abre en una sesión de
-  administración. Desinstalar no la pide (sacar una app no afloja nada) y no
+  Ajustes y no pide contraseña (lo decidió Marcos el 22/10: desde ahí se
+  llega a los ajustes de esa app, y a la Play Store, que no le preocupa): con
+  Slowtown activo se abre en una sesión chica, que suma sólo Ajustes a la
+  lista y termina como la de administración. Desinstalar no la pide (sacar una app no afloja nada) y no
   se ofrece para las apps de sistema (desinstalarles las actualizaciones
   borraría la pausa del nivel 2) ni para las que tienen la desinstalación
   bloqueada. Siendo Device Owner pregunta Slowtown y desinstala sin el

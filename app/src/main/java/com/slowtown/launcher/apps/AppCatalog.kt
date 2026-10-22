@@ -39,14 +39,17 @@ fun normalize(text: String): String =
 object AppCatalog {
     private val collator = Collator.getInstance(Locale.forLanguageTag("es-AR"))
 
+    const val PLAY_STORE = "com.android.vending"
+
     /**
      * No se pueden permitir: son las puertas que la contraseña cierra. Se
-     * abren desde la administración, por una sesión que termina sola.
+     * abren desde la administración, por una sesión que termina sola. La Play
+     * Store sí se puede permitir (lo decidió Marcos el 22/10, para bajar una
+     * app fuera de casa): lo que se instala no abre hasta permitirlo, y los
+     * navegadores y lo del nivel 2 se pausan apenas se instalan.
      */
-    const val PLAY_STORE = "com.android.vending"
     private val ADMIN_ONLY = setOf(
         "com.android.settings",
-        PLAY_STORE,
         "com.sec.android.app.samsungapps",
     )
 

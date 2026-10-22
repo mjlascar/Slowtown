@@ -112,6 +112,11 @@ class Prefs(context: Context) {
         get() = prefs.getLong(KEY_ADMIN_SESSION_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_ADMIN_SESSION_UNTIL, value).apply()
 
+    /** Si la sesión en curso es sólo de Ajustes, para la información de una app ([com.slowtown.launcher.admin.AdminSession]). */
+    var adminSessionInfoOnly: Boolean
+        get() = prefs.getBoolean(KEY_ADMIN_SESSION_INFO_ONLY, false)
+        set(value) = prefs.edit().putBoolean(KEY_ADMIN_SESSION_INFO_ONLY, value).apply()
+
     /** Cuándo termina «Habilitar todo» en curso; 0 si no hay. */
     var freeSessionUntil: Long
         get() = prefs.getLong(KEY_FREE_SESSION_UNTIL, 0L)
@@ -202,6 +207,7 @@ class Prefs(context: Context) {
         const val KEY_VETOED = "vetoed"
         const val KEY_CLOSED = "closed"
         const val KEY_ADMIN_SESSION_UNTIL = "admin_session_until"
+        const val KEY_ADMIN_SESSION_INFO_ONLY = "admin_session_info_only"
         const val KEY_FREE_SESSION_UNTIL = "free_session_until"
         const val KEY_FREE_SESSION_USES = "free_session_uses"
         const val KEY_WIDGET_ID = "widget_id"

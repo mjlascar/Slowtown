@@ -119,9 +119,6 @@ class HomeActivity : ComponentActivity() {
     /** Las ocultas de la lista de todas las apps: aparecen sólo buscándolas. */
     private var hidden by mutableStateOf<Set<String>>(emptySet())
 
-    /** Lo que se abre al poner la contraseña, en vez de la administración: la información de una app. */
-    private var adminTarget: Intent? = null
-
     /** Si ahora manda la noche (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
     private var night by mutableStateOf(false)
     private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
@@ -506,7 +503,6 @@ class HomeActivity : ComponentActivity() {
     }
 
     private fun askForAdmin() {
-        adminTarget = null
         screen = if (Password.isSet(this)) Screen.Unlock else Screen.CreatePassword
     }
 
@@ -518,12 +514,8 @@ class HomeActivity : ComponentActivity() {
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) screen = next
     }
 
-    /** Con la contraseña puesta: la administración, o lo que se pidió con ella ([adminTarget]). */
-    private fun unlocked() {
-        val target = adminTarget ?: return showIfStarted(Screen.Admin)
-        adminTarget = null
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startAdminSession(target)
-    }
+    /** Con la contraseña puesta, la administración. */
+    private fun unlocked() = showIfStarted(Screen.Admin)
 
     private fun launch(app: LaunchableApp) {
         runCatching { startActivity(app.intent()) }
@@ -566,11 +558,14 @@ class HomeActivity : ComponentActivity() {
      * activo, con la contraseña y en una sesión de administración. Con Slowtown
      * en pausa, o con «Habilitar todo», que ya abre Ajustes, directo.
      */
+    /**
+     * Sin contraseña: con Slowtown activo, en una sesión que suma sólo Ajustes
+     * y termina como la de administración (ver AdminSession).
+     */
     private fun openAppInfo(app: LaunchableApp) {
         val info = AppCatalog.infoIntent(app.packageName)
         if (isLocked() && !FreeSession.isActive(this)) {
-            askForAdmin()
-            adminTarget = info
+            startAdminSession(info, infoOnly = true)
             return
         }
         runCatching { startActivity(info) }
@@ -649,12 +644,12 @@ class HomeActivity : ComponentActivity() {
      * Ajustes y la Play Store: todo el teléfono queda a mano hasta volver a
      * Inicio, apagar la pantalla o pasar [AdminSession.LENGTH_MS].
      */
-    private fun startAdminSession(target: Intent?) {
+    private fun startAdminSession(target: Intent?, infoOnly: Boolean = false) {
         if (target == null) return
         screen = Screen.Home
         lifecycleScope.launch {
             if (isLocked()) {
-                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages) }
+                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages, infoOnly) }
             }
             runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 .onFailure { Log.w(TAG, "No pude abrir $target", it) }

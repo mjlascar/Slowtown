@@ -135,11 +135,20 @@ object Policies {
      * la llamada, si es de las permitidas, está siempre.
      */
     private fun effectivePackages(context: Context, packages: Collection<String>): Set<String> {
-        val session = AdminSession.isActive(context) || FreeSession.isActive(context)
         val night = Bedtime.restricts(context) && Bedtime.inUse(context) && !CallGuard.inCall(context)
         val allowed = allowlist(context, if (night) emptySet() else packages) + CallGuard.packages(context)
-        return if (session) allowed + installed(context) else allowed
+        val admin = AdminSession.isActive(context)
+        return when {
+            FreeSession.isActive(context) -> allowed + installed(context)
+            // La información de una app: sólo Ajustes, el resto sigue cerrado.
+            admin && AdminSession.isInfoOnly(context) -> allowed + SETTINGS
+            admin -> allowed + installed(context)
+            else -> allowed
+        }
     }
+
+    /** Lo que suma la sesión chica de la información de una app ([AdminSession]). */
+    private val SETTINGS = setOf("com.android.settings")
 
     /**
      * Sesión de administración: se puede abrir cualquier cosa sin salir de
@@ -150,7 +159,7 @@ object Policies {
     @Synchronized
     fun openForAdmin(context: Context, packages: Collection<String>) {
         if (!isDeviceOwner(context)) return
-        setPackages(context, allowlist(context, packages) + installed(context))
+        setPackages(context, effectivePackages(context, packages))
     }
 
     // La variante con PackageInfoFlags recién existe en API 33.
