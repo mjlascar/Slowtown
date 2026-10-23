@@ -24,6 +24,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -71,6 +72,7 @@ import com.slowtown.launcher.ui.UnlockScreen
 import com.slowtown.launcher.ui.WidgetChoice
 import com.slowtown.launcher.ui.WidgetPickerScreen
 import com.slowtown.launcher.ui.WidgetSlot
+import com.slowtown.launcher.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -254,6 +256,7 @@ class HomeActivity : ComponentActivity() {
         }
 
         setContent {
+            val updateState by Updater.state.collectAsState()
             val appActions = AppActions(
                 folders = folders,
                 favorites = favorites,
@@ -274,6 +277,8 @@ class HomeActivity : ComponentActivity() {
                         safeMode = status.safeMode,
                         notice = notice,
                         onBurst = if (night) ::startBurst else null,
+                        update = updateState,
+                        onUpdate = { Updater.update(this@HomeActivity) },
                         screenTime = screenTime,
                         showClock = homeLook.showClock,
                         scalePercent = homeLook.scalePercent,
@@ -332,6 +337,11 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.Admin -> AdminScreen(
                         status = status,
+                        version = Updater.version(this@HomeActivity),
+                        updates = Updater.enabled(this@HomeActivity),
+                        update = updateState,
+                        onCheckUpdate = { Updater.checkNow(this@HomeActivity) },
+                        onUpdate = { Updater.update(this@HomeActivity) },
                         onChooseApps = { screen = Screen.ChooseApps },
                         onSites = {
                             blockedSites = prefs.blockedSites
@@ -467,6 +477,8 @@ class HomeActivity : ComponentActivity() {
         refreshStatus()
         refreshApps()
         refreshWidget()
+        // Si hay una versión nueva de Slowtown. Busca en su hilo, cada 6 horas como mucho.
+        Updater.onHome(this)
     }
 
     /**

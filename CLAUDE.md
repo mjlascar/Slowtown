@@ -219,8 +219,9 @@ un cajón de su casa se termina sacando.
   páginas que se suman en «Páginas bloqueadas» (`Prefs.blockedSites`),
   pausar Slowtown y las dos sesiones.
 - **Nivel 2, el código** (`Fixed`): no se cambia desde el teléfono, ni con la
-  contraseña; sólo con una versión nueva, compilada e instalada por cable con
-  la clave estable. Son las políticas de Chrome (`Chrome`: sin incógnito,
+  contraseña; sólo con una versión nueva: por cable, o una release de GitHub
+  que Slowtown baja sola (ver «Releases»; Marcos aceptó ese camino el 23/10).
+  Son las políticas de Chrome (`Chrome`: sin incógnito,
   SafeSearch y el filtro de sitios de Chrome, sin DNS propio de Chrome, sin
   noticias en la pestaña nueva, y `URLBlocklist`) y las apps
   pausadas (`Vetoed`: `Fixed.APPS` y
@@ -378,6 +379,21 @@ de releases deja sin actualizaciones a todos los que la instalaron.
   `scripts/firma-releases.sha256`. La idea es que testOnly queda fijado al
   activar el administrador y las releases siguientes no lo sacan: confirmarlo
   en el emulador antes.
+- **Se actualiza sola** (`update/Updater.kt`; lo pidió Marcos el 23/10 para
+  no conectar el cable). Sólo lo firmado con la clave de releases: la de
+  cable no busca nada. Al volver a Inicio, cada 6 horas como mucho, le
+  pregunta a la API de GitHub por la última release, y si es más nueva Inicio
+  muestra un renglón gris: «Versión X.Y.Z disponible · Actualizar». Recién al
+  tocarlo baja `Slowtown-X.Y.Z.apk` al caché, verifica con Android que sea
+  Slowtown, más nueva y firmada con la misma clave, y la instala con
+  `PackageInstaller` a nombre de Slowtown. Con Device Owner no pregunta nada,
+  también con Slowtown activo; sin él, Android pide antes «Instalar apps
+  desconocidas» para Slowtown y quizás una confirmación. En la administración
+  están la versión, «Buscar actualización» y, si falla, lo que dijo Android.
+  Con esto el nivel 2 cambia también con una release (Marcos lo aceptó). Play
+  Protect frenó el APK bajado con Chrome; si frena también lo que instala
+  Slowtown se sabe con la primera actualización en el S10e. Falta probar en el
+  emulador qué hace lock task cuando Slowtown se reemplaza estando activa.
 
 ## La red contra el peor caso
 

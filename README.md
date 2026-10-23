@@ -20,7 +20,7 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   Slowtown. La configuración pide una contraseña larga.
 - **Dos niveles:** el primero es lo que se cambia con la contraseña (las apps
   permitidas y las páginas que se suman). El segundo sólo cambia con una
-  versión nueva, instalada por cable: las políticas de Chrome, con la lista de
+  versión nueva de Slowtown: las políticas de Chrome, con la lista de
   bloqueo por defecto de la Universidad Toulouse Capitole, y las apps que no se
   abren nunca.
 - **Bedtime:** de noche sólo se abren el reloj y las alarmas (y las
@@ -48,6 +48,10 @@ falta Android 12 o más nuevo.
 3. Apretá Inicio y elegí Slowtown, o andá a Ajustes → Aplicaciones →
    Aplicaciones predeterminadas → Aplicación de inicio. Para volver al de
    antes, se elige otro en el mismo lugar.
+
+Después se actualiza sola: cuando hay una versión nueva, Inicio lo avisa, y
+con un toque la baja y la instala. La primera vez Android pide dejar a
+Slowtown «instalar apps desconocidas».
 
 Si Google Play Protect la frena («App blocked to protect your device»): en
 algunos países Google no deja instalar desde el navegador las apps que leen

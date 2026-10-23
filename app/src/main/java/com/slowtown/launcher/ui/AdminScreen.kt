@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.slowtown.launcher.update.UpdateState
 
 data class AdminStatus(
     val deviceOwner: Boolean = false,
@@ -22,6 +23,13 @@ data class AdminStatus(
 @Composable
 fun AdminScreen(
     status: AdminStatus,
+    /** La versión instalada, «0.2.1». */
+    version: String,
+    /** Si se actualiza sola desde GitHub: sólo la de las releases. La de cable, por cable. */
+    updates: Boolean,
+    update: UpdateState,
+    onCheckUpdate: () -> Unit,
+    onUpdate: () -> Unit,
     onChooseApps: () -> Unit,
     onSites: () -> Unit,
     onChooseWidget: () -> Unit,
@@ -88,6 +96,19 @@ fun AdminScreen(
             // Desde la administración ya no: la contraseña está en un cajón de
             // la casa, y soltarlo apagaba también lo que se bloquea siempre.
             HintText("Slowtown deja de ser Device Owner sólo por cable, desde la compu (scripts/liberar.sh).")
+        }
+
+        StatusLine("Versión", version)
+        if (updates) {
+            val busy = update == UpdateState.Checking ||
+                update is UpdateState.Downloading ||
+                update is UpdateState.Installing
+            OutlinedButton(onClick = onCheckUpdate, enabled = !busy, modifier = wide) { Text("Buscar actualización") }
+            UpdateLine(update, onUpdate)
+            // Lo que dijeron Android o la red: sin cable, es la única forma de saber qué pasó.
+            (update as? UpdateState.Failed)?.detail?.let { HintText(it.take(300)) }
+        } else {
+            HintText("Versión de cable: se actualiza por cable.")
         }
     }
 }

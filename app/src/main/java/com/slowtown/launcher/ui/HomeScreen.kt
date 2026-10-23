@@ -36,6 +36,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
+import com.slowtown.launcher.update.UpdateState
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -62,6 +63,12 @@ fun HomeScreen(
      * «Es Bedtime, andá a dormir», y el botón aparece recién al tocarlo.
      */
     onBurst: (() -> Unit)?,
+    /**
+     * La actualización de Slowtown: Inicio la muestra sólo si hay una versión
+     * nueva, en un renglón que se toca ([onUpdate]).
+     */
+    update: UpdateState,
+    onUpdate: () -> Unit,
     /** El tiempo de pantalla de hoy, corto («1 h 5 min»), o null sin acceso a los datos de uso. */
     screenTime: String?,
     /** Si va la hora grande arriba. De entrada no: la barra de arriba ya la muestra. */
@@ -125,6 +132,11 @@ fun HomeScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(onClick = onBurst) { Text("Usar 5 minutos") }
                 }
+            }
+            // Debajo de los otros avisos: es lo menos urgente.
+            if (update is UpdateState.Pending) {
+                Spacer(Modifier.height(8.dp))
+                UpdateLine(update, onUpdate)
             }
             if (safeMode) {
                 Spacer(Modifier.height(16.dp))

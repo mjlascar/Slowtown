@@ -35,6 +35,21 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Para buscar y bajar las versiones nuevas de Slowtown de las releases
+         de GitHub (update/Updater.kt). Es lo único que Slowtown hace por
+         internet. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Para instalarlas a nombre de Slowtown. Con Device Owner instala sin
+         preguntar; sin él, Android pide antes que se deje a Slowtown «instalar
+         apps desconocidas». -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Sin Device Owner, Android 12 deja que una app se actualice a sí misma
+         sin la pantalla de confirmación (una vez dado el permiso de arriba). Si
+         no la deja, la confirmación aparece igual. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+
     <application
         android:name=".SlowtownApp"
         android:allowBackup="false"
@@ -78,6 +93,14 @@
              disparan las alarmas de Slowtown: no se exporta. -->
         <receiver
             android:name=".admin.Bedtime$Tick"
+            android:exported="false" />
+
+        <!-- El resultado de instalar una versión nueva de Slowtown: lo manda el
+             instalador de Android con el PendingIntent de Slowtown. Declarado
+             acá y no al vuelo, porque puede llegar a la versión nueva, que
+             arranca de cero. No se exporta. -->
+        <receiver
+            android:name=".update.Updater$Result"
             android:exported="false" />
 
         <!-- Las notificaciones por oleadas: lee las notificaciones de las apps
