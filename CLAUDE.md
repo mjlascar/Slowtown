@@ -360,9 +360,15 @@ de releases deja sin actualizaciones a todos los que la instalaron.
   sale de la etiqueta: X·10000 + Y·100 + Z.
 - En esta compu, `./gradlew assembleRelease` firma desde
   `~/slowtown-firma-releases/` (para probar antes de etiquetar).
-- El S10e sigue con la variante debug (testOnly, clave personal): una
-  release no se instala encima, y para Device Owner no sirve, porque
-  `liberar.sh --forzar` necesita testOnly.
+- **El S10e pasó a la release de GitHub** (23/10: Marcos desinstaló la de
+  debug, que tenía la clave personal). Las actualizaciones de GitHub se
+  instalan encima sin perder nada. Para el paso 3 no sirve tal cual, porque
+  `liberar.sh --forzar` necesita testOnly: ese día se instala encima una
+  variante de cable (testOnly) firmada con la clave de releases, que conserva
+  la configuración, y `provisionar.sh` tiene que aceptar también la huella de
+  `scripts/firma-releases.sha256`. La idea es que testOnly queda fijado al
+  activar el administrador y las releases siguientes no lo sacan: confirmarlo
+  en el emulador antes.
 
 ## La red contra el peor caso
 
