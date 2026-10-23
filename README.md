@@ -47,6 +47,13 @@ falta Android 12 o más nuevo.
    Aplicaciones predeterminadas → Aplicación de inicio. Para volver al de
    antes, se elige otro en el mismo lugar.
 
+Si Google Play Protect la frena («App blocked to protect your device»): en
+algunos países Google no deja instalar desde el navegador las apps que leen
+notificaciones, y Slowtown las lee para las oleadas. Por cable
+(`adb install`) se instala igual. Si no, se apaga un momento Play Protect
+(Play Store → tu perfil → Play Protect → ⚙ → «Escanear apps con Play
+Protect»), se instala y se vuelve a prender.
+
 Así es un launcher: Inicio en texto, hábitos, carpetas y apps ocultas. El
 tiempo de pantalla y las notificaciones por oleadas piden un permiso que
 Android da desde Ajustes: «Acceso a datos de uso» y «Acceso a

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <!-- Una S que es el camino de vuelta -->
+  <path d="M338,400 C150,400 150,292 256,264 C362,236 362,152 214,152" fill="none" stroke="#fff" stroke-width="54"/>
+  <path d="M338,400 C150,400 150,292 256,264 C362,236 362,152 214,152" fill="none" stroke="#000" stroke-width="6" stroke-dasharray="16 16"/>
+  <!-- La casa al final, y la luna -->
+  <polygon points="148,176 148,138 172,112 196,138 196,176" fill="#fff"/>
+  <circle cx="372" cy="124" r="26" fill="#fff"/>
+  <circle cx="385" cy="115" r="23" fill="#000"/>
+</svg>

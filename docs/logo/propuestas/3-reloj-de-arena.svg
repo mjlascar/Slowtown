@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <rect x="158" y="102" width="196" height="22" rx="6" fill="#fff"/>
+  <rect x="158" y="388" width="196" height="22" rx="6" fill="#fff"/>
+  <path d="M176,124 L336,124 L336,196 L268,244 L268,268 L336,316 L336,388 L176,388 L176,316 L244,268 L244,244 L176,196 Z"
+    fill="none" stroke="#fff" stroke-width="14" stroke-linejoin="round"/>
+  <!-- Arriba queda poca arena, y cae despacio -->
+  <polygon points="194,208 318,208 266,242 246,242" fill="#fff"/>
+  <line x1="256" y1="246" x2="256" y2="292" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+  <!-- Abajo, lo que cayó es el pueblo: tres casas -->
+  <polygon points="188,381 188,338 210,316 232,338 232,381" fill="#fff"/>
+  <polygon points="236,381 236,326 258,302 280,326 280,381" fill="#fff"/>
+  <polygon points="284,381 284,342 304,322 324,342 324,381" fill="#fff"/>
+</svg>

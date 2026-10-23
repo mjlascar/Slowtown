@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <!-- El disco de un teléfono de antes: se marca despacio -->
+  <circle cx="256" cy="256" r="168" fill="#fff"/>
+  <circle cx="198.0" cy="356.5" r="22" fill="#000"/>
+  <circle cx="155.5" cy="314.0" r="22" fill="#000"/>
+  <circle cx="140.0" cy="256.0" r="22" fill="#000"/>
+  <circle cx="155.5" cy="198.0" r="22" fill="#000"/>
+  <circle cx="198.0" cy="155.5" r="22" fill="#000"/>
+  <circle cx="256.0" cy="140.0" r="22" fill="#000"/>
+  <circle cx="314.0" cy="155.5" r="22" fill="#000"/>
+  <circle cx="356.5" cy="198.0" r="22" fill="#000"/>
+  <circle cx="372.0" cy="256.0" r="22" fill="#000"/>
+  <circle cx="356.5" cy="314.0" r="22" fill="#000"/>
+  <line x1="294.9" y1="375.8" x2="305.4" y2="408.2" stroke="#000" stroke-width="14" stroke-linecap="round"/>
+  <!-- En el centro, el pueblo -->
+  <circle cx="256" cy="256" r="64" fill="#000"/>
+  <polygon points="230,290 230,258 256,232 282,258 282,290" fill="#fff"/>
+</svg>

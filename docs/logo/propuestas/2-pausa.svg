@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <!-- Dos casas que forman el símbolo de pausa -->
+  <polygon points="150,392 150,214 190,160 230,214 230,392" fill="#fff"/>
+  <polygon points="282,392 282,214 322,160 362,214 362,392" fill="#fff"/>
+  <rect x="176" y="250" width="28" height="28" fill="#000"/>
+  <rect x="308" y="250" width="28" height="28" fill="#000"/>
+  <!-- La luna -->
+  <circle cx="366" cy="124" r="28" fill="#fff"/>
+  <circle cx="380" cy="114" r="25" fill="#000"/>
+</svg>
