@@ -11,3 +11,6 @@ captures/
 # Las claves de firma viven fuera del repo, nunca adentro.
 *.keystore
 *.jks
+
+# Lo que deja Python al importar los scripts de docs/logo
+__pycache__/
