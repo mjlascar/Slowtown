@@ -119,14 +119,14 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
 
     FormScaffold(title = "Notificaciones", onBack = onBack) {
         HintText(
-            "Las de las apps que elijas no llegan apenas salen: esperan y llegan " +
-                "todas juntas, en silencio, a las horas de abajo. Llegan las originales: " +
-                "se tocan y se responden como siempre.",
+            "Las notificaciones de las apps que marques abajo no llegan en el momento: " +
+                "esperan y llegan todas juntas, en silencio, a las horas que elijas. " +
+                "Después se tocan y se responden como siempre.",
         )
         if (!access) {
             ErrorText(
-                "Slowtown todavía no puede leer las notificaciones. El permiso se da " +
-                    "por cable, con scripts/provisionar.sh.",
+                "Slowtown todavía no puede leer las notificaciones. Dale el permiso en " +
+                    "Ajustes, en «Acceso a notificaciones», o por cable con provisionar.sh.",
             )
         }
         Row(
@@ -173,10 +173,9 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
 
         Text("Pasan siempre", style = MaterialTheme.typography.titleMedium)
         HintText(
-            "Si una notificación de esas apps trae una de estas palabras en el título " +
-                "o en el texto, llega en el momento: un nombre, «urgente». Palabras " +
-                "enteras, sin importar tildes ni mayúsculas: «mamá» encuentra «Mamá», " +
-                "no «mamadera».",
+            "Si una notificación trae una de estas palabras, llega en el momento: " +
+                "por ejemplo, un nombre o «urgente». Cuenta la palabra entera: «mamá» " +
+                "encuentra «Mamá», pero no «mamadera».",
         )
         OutlinedTextField(
             value = word,
@@ -199,12 +198,12 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
             }
         }
 
-        Text("Las apps que esperan", style = MaterialTheme.typography.titleMedium)
+        Text("Qué apps esperan", style = MaterialTheme.typography.titleMedium)
         HintText(
-            "Pasan siempre las llamadas, las alarmas, las llamadas perdidas, la música " +
-                "y lo que está en curso, como un viaje o una descarga. Una que va a " +
-                "esperar puede sonar un instante antes de irse: Android avisa " +
-                "después de hacerla sonar.",
+            "Marcá las apps cuyas notificaciones querés que esperen. Las llamadas, las " +
+                "alarmas, la música y lo que está en curso (un viaje, una descarga) " +
+                "llegan siempre en el momento. A veces una suena al llegar, antes de " +
+                "quedar esperando.",
         )
         if (enabled && packages.isEmpty()) HintText("Todavía no elegiste ninguna: no espera nada.")
         choices.forEach { app ->

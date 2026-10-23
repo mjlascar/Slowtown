@@ -48,7 +48,7 @@ internal fun FormScaffold(
     title: String,
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
-) {
+) = CompactTexts {
     Column(
         Modifier
             .fillMaxSize()
@@ -60,7 +60,7 @@ internal fun FormScaffold(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )
     }

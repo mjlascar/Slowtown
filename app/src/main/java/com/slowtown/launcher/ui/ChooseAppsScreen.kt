@@ -35,42 +35,44 @@ fun ChooseAppsScreen(
 ) {
     var selection by remember(chosen) { mutableStateOf(chosen) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .safeDrawingPadding(),
-    ) {
-        // «Volver» arriba, como en las demás pantallas de la administración.
-        BackBar("Apps permitidas", onBack)
+    CompactTexts {
         Column(
             Modifier
-                .weight(1f)
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+                .fillMaxSize()
+                .safeDrawingPadding(),
         ) {
-            HintText(
-                "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
-                    "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
-                    "deslizando para arriba en Inicio.",
-            )
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(Modifier.weight(1f)) {
-                items(apps, key = { it.key }) { app ->
-                    val checked = app.key in selection
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { selection = if (checked) selection - app.key else selection + app.key }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = checked, onCheckedChange = null)
-                        Spacer(Modifier.width(12.dp))
-                        Text(app.label, style = MaterialTheme.typography.titleLarge)
+            // «Volver» arriba, como en las demás pantallas de la administración.
+            BackBar("Apps permitidas", onBack)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+            ) {
+                HintText(
+                    "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
+                        "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
+                        "deslizando para arriba en Inicio.",
+                )
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(Modifier.weight(1f)) {
+                    items(apps, key = { it.key }) { app ->
+                        val checked = app.key in selection
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selection = if (checked) selection - app.key else selection + app.key }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = checked, onCheckedChange = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(app.label, style = MaterialTheme.typography.titleLarge)
+                        }
                     }
                 }
-            }
-            Button(onClick = { onDone(selection) }, modifier = Modifier.align(Alignment.End)) {
-                Text("Listo (${apps.count { it.key in selection }})")
+                Button(onClick = { onDone(selection) }, modifier = Modifier.align(Alignment.End)) {
+                    Text("Listo (${apps.count { it.key in selection }})")
+                }
             }
         }
     }

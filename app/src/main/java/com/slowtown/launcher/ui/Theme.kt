@@ -3,10 +3,12 @@ package com.slowtown.launcher.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 
 private val Colors = darkColorScheme(
     primary = Color.White,
@@ -35,4 +37,26 @@ fun SlowtownTheme(content: @Composable () -> Unit) {
             content = content,
         )
     }
+}
+
+/**
+ * Las letras de la administración, un poco más chicas que las de Material: en
+ * los 360 dp del S10e se veían gigantes (Marcos, 23/10). Inicio no cambia: su
+ * tamaño se elige en «Cómo se ve Inicio».
+ */
+private val Compact: Typography = Typography().run {
+    fun TextStyle.small() = copy(fontSize = fontSize * 0.86f, lineHeight = lineHeight * 0.86f)
+    Typography(
+        displayLarge = displayLarge.small(), displayMedium = displayMedium.small(), displaySmall = displaySmall.small(),
+        headlineLarge = headlineLarge.small(), headlineMedium = headlineMedium.small(), headlineSmall = headlineSmall.small(),
+        titleLarge = titleLarge.small(), titleMedium = titleMedium.small(), titleSmall = titleSmall.small(),
+        bodyLarge = bodyLarge.small(), bodyMedium = bodyMedium.small(), bodySmall = bodySmall.small(),
+        labelLarge = labelLarge.small(), labelMedium = labelMedium.small(), labelSmall = labelSmall.small(),
+    )
+}
+
+/** Las pantallas de la administración, con [Compact]. */
+@Composable
+fun CompactTexts(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme, typography = Compact, content = content)
 }
