@@ -49,7 +49,7 @@ object ScreenTime {
             val event = UsageEvents.Event()
             while (query.hasNextEvent()) {
                 query.getNextEvent(event)
-                add(Event(event.timeStamp, event.eventType, event.packageName))
+                add(Event(event.timeStamp, event.eventType, event.packageName, event.className))
             }
         }
         val interactive = context.getSystemService(PowerManager::class.java).isInteractive
@@ -69,13 +69,19 @@ object ScreenTime {
         }
     }
 
-    internal data class Event(val time: Long, val type: Int, val packageName: String?)
+    internal data class Event(val time: Long, val type: Int, val packageName: String?, val className: String? = null)
 
     /**
-     * Suma el tiempo adelante de cada app entre [start] y [end]. Una app empieza
-     * con RESUMED y termina con su PAUSED o STOPPED; apagar la pantalla, la
+     * Suma el tiempo adelante de cada app entre [start] y [end]. Una pantalla
+     * empieza con RESUMED y termina con su PAUSED; apagar la pantalla, la
      * pantalla de bloqueo o apagar el teléfono terminan lo que esté abierto. Lo
      * que sigue abierto al final cuenta hasta [end] sólo con la pantalla prendida.
+     *
+     * STOPPED no cuenta, y PAUSED sólo si es de la pantalla que está adelante:
+     * al pasar de una pantalla a otra de la misma app (en WhatsApp, de la lista
+     * de chats a un chat), Android avisa que se paró la vieja un instante
+     * después de que arrancó la nueva. Tomarlo como el final dejaba sin contar
+     * todo el rato en el chat: Inicio decía 22 min con 54 en Bienestar digital.
      */
     internal fun foreground(
         events: List<Event>,
@@ -85,22 +91,27 @@ object ScreenTime {
         openAtEnd: Boolean,
     ): Long {
         var current: String? = null
+        var currentClass: String? = null
         var since = 0L
         var total = 0L
         fun close(at: Long) {
             val app = current ?: return
             if (app !in excluded) total += (minOf(at, end) - maxOf(since, start)).coerceAtLeast(0L)
             current = null
+            currentClass = null
         }
         for (event in events.sortedBy { it.time }) {
             when (event.type) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
                     close(event.time)
                     current = event.packageName
+                    currentClass = event.className
                     since = event.time
                 }
-                UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED ->
-                    if (event.packageName == current) close(event.time)
+                UsageEvents.Event.ACTIVITY_PAUSED -> {
+                    val same = event.className == null || currentClass == null || event.className == currentClass
+                    if (event.packageName == current && same) close(event.time)
+                }
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE,
                 UsageEvents.Event.KEYGUARD_SHOWN,
                 UsageEvents.Event.DEVICE_SHUTDOWN -> close(event.time)
