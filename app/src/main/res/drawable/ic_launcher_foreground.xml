@@ -1,20 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Un reloj sin números. Dentro de los 66 dp del centro, que es lo que los
-     launchers nunca recortan. -->
+<!-- El reloj de arena inclinado (docs/logo/slowtown.svg), que eligió Marcos el
+     23/10. Lo genera docs/logo/a_vector.py: no se edita a mano. Achicado para
+     que nada pase de 35 dp del centro, y los launchers no lo recorten. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z"
-        android:strokeWidth="4"
-        android:strokeColor="#FFFFFF" />
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M54,54L54,40M54,54L64,60"
-        android:strokeWidth="4"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round" />
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group android:pivotX="256" android:pivotY="256" android:scaleX="0.8619" android:scaleY="0.8619">
+        <group android:pivotX="256" android:pivotY="256" android:rotation="-12">
+            <path android:fillColor="#FFFFFFFF" android:pathData="M158,98H354A12,12 0,0 1 366,110V114A12,12 0,0 1 354,126H158A12,12 0,0 1 146,114V110A12,12 0,0 1 158,98Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M158,386H354A12,12 0,0 1 366,398V402A12,12 0,0 1 354,414H158A12,12 0,0 1 146,402V398A12,12 0,0 1 158,386Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M180,124 C180,198 236,228 246,256 C236,284 180,314 180,388 L332,388 C332,314 276,284 266,256 C276,228 332,198 332,124 Z" />
+            <path android:fillColor="#FF000000" android:pathData="M198,138 C198,198 242,226 252,250 L260,250 C270,226 314,198 314,138 Z" />
+            <path android:fillColor="#FF000000" android:pathData="M252,262 L260,262 C270,286 314,314 314,374 L198,374 C198,314 242,286 252,262 Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M222,200 Q256,214 290,200 L262,247 L250,247 Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M251,264a5,5 0,1 0 10,0a5,5 0,1 0 -10,0Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M251.5,282a4.5,4.5 0,1 0 9,0a4.5,4.5 0,1 0 -9,0Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M252,300a4,4 0,1 0 8,0a4,4 0,1 0 -8,0Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M252.5,318a3.5,3.5 0,1 0 7,0a3.5,3.5 0,1 0 -7,0Z" />
+            <path android:fillColor="#FFFFB547" android:pathData="M200,374 Q256,346 312,374 Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M206,364L206,350L220,334L234,350L234,364Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M238,336h26v28h-26Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M244,312h14v26h-14Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M242,312L251,288L260,312Z" />
+            <path android:fillColor="#FFFFFFFF" android:pathData="M270,364L270,352L283,336L296,352L296,364Z" />
+            <path android:fillColor="#FF000000" android:pathData="M215,356h9v9h-9Z" />
+            <path android:fillColor="#FF000000" android:pathData="M247,356h9v9h-9Z" />
+            <path android:fillColor="#FF000000" android:pathData="M278,358h9v9h-9Z" />
+        </group>
+    </group>
 </vector>

@@ -1,3 +1,5 @@
+<img src="docs/logo/slowtown.svg" width="112" align="right" alt="El logo de Slowtown: un reloj de arena inclinado">
+
 # Slowtown
 
 Un launcher para Android que convierte el teléfono de todos los días en un

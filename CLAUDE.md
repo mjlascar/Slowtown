@@ -343,6 +343,15 @@ hacen falta coordenadas).
 computadora»** en el diálogo de adb: con lock task activo no se puede
 autorizar una computadora nueva, y sin eso `liberar.sh` no llega.
 
+## El logo
+
+El reloj de arena inclinado, con el pueblo abajo (`docs/logo/slowtown.svg`):
+lo eligió Marcos el 23/10, entre las propuestas de `docs/logo/propuestas*`,
+inspiradas en «Slowtown» de Twenty One Pilots. Blanco y negro con detalles en
+ámbar. `docs/logo/a_vector.py` lo pasa al ícono adaptable
+(`res/drawable/ic_launcher_foreground.xml`, achicado para que nada pase de 35
+dp del centro): si cambia el SVG, se vuelve a correr, no se edita a mano.
+
 ## Releases
 
 Para los amigos de Marcos y quien quiera (lo pidió el 22/10): la variante
