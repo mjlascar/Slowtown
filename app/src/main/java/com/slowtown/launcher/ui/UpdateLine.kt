@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.update.UpdateState
 
@@ -16,7 +17,7 @@ import com.slowtown.launcher.update.UpdateState
  * Android espera la confirmación, para volver a abrirla.
  */
 @Composable
-internal fun UpdateLine(state: UpdateState, onClick: () -> Unit) {
+internal fun UpdateLine(state: UpdateState, onClick: () -> Unit, textAlign: TextAlign? = null) {
     val text = updateText(state) ?: return
     val tappable = when (state) {
         is UpdateState.Available, is UpdateState.NeedsPermission, is UpdateState.Failed -> true
@@ -27,6 +28,7 @@ internal fun UpdateLine(state: UpdateState, onClick: () -> Unit) {
         text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodyMedium,
+        textAlign = textAlign,
         modifier = Modifier
             .clickable(enabled = tappable, role = Role.Button, onClick = onClick)
             .padding(vertical = 4.dp),

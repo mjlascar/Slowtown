@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -42,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.HabitKind
@@ -83,6 +87,8 @@ private val FLAME_STOPS = listOf(
  * derecha, como en GitHub), cuánto lleva contra la meta, y a la derecha de
  * todo el botón que marca hoy, pegado al cuadradito que prende. Tocar los
  * cuadraditos abre el resumen.
+ *
+ * @param alignment dónde van a lo ancho, si sobra lugar («Cómo se ve Inicio»).
  */
 @Composable
 fun HabitsWidget(
@@ -91,52 +97,79 @@ fun HabitsWidget(
     today: LocalDate,
     onToggleToday: (HabitKind) -> Unit,
     onOpen: () -> Unit,
+    alignment: Alignment.Horizontal = Alignment.Start,
 ) {
-    val days = Habits.lastDays(today)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val place = Modifier
+            .fillMaxWidth()
+            .wrapContentWidth(alignment)
         // Los cuadraditos se achican si no entra todo: el S10e es más angosto que el emulador.
         val fixed = FLAME + FLAME_GAP + COUNT + GAP * 6 + BUTTON_GAP + BUTTON
-        val cell = ((maxWidth - fixed) / 7).coerceIn(MIN_CELL, CELL)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(FLAME + FLAME_GAP + COUNT))
-                Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                    days.forEach { day ->
-                        Text(
-                            initial(day),
-                            modifier = Modifier.width(cell),
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+        val narrowest = fixed + MIN_CELL * 7
+        if (maxWidth >= narrowest) {
+            HabitRows(plan, marks, today, ((maxWidth - fixed) / 7).coerceIn(MIN_CELL, CELL), onToggleToday, onOpen, place)
+        } else {
+            // Ni con los cuadraditos más chicos: los hábitos más grandes que el
+            // resto de Inicio, en una pantalla angosta. Se achica todo junto
+            // hasta que entre, en vez de aplastar el botón de hoy.
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density * (maxWidth / narrowest), density.fontScale)) {
+                HabitRows(plan, marks, today, MIN_CELL, onToggleToday, onOpen, place)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HabitRows(
+    plan: List<HabitPlan>,
+    marks: Map<HabitKind, Set<LocalDate>>,
+    today: LocalDate,
+    cell: Dp,
+    onToggleToday: (HabitKind) -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier,
+) {
+    val days = Habits.lastDays(today)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(FLAME + FLAME_GAP + COUNT))
+            Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
+                days.forEach { day ->
+                    Text(
+                        initial(day),
+                        modifier = Modifier.width(cell),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            plan.forEach { (kind, perWeek) ->
-                val done = marks[kind].orEmpty()
-                val count = Habits.lastWeekCount(done, today)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StreakFlame(kind, Habits.streak(perWeek, done, today))
-                    Spacer(Modifier.width(FLAME_GAP))
-                    Text(
-                        "$count/$perWeek",
-                        modifier = Modifier.width(COUNT),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (count >= perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        Modifier
-                            .clearAndSetSemantics {
-                                contentDescription = "${kind.label}, últimos 7 días: $count de $perWeek. Ver el resumen"
-                            }
-                            .clickable(onClick = onOpen),
-                        horizontalArrangement = Arrangement.spacedBy(GAP),
-                    ) {
-                        days.forEach { day -> Cell(done = day in done, today = day == today, size = cell) }
-                    }
-                    Spacer(Modifier.width(BUTTON_GAP))
-                    HabitButton(kind, doneToday = today in done, onToggle = { onToggleToday(kind) })
+        }
+        plan.forEach { (kind, perWeek) ->
+            val done = marks[kind].orEmpty()
+            val count = Habits.lastWeekCount(done, today)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StreakFlame(kind, Habits.streak(perWeek, done, today))
+                Spacer(Modifier.width(FLAME_GAP))
+                Text(
+                    "$count/$perWeek",
+                    modifier = Modifier.width(COUNT),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (count >= perWeek) DONE else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    Modifier
+                        .clearAndSetSemantics {
+                            contentDescription = "${kind.label}, últimos 7 días: $count de $perWeek. Ver el resumen"
+                        }
+                        .clickable(onClick = onOpen),
+                    horizontalArrangement = Arrangement.spacedBy(GAP),
+                ) {
+                    days.forEach { day -> Cell(done = day in done, today = day == today, size = cell) }
                 }
+                Spacer(Modifier.width(BUTTON_GAP))
+                HabitButton(kind, doneToday = today in done, onToggle = { onToggleToday(kind) })
             }
         }
     }

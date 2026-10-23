@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -125,7 +126,7 @@ class HomeActivity : ComponentActivity() {
     private var night by mutableStateOf(false)
     private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
 
-    /** Cómo se ve Inicio: el tamaño y si va la hora grande. */
+    /** Cómo se ve Inicio: el tamaño, si va la hora grande, y el tamaño y el lugar de cada parte. */
     private var homeLook by mutableStateOf(HomeLook(100, false))
 
     private lateinit var widgetHost: AppWidgetHost
@@ -176,7 +177,7 @@ class HomeActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         prefs = Prefs(this)
-        homeLook = HomeLook(prefs.homeScalePercent, prefs.showClock)
+        homeLook = HomeLook(prefs.homeScalePercent, prefs.showClock, prefs.homeBlocks)
         // Con Inicio al frente y la hora grande, la de la barra se esconde; al
         // ir a otra pantalla de Slowtown, vuelve. Escribir el ajuste es una
         // llamada corta: en el hilo principal, para que no se crucen.
@@ -280,20 +281,20 @@ class HomeActivity : ComponentActivity() {
                         update = updateState,
                         onUpdate = { Updater.update(this@HomeActivity) },
                         screenTime = screenTime,
-                        showClock = homeLook.showClock,
-                        scalePercent = homeLook.scalePercent,
+                        look = homeLook,
                         widget = if (showHabits) {
-                            @Composable {
+                            @Composable { align: Alignment.Horizontal ->
                                 HabitsWidget(
                                     plan = habitPlan,
                                     marks = habitMarks,
                                     today = today,
                                     onToggleToday = { toggleHabit(it, today) },
                                     onOpen = { screen = Screen.Habits },
+                                    alignment = align,
                                 )
                             }
                         } else {
-                            widget?.let { (id, info) -> @Composable { WidgetSlot(widgetHost, id, info) } }
+                            widget?.let { (id, info) -> @Composable { _: Alignment.Horizontal -> WidgetSlot(widgetHost, id, info) } }
                         },
                         scaleWidget = showHabits,
                         onOpen = ::launch,
@@ -386,6 +387,7 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.HomeLook -> HomeLookScreen(
                         look = homeLook,
+                        appWidget = !showHabits && widget != null,
                         onChange = ::saveHomeLook,
                         onBack = { screen = Screen.Admin },
                     )
@@ -705,6 +707,7 @@ class HomeActivity : ComponentActivity() {
     private fun saveHomeLook(look: HomeLook) {
         prefs.homeScalePercent = look.scalePercent
         prefs.showClock = look.showClock
+        prefs.homeBlocks = look.blocks
         homeLook = look
     }
 

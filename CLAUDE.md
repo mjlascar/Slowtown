@@ -60,8 +60,15 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   estar y andar de fondo sin ocupar lugar, como el teclado (lo pidió Marcos).
   Sin contraseña.
 - **Cómo se ve Inicio** (en la administración): el tamaño de todo Inicio junto
-  (70, 80, 90 o 100 %, `Prefs.homeScalePercent`, con una vista previa ahí
-  mismo) y la hora grande (`Prefs.showClock`, prendida de entrada).
+  (70, 80, 90 o 100 %, `Prefs.homeScalePercent`), la hora grande
+  (`Prefs.showClock`, prendida de entrada) y cada parte por separado (lo pidió
+  Marcos): la hora, la fecha, el tiempo de pantalla, los avisos, las apps,
+  «↑ todas las apps» y los hábitos, cada una con su tamaño (de 60 a 150 %,
+  sobre el de todo Inicio) y su lugar a lo ancho (`Prefs.homeBlocks`, JSON; de
+  entrada, como era Inicio). El tiempo de pantalla comparte el renglón de la
+  hora (sin ella, el de la fecha) si van en lugares distintos y entran; si no,
+  va justo debajo. El widget de otra app no cambia. Arriba, fija, una vista
+  previa: Inicio en miniatura, armado con las mismas piezas (`HomeContent`).
 - **Una sola hora en Inicio** (`StatusBarClock`): con la hora grande a la
   vista, la de la barra de arriba se esconde mientras Inicio está al frente, y
   vuelve en cualquier otra pantalla (Marcos no la quiere repetida). Android no

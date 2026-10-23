@@ -8,6 +8,7 @@ import com.slowtown.launcher.apps.Folders
 import com.slowtown.launcher.apps.HabitKind
 import com.slowtown.launcher.apps.HabitPlan
 import com.slowtown.launcher.apps.Habits
+import com.slowtown.launcher.ui.HomeBlocks
 import java.time.DayOfWeek
 
 /** Lo que eligió el usuario. La contraseña vive aparte, en [com.slowtown.launcher.security.Password]. */
@@ -63,6 +64,14 @@ class Prefs(context: Context) {
     var showClock: Boolean
         get() = prefs.getBoolean(KEY_SHOW_CLOCK, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_CLOCK, value).apply()
+
+    /**
+     * El tamaño y el lugar de cada parte de Inicio (la hora, la fecha, las
+     * apps…), como JSON. Lo que falta o no se entiende queda como venía.
+     */
+    var homeBlocks: HomeBlocks
+        get() = HomeBlocks.parse(prefs.getString(KEY_HOME_BLOCKS, null))
+        set(value) = prefs.edit().putString(KEY_HOME_BLOCKS, value.serialize()).apply()
 
     /** Si Slowtown escondió la hora de la barra ([StatusBarClock]) y tiene que devolverla. */
     val statusClockHidden: Boolean
@@ -200,6 +209,7 @@ class Prefs(context: Context) {
         const val KEY_HIDDEN_APPS = "hidden_apps"
         const val KEY_HOME_SCALE = "home_scale_percent"
         const val KEY_SHOW_CLOCK = "show_clock"
+        const val KEY_HOME_BLOCKS = "home_blocks"
         const val KEY_STATUS_CLOCK_HIDDEN = "status_clock_hidden"
         const val KEY_STATUS_ICONS = "status_icons"
         const val MIN_HOME_SCALE = 70
