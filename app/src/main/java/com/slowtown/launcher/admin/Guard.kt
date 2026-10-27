@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
@@ -37,19 +38,33 @@ object Guard {
     /** Después de volver a Inicio, cuánto esperar antes de hacerlo otra vez con la misma app. */
     private const val KICK_AGAIN_MS = 2_000L
 
+    /** La barra del sistema, que la guardia no frena: sus diálogos son pantallas. */
+    private val EXEMPT = setOf("com.android.systemui")
+
     /**
-     * Lo que la guardia no frena aunque no esté en la lista: la barra del
-     * sistema (sus diálogos son pantallas) y el instalador de Android, que
-     * pregunta antes de instalar o desinstalar (las actualizaciones de
-     * Slowtown, «Desinstalar» de la lista). Abrirlo no afloja nada: lo nuevo
-     * que se instala tampoco está permitido.
+     * El instalador de Android, que pregunta antes de instalar o desinstalar:
+     * estos y el que atienda «desinstalar» en el teléfono ([installers]).
+     * Pasa sólo un rato después de que Slowtown lo abre ([allowInstaller]):
+     * si pasara siempre, cualquier app permitida que ofrezca desinstalar
+     * podría sacar a Slowtown sin cable.
      */
-    private val EXEMPT = setOf(
-        "com.android.systemui",
+    private val INSTALLERS = setOf(
         "com.android.packageinstaller",
         "com.google.android.packageinstaller",
         "com.samsung.android.packageinstaller",
     )
+    private const val INSTALLER_MS = 2 * 60_000L
+
+    @Volatile
+    private var installerUntil = 0L
+
+    /**
+     * Deja pasar el instalador de Android un par de minutos: lo abre Slowtown
+     * para desinstalar una app de la lista o para confirmar una actualización.
+     */
+    fun allowInstaller() {
+        installerUntil = SystemClock.elapsedRealtime() + INSTALLER_MS
+    }
 
     private val handler by lazy { Handler(HandlerThread("guardia").apply { start() }.looper) }
     private val loop = Runnable { tick() }
@@ -58,6 +73,7 @@ object Guard {
     private lateinit var app: Context
     private var running = false
     private var launchers = emptySet<String>()
+    private var installers = INSTALLERS
     private var cursor = 0L
     private var front: String? = null
     private var frontClass: String? = null
@@ -99,6 +115,7 @@ object Guard {
                 cursor = System.currentTimeMillis() - LOOK_BACK_MS
                 front = null
                 launchers = runCatching { launchers(appContext) }.getOrDefault(emptySet())
+                installers = INSTALLERS + runCatching { installers(appContext) }.getOrDefault(emptySet())
             }
             tick()
         }
@@ -154,6 +171,7 @@ object Guard {
 
     private fun judge(context: Context, pkg: String) {
         if (pkg == context.packageName || pkg in EXEMPT || pkg in launchers) return
+        if (pkg in installers && SystemClock.elapsedRealtime() < installerUntil) return
         val mode = Rules.mode(context)
         if (mode == Rules.Mode.GUARD) {
             Rules.hold(context, pkg)?.let { return kick(context, pkg, it) }
@@ -204,6 +222,15 @@ object Guard {
             .queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_ALL)
             .filter { it.priority >= 0 }
             .mapTo(mutableSetOf()) { it.activityInfo.packageName } - Rules.SETTINGS
+
+    /** Quien atiende «desinstalar» en este teléfono: cada marca puede tener el suyo. */
+    // La variante con ResolveInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    private fun installers(context: Context): Set<String> {
+        val delete = Intent(Intent.ACTION_DELETE, Uri.fromParts("package", context.packageName, null))
+        return context.packageManager.queryIntentActivities(delete, PackageManager.MATCH_SYSTEM_ONLY)
+            .mapTo(mutableSetOf()) { it.activityInfo.packageName }
+    }
 
     /** Vuelve a Inicio, que dice por qué ([lastHeld]). */
     private fun kick(context: Context, pkg: String, hold: Rules.Hold) {

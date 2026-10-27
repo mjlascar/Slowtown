@@ -10,7 +10,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import com.slowtown.launcher.Prefs
+import com.slowtown.launcher.admin.AdminSession
+import com.slowtown.launcher.admin.Guard
 import com.slowtown.launcher.admin.Policies
+import com.slowtown.launcher.admin.Rules
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -157,7 +161,7 @@ object Updater {
     fun update(context: Context) {
         val now = _state.value
         if (now is UpdateState.Installing) {
-            confirmation?.let { show(context, it, "la confirmación de Android") }
+            confirmation?.let { confirm(context, it) }
             return
         }
         if (now !is UpdateState.Available && now !is UpdateState.NeedsPermission && now !is UpdateState.Failed) return
@@ -167,6 +171,11 @@ object Updater {
         // pantalla de Ajustes no se abriría.
         if (!Policies.isDeviceOwner(context) && !context.packageManager.canRequestPackageInstalls()) {
             _state.value = UpdateState.NeedsPermission(version)
+            // Sin cable, la guardia deja pasar esa pantalla de Ajustes en una
+            // sesión chica, como la información de una app.
+            if (Rules.mode(context) == Rules.Mode.GUARD) {
+                AdminSession.start(context, Prefs(context).allowedPackages, infoOnly = true)
+            }
             show(
                 context,
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")),
@@ -327,7 +336,7 @@ object Updater {
             if (confirm != null) {
                 confirmation = confirm
                 _state.value = UpdateState.Installing(version, waiting = true)
-                show(context, confirm, "la confirmación de Android")
+                confirm(context, confirm)
                 return
             }
         }
@@ -345,6 +354,12 @@ object Updater {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
         Log.w(TAG, "Android no instaló la $version: estado $status, $message")
         _state.value = UpdateState.Failed(version, message ?: "Android contestó $status")
+    }
+
+    /** La confirmación del instalador de Android: sin cable, la guardia la deja pasar porque la abre Slowtown. */
+    private fun confirm(context: Context, intent: Intent) {
+        Guard.allowInstaller()
+        show(context, intent, "la confirmación de Android")
     }
 
     /** Abre una pantalla de Android, también desde el resultado del instalador, que no es una actividad. */

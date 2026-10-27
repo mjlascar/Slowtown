@@ -214,8 +214,13 @@ encima: los bancos los miran mal.
 - **Activar sin cable** (`Rules.Mode.GUARD`): la administración deja activar
   Slowtown si tiene las dos cosas, y si falta una, ofrece darla. Rige todo lo
   mismo que con lock task: las permitidas, Bedtime, Flow State, los límites y
-  las dos sesiones (con una, la guardia deja pasar). No frena la barra del
-  sistema, el instalador de Android (las actualizaciones y «Desinstalar») ni
+  las dos sesiones (con una, la guardia deja pasar). El instalador de Android
+  pasa sólo un par de minutos después de que Slowtown lo abre (para
+  desinstalar una app de la lista o confirmar una actualización,
+  `Guard.allowInstaller`): si pasara siempre, una app permitida que ofrezca
+  desinstalar podría sacar a Slowtown. La pantalla de Ajustes del permiso
+  para instalar, que pide la actualización sin Device Owner, va en una sesión
+  chica, como la información de una app. No frena la barra del sistema ni
   los Inicios (el de fábrica asoma mientras Slowtown se actualiza, y desde él
   o sus Recientes sólo se salta a otras apps), salvo Ajustes, que también se
   anuncia como Inicio (su pantalla de respaldo del arranque, con prioridad

@@ -4792,6 +4792,13 @@ paso_15() {
   ir_a_inicio
   frenada_por_la_guardia "$APP_AJUSTES, terminada la sesión al volver a Inicio" "$FOCO_AJUSTES" -a android.settings.SETTINGS
 
+  # El instalador de Android pasa sólo si lo abre Slowtown (para desinstalar
+  # una app de la lista o actualizarse): pedirle desinstalar Slowtown desde
+  # afuera no llega a la pregunta.
+  frenada_por_la_guardia "el pedido de desinstalar Slowtown que no hizo Slowtown" packageinstaller \
+    -a android.intent.action.DELETE -d "package:$PAQUETE"
+  if instalada; then ok "y Slowtown sigue instalada"; else mal "Slowtown se desinstaló"; fi
+
   # En pausa, nada.
   if entrar_admin && tocar_desplazando texto "$TXT_PAUSAR" && esperar_ui 10 texto "$TXT_ACTIVAR"; then
     ir_a_inicio

@@ -695,6 +695,8 @@ class HomeActivity : ComponentActivity() {
      */
     private fun uninstall(app: LaunchableApp) {
         if (!Policies.isDeviceOwner(this)) {
+            // Sin cable, la guardia deja pasar el diálogo de Android porque lo abrió Slowtown.
+            Guard.allowInstaller()
             runCatching { uninstallDialog.launch(AppCatalog.uninstallIntent(app.packageName)) }
                 .onFailure { Log.w(TAG, "No pude abrir el diálogo para desinstalar ${app.packageName}", it) }
             return
