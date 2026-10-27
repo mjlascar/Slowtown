@@ -11,13 +11,15 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
 ## Qué hace
 
 - **Inicio en texto:** la hora (una sola: la de la barra se esconde), el
-  tiempo de pantalla del día, las apps que elegiste y tus hábitos, del tamaño
-  que quieras. Deslizando para arriba,
-  todas las apps, con carpetas, buscador y apps ocultas que sólo aparecen al
-  buscarlas.
-- **Slowtown activo:** con Device Owner y lock task sólo se abren las apps
-  permitidas. No hay Recientes ni ajustes rápidos, e Inicio es siempre
-  Slowtown. La configuración pide una contraseña larga.
+  tiempo de pantalla del día (tocándolo, Bienestar digital), las apps que
+  elegiste y tus hábitos, cada parte del tamaño y en el lugar que quieras.
+  Deslizando para arriba, todas las apps, con carpetas, buscador y apps
+  ocultas que sólo aparecen al buscarlas.
+- **Slowtown activo:** sólo se abren las apps permitidas. Con Device Owner
+  (por cable) es lock task: no hay Recientes ni ajustes rápidos, e Inicio es
+  siempre Slowtown. Sin cable, una guardia vuelve a Inicio si se abre algo que
+  no corresponde, como las apps de bloqueo de la Play Store. La configuración
+  pide una contraseña larga.
 - **Dos niveles:** el primero es lo que se cambia con la contraseña (las apps
   permitidas y las páginas que se suman). El segundo sólo cambia con una
   versión nueva de Slowtown: las políticas de Chrome, con la lista de
@@ -26,6 +28,10 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
 - **Bedtime:** de noche sólo se abren el reloj y las alarmas (y las
   llamadas, SMS y emergencias). Para usar el teléfono, ráfagas de 5 minutos.
   Nunca corta una llamada, tampoco las de WhatsApp.
+- **Flow State:** en los horarios que elijas, cada uno con sus días, no se
+  abren las apps que distraen. También con ráfagas de 5 minutos.
+- **Límites por app:** «máximo 1 hora de Instagram»: cuando una app llega a
+  su límite del día, no se abre más hasta mañana.
 - **Notificaciones por oleadas:** las de las apps que elijas esperan y llegan
   todas juntas, en silencio, a ciertas horas, salvo las que traen una palabra
   de «pasan siempre». Con «sólo los grupos», de WhatsApp esperan los grupos y
@@ -65,11 +71,16 @@ tiempo de pantalla y las notificaciones por oleadas piden un permiso que
 Android da desde Ajustes: «Acceso a datos de uso» y «Acceso a
 notificaciones».
 
-Lo que cierra el teléfono de verdad (Device Owner: sólo las apps permitidas,
-Bedtime y el nivel 2) se activa por cable, con una compu y
-`scripts/provisionar.sh`, y exige sacar un rato las cuentas del teléfono. Ese
-camino usa la variante de prueba, que la salida por cable siempre puede
-sacar, y no la de las releases.
+Con el acceso a datos de uso y Slowtown como Inicio, se activa sin cable
+(mantené apretada la hora → «Activar Slowtown»): sólo las apps permitidas,
+Bedtime, Flow State y los límites por app, con una guardia que vuelve a Inicio
+si se abre algo que no corresponde. Se esquiva más fácil que el cierre por
+cable (con el modo seguro, por ejemplo).
+
+Lo que cierra el teléfono de verdad (Device Owner: lock task y el nivel 2) se
+activa por cable, con una compu y `scripts/provisionar.sh`, y exige sacar un
+rato las cuentas del teléfono. Ese camino usa la variante de prueba, que la
+salida por cable siempre puede sacar, y no la de las releases.
 
 Todas las releases salen firmadas con el mismo certificado, de huella SHA-256
 `3ef7e1d4a3e180864607d49a7c2ac38b0190d03b94f0c3e95d897e066bb25559` (también en `scripts/firma-releases.sha256`).

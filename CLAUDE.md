@@ -12,9 +12,11 @@ filtro de páginas, desbloqueo con fricción, cómo preparar el S10e) está en
 
 ## Cómo cierra el teléfono
 
-Sin Device Owner, Slowtown es sólo un launcher: se esquiva bajando el panel y
-tocando el engranaje. Lo que cierra de verdad es Device Owner, que se activa
-por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
+Dos maneras, según el teléfono, con las mismas reglas (`admin/Rules.kt`: qué
+se puede abrir ahora y por qué no lo demás). Sin cable, la guardia (ver «Sin
+cable: la guardia»): se esquiva más fácil, pero no pide adb ni sacar las
+cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
+`scripts/provisionar.sh`. Con él, «Activar Slowtown» es lock task:
 
 - sólo se abren las apps de Inicio y las esenciales (`Essentials`: llamadas,
   SMS, emergencias, alertas y las pantallas de sistema que abren las apps);
@@ -36,7 +38,9 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
 - **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
   Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
   manteniendo apretada una app en la lista de todas.
-- **Todas las apps**: deslizando para arriba (o «↑ todas las apps»). Arriba
+- **Todas las apps**: deslizando para arriba. «↑ todas las apps», el renglón
+  que lo abre con un toque, viene escondido desde el 27/10 (Marcos no lo
+  quiere a la vista) y se muestra en «Cómo se ve Inicio». Arriba
   las carpetas, en dos columnas; debajo, las apps que no están en ninguna.
   El buscador ignora tildes, busca también adentro de las carpetas y Enter
   abre la primera; el teclado se abre recién al tocarlo (lo pidió Marcos).
@@ -65,7 +69,9 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   Marcos): la hora, la fecha, el tiempo de pantalla, los avisos, las apps,
   «↑ todas las apps» y los hábitos, cada una con su tamaño (de 60 a 150 %,
   sobre el de todo Inicio) y su lugar a lo ancho (`Prefs.homeBlocks`, JSON; de
-  entrada, como era Inicio). El tiempo de pantalla comparte el renglón de la
+  entrada, como era Inicio). «Todas las apps» además se saca (`HomeBlock.hideable`,
+  y viene sacado); la fecha no, porque sin la hora grande es lo que se mantiene
+  apretado para entrar. El tiempo de pantalla comparte el renglón de la
   hora (sin ella, el de la fecha) si van en lugares distintos y entran; si no,
   va justo debajo. El widget de otra app no cambia. Arriba, fija, una vista
   previa: Inicio en miniatura, armado con las mismas piezas (`HomeContent`).
@@ -77,6 +83,11 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   `WRITE_SECURE_SETTINGS` que da `provisionar.sh` por adb. Guarda cómo estaba
   la lista y la deja igual al mostrarla; la salida por cable también. Sin la
   hora grande, la fecha encabeza Inicio y la barra queda como siempre.
+- **La hora de Inicio** se mira una vez por segundo mientras Inicio se ve, y
+  apenas vuelve a verse o recupera el foco (`rememberMinute`). Antes esperaba
+  el minuto siguiente con un delay, que no corre con el teléfono dormido: al
+  desbloquear mostraba unos segundos la hora vieja, y a veces quedaba minutos
+  atrás de la del panel (lo vio Marcos el 27/10).
 - **Widget**: uno, pegado al borde de abajo (`AppWidgetHost`). Se elige en la
   administración y se arma en una sesión de administración, porque la
   configuración del widget es de su app. `provisionar.sh` corre `appwidget
@@ -104,7 +115,11 @@ por cable con `scripts/provisionar.sh`. «Activar Slowtown» es lock task:
   `habit_leer`…): sacar un hábito no borra sus días.
 - **Tiempo de pantalla** (`apps/ScreenTime.kt`): arriba a la derecha de
   Inicio, sólo el número («1 h 5 min»; Marcos quiere menos texto en Inicio, y
-  el lector de pantalla dice «Hoy: 1 h 5 min de pantalla»). Bienestar digital no comparte sus números, así que se
+  el lector de pantalla dice «Hoy: 1 h 5 min de pantalla»). Tocarlo abre
+  Bienestar digital (`ScreenTime.wellbeing`: el de Samsung no tiene ícono, así
+  que se busca su pantalla principal), que está siempre en la lista de lock
+  task: muestra el uso y suma límites, no afloja nada. Mantenerlo apretado
+  entra a la administración, como el resto de la cabecera. Bienestar digital no comparte sus números, así que se
   calcula igual que él, con los datos de uso de Android (sin contar Inicio).
   Necesita el acceso a los datos de uso, que da `provisionar.sh` por adb
   (`appops set … GET_USAGE_STATS allow`); sin eso, la línea no aparece.
@@ -156,6 +171,61 @@ Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
   bloqueo, como la cámara segura.
 - En el emulador, el final de una ráfaga se dispara a mano con root:
   `adb shell "am broadcast -n 'com.slowtown.launcher/.admin.Bedtime\$Tick' --ez fin_de_rafaga true"`.
+
+## Flow State y límites por app
+
+Los dos los pidió Marcos el 27/10, y los dos viven en la administración, con
+contraseña (achicarlos afloja). Rigen con Slowtown activo, con cable o sin
+él, y frenan una app de las permitidas: con Device Owner sale de la lista de
+lock task (Android la cierra si estaba abierta); sin cable, la guardia vuelve
+a Inicio. En Inicio quedan en gris, y tocarlas dice por qué y hasta cuándo.
+Nunca frenan lo que no puede faltar (`Rules.always`) ni la app de una llamada.
+
+- **Flow State** (`admin/FlowState.kt`, `ui/FlowStateScreen.kt`), «así como
+  está Bedtime»: varios horarios, cada uno con sus ruedas y sus días (cada uno
+  es del día en que empieza, como las noches), y las mismas apps en todos (por
+  paquete). De entrada, de lunes a viernes de 9 a 13, apagado. Inicio dice
+  «Es *Flow State* hasta las 13:00», y tocándolo aparece la ráfaga de 5
+  minutos, la misma de Bedtime: una ráfaga suelta las dos. Los bordes los
+  agenda `Bedtime.schedule`, junto con los de la noche.
+- **Límites por app** (`admin/Limits.kt`, `ui/LimitsScreen.kt`): minutos por
+  día por paquete, de a 15 (hasta 8 h). Cuenta el tiempo de pantalla de cada
+  app (`ScreenTime.byApp`, igual que el total de Inicio). Sin ráfagas: el
+  límite es del día. Recorrer el uso del día cuesta, así que lo mira la
+  guardia cuando la app con límite llega adelante y cuando se le acaba el
+  rato (también con una alarma, por si Slowtown no sigue corriendo), Inicio
+  al volver, y los horarios a la medianoche. Lo que llegó se guarda con la
+  fecha (`Prefs.limitsReached`) y al cambiar el día deja de valer solo. Con
+  Device Owner la guardia corre sólo para esto: lock task no sabe cuánto
+  lleva cada app.
+
+## Sin cable: la guardia
+
+`admin/Guard.kt`. Sin Device Owner no hay lock task: la guardia lee los
+eventos de uso de Android cada medio segundo (`UsageStatsManager.queryEvents`,
+con el teléfono en uso) y, si adelante queda una app que no corresponde
+(`Rules.hold`), abre Inicio, que dice por qué. Es lo que hacen las apps de
+bloqueo de la Play Store (`docs/sin-cable.md`, lo pidió Marcos para no
+cerrarse la puerta de Play), con lo mínimo: el acceso a los datos de uso, que
+se da en Ajustes sin cable, y ser el Inicio (Android le deja al Inicio abrir
+pantallas desde segundo plano). Sin servicio de accesibilidad ni ventanas
+encima: los bancos los miran mal.
+
+- **Activar sin cable** (`Rules.Mode.GUARD`): la administración deja activar
+  Slowtown si tiene las dos cosas, y si falta una, ofrece darla. Rige todo lo
+  mismo que con lock task: las permitidas, Bedtime, Flow State, los límites y
+  las dos sesiones (con una, la guardia deja pasar). No frena la barra del
+  sistema, el instalador de Android (las actualizaciones y «Desinstalar») ni
+  los Inicios (el de fábrica asoma mientras Slowtown se actualiza, y desde él
+  o sus Recientes sólo se salta a otras apps), salvo Ajustes, que también se
+  anuncia como Inicio (su pantalla de respaldo del arranque, con prioridad
+  negativa): dejarlo pasar era dejar pasar Ajustes entero, y lo vio el paso 15
+  de la prueba.
+- **Se esquiva**: el modo seguro, desinstalar desde la Play Store si está
+  permitida, o una sesión de administración usada para sacar el acceso a los
+  datos de uso. La app frenada llega a verse menos de un segundo. El nivel 2
+  no existe sin Device Owner: lo de `Fixed.APPS` frena sólo por no estar
+  permitido.
 
 ## Notificaciones por oleadas
 
@@ -330,9 +400,9 @@ unos 3 GB reales, y el build otros 2: el 19/10 el kernel lo mató por falta de
 memoria a mitad de un build. Compilar antes de levantarlo, o cerrar Firefox.
 
 `./scripts/probar-emulador.sh --limpio` corre todo el recorrido de punta a
-punta (instalar, activar, intentos de escape, llamada, SMS, Ajustes, nivel 2,
-reinicio, crashes, salida por cable, también con `--forzar`) y termina con
-código 1 si algo falla. El navegador del emulador (WebView Browser Tester) es
+punta (con `--pasos=4c,9h,15`, sólo esos, además de instalar y activar) (instalar, activar, intentos de escape, llamada, SMS, Ajustes, nivel 2,
+reinicio, crashes, salida por cable, también con `--forzar`, y al final la
+guardia sin cable) y termina con código 1 si algo falla. El navegador del emulador (WebView Browser Tester) es
 el que el nivel 2 pausa; para probar las instalaciones nuevas, la prueba arma
 dos APK mínimos con aapt2. Chrome no está en el emulador: se verifica que
 Android guarde las políticas, no que Chrome las cumpla. Al teléfono

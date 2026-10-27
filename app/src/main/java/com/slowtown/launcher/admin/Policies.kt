@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.UserManager
 import com.slowtown.launcher.HomeActivity
-import com.slowtown.launcher.apps.ScreenTime
 
 /**
  * Todo lo que Slowtown hace como Device Owner pasa por acá. Sin Device Owner
@@ -117,8 +116,9 @@ object Policies {
 
     /**
      * Sólo la lista, cuando cambia algo que depende de la hora (empieza o
-     * termina la noche, o una ráfaga) o de una llamada: escribe sólo si
-     * cambió, así que se puede llamar en cada vuelta a Inicio.
+     * termina la noche o Flow State, una ráfaga, una app llega a su límite) o
+     * de una llamada: escribe sólo si cambió, así que se puede llamar en cada
+     * vuelta a Inicio.
      */
     @Synchronized
     fun refreshPackages(context: Context, packages: Collection<String>) {
@@ -127,29 +127,22 @@ object Policies {
     }
 
     /**
-     * La lista que corresponde ahora. Con una sesión en curso (administración
-     * o «Habilitar todo»), todo lo instalado: rearmar la política no la puede
-     * cortar antes. De noche, sin ráfaga, sólo lo de siempre ([allowlist]
-     * suma el reloj y las alarmas), sin las apps permitidas, y sólo con el
-     * teléfono en uso ([Bedtime.inUse]). La noche no corta llamadas
-     * ([CallGuard]): mientras hay una, la lista es la de siempre, y la app de
-     * la llamada, si es de las permitidas, está siempre.
+     * La lista que corresponde ahora, según [Rules]: lo que no puede faltar,
+     * las permitidas que no frenan la noche, Flow State o los límites, y la
+     * app de una llamada. Con una sesión en curso (administración o «Habilitar
+     * todo»), todo lo instalado: rearmar la política no la puede cortar antes.
      */
     private fun effectivePackages(context: Context, packages: Collection<String>): Set<String> {
-        val night = Bedtime.restricts(context) && Bedtime.inUse(context) && !CallGuard.inCall(context)
-        val allowed = allowlist(context, if (night) emptySet() else packages) + CallGuard.packages(context)
+        val allowed = Rules.allowed(context, packages)
         val admin = AdminSession.isActive(context)
         return when {
             FreeSession.isActive(context) -> allowed + installed(context)
             // La información de una app: sólo Ajustes, el resto sigue cerrado.
-            admin && AdminSession.isInfoOnly(context) -> allowed + SETTINGS
+            admin && AdminSession.isInfoOnly(context) -> allowed + Rules.SETTINGS
             admin -> allowed + installed(context)
             else -> allowed
         }
     }
-
-    /** Lo que suma la sesión chica de la información de una app ([AdminSession]). */
-    private val SETTINGS = setOf("com.android.settings")
 
     /**
      * Sesión de administración: se puede abrir cualquier cosa sin salir de
@@ -204,21 +197,6 @@ object Policies {
         if (!isDeviceOwner(context)) return
         relax(context)
         dpm(context).clearDeviceOwnerApp(context.packageName)
-    }
-
-    /**
-     * Slowtown, las apps de Inicio y lo que no puede faltar: lo esencial y el
-     * reloj y las alarmas, de día y de noche (la alarma de la mañana tiene que
-     * poder mostrar su pantalla con Slowtown activo). Y Bienestar digital, que
-     * se abre tocando el tiempo de pantalla: muestra el uso y suma límites, no
-     * afloja nada.
-     */
-    private fun allowlist(context: Context, packages: Collection<String>): Set<String> = buildSet {
-        add(context.packageName)
-        addAll(packages)
-        addAll(Essentials.packages(context))
-        addAll(Bedtime.apps(context))
-        addAll(ScreenTime.WELLBEING)
     }
 
     /** Cada escritura guarda a disco y avisa a todo el sistema: sólo si cambió. */

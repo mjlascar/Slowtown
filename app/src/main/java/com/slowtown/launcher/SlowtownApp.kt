@@ -83,7 +83,9 @@ class SlowtownApp : Application() {
     /**
      * La noche rige con el teléfono en uso ([Bedtime.inUse]): al apagar la
      * pantalla vuelve la lista de siempre, para que una llamada pueda abrir
-     * la suya, y al desbloquear se achica. Consulta al sistema: en otro hilo.
+     * la suya, y al desbloquear se achica. La guardia ([Guard]) también mira
+     * sólo con el teléfono en uso: para al apagar la pantalla y arranca al
+     * desbloquear ([Bedtime.refresh] la avisa). Consulta al sistema: en otro hilo.
      */
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -132,9 +134,12 @@ class SlowtownApp : Application() {
         thread(name = "nivel-2") {
             runCatching { Fixed.enforce(this) }
                 .onFailure { Log.e(TAG, "No pude poner el nivel 2", it) }
-            // Un reinicio borra las alarmas: la hora de dormir se vuelve a agendar.
+            // Un reinicio borra las alarmas: los horarios se vuelven a agendar.
             runCatching { Bedtime.schedule(this) }
-                .onFailure { Log.e(TAG, "No pude agendar la hora de dormir", it) }
+                .onFailure { Log.e(TAG, "No pude agendar los horarios", it) }
+            // Y si Slowtown estaba activo sin cable, la guardia vuelve a mirar.
+            runCatching { Bedtime.refresh(this) }
+                .onFailure { Log.e(TAG, "No pude poner al día lo que se puede abrir", it) }
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)

@@ -18,7 +18,13 @@ data class AdminStatus(
     /** Lo que pasa ahora: si el sistema está en lock task. */
     val locked: Boolean = false,
     val safeMode: Boolean = false,
-)
+    /** Sin cable, lo que necesita la guardia: el acceso a los datos de uso y ser el Inicio. */
+    val usageAccess: Boolean = false,
+    val home: Boolean = false,
+) {
+    /** Si Slowtown puede cerrar el teléfono: con Device Owner, o sin cable con la guardia. */
+    val canClose: Boolean get() = deviceOwner || (usageAccess && home)
+}
 
 @Composable
 fun AdminScreen(
@@ -36,7 +42,11 @@ fun AdminScreen(
     onHomeLook: () -> Unit,
     onFolders: () -> Unit,
     onBedtime: () -> Unit,
+    onFlowState: () -> Unit,
+    onLimits: () -> Unit,
     onNotifications: () -> Unit,
+    onUsageAccess: () -> Unit,
+    onChooseHome: () -> Unit,
     onToggleClosed: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenPlayStore: () -> Unit,
@@ -52,16 +62,25 @@ fun AdminScreen(
             "Slowtown",
             when {
                 status.locked -> "activo"
-                status.closed -> "se activa al volver a Inicio"
+                status.closed && status.deviceOwner -> "se activa al volver a Inicio"
+                status.closed && status.canClose && !status.safeMode -> "activo, sin cable"
                 else -> "en pausa"
             },
         )
         if (!status.deviceOwner) {
             HintText(
-                "Sin Device Owner, Slowtown es sólo un launcher: el panel de " +
-                    "ajustes rápidos y Ajustes quedan a mano. Se activa por cable " +
-                    "con scripts/provisionar.sh.",
+                "Sin Device Owner, Slowtown cierra sin cable: si se abre algo que no corresponde, " +
+                    "vuelve a Inicio. Se esquiva más fácil (con el modo seguro, por ejemplo); el " +
+                    "cierre completo se activa por cable, con scripts/provisionar.sh.",
             )
+            if (!status.usageAccess) {
+                ErrorText("Para cerrar sin cable falta el acceso a los datos de uso.")
+                OutlinedButton(onClick = onUsageAccess, modifier = wide) { Text("Dar el acceso a los datos de uso") }
+            }
+            if (!status.home) {
+                ErrorText("Para cerrar sin cable, Slowtown tiene que ser el Inicio.")
+                OutlinedButton(onClick = onChooseHome, modifier = wide) { Text("Elegir Slowtown como Inicio") }
+            }
         }
         if (status.safeMode) {
             ErrorText("Modo a prueba de fallos: Slowtown se colgó varias veces seguidas y se pausó solo.")
@@ -76,11 +95,14 @@ fun AdminScreen(
         OutlinedButton(onClick = onHomeLook, modifier = wide) { Text("Cómo se ve Inicio") }
         OutlinedButton(onClick = onFolders, modifier = wide) { Text("Carpetas") }
         OutlinedButton(onClick = onBedtime, modifier = wide) { Text("Bedtime") }
+        OutlinedButton(onClick = onFlowState, modifier = wide) { Text("Flow State") }
+        OutlinedButton(onClick = onLimits, modifier = wide) { Text("Límites por app") }
         OutlinedButton(onClick = onNotifications, modifier = wide) { Text("Notificaciones") }
-        Button(onClick = onToggleClosed, enabled = status.deviceOwner, modifier = wide) {
+        Button(onClick = onToggleClosed, enabled = status.closed || status.canClose, modifier = wide) {
             Text(if (status.closed) "Pausar Slowtown" else "Activar Slowtown")
         }
-        if (status.closed) {
+        // Sin Device Owner no hay lock task que cierre nada al salir, ni nivel 2.
+        if (status.closed && status.deviceOwner) {
             HintText("Pausarlo cierra las apps que estén abiertas. Lo que está bloqueado siempre sigue bloqueado.")
         }
         OutlinedButton(onClick = onOpenSettings, modifier = wide) { Text("Ir a Ajustes") }

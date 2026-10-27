@@ -26,12 +26,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
 
+/**
+ * Elegir apps de una lista, con casillas: las permitidas y, con otro título y
+ * otra explicación, las de Flow State y las de los límites por app.
+ */
 @Composable
 fun ChooseAppsScreen(
     apps: List<LaunchableApp>,
     chosen: Set<String>,
     onDone: (Set<String>) -> Unit,
     onBack: () -> Unit,
+    title: String = "Apps permitidas",
+    hint: String = "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
+        "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
+        "deslizando para arriba en Inicio.",
 ) {
     var selection by remember(chosen) { mutableStateOf(chosen) }
 
@@ -42,17 +50,13 @@ fun ChooseAppsScreen(
                 .safeDrawingPadding(),
         ) {
             // «Volver» arriba, como en las demás pantallas de la administración.
-            BackBar("Apps permitidas", onBack)
+            BackBar(title, onBack)
             Column(
                 Modifier
                     .weight(1f)
                     .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
             ) {
-                HintText(
-                    "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
-                        "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
-                        "deslizando para arriba en Inicio.",
-                )
+                HintText(hint)
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(Modifier.weight(1f)) {
                     items(apps, key = { it.key }) { app ->

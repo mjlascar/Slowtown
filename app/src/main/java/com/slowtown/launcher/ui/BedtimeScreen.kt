@@ -53,23 +53,25 @@ fun BedtimeScreen(
             Text("Prendida", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Switch(checked = enabled, onCheckedChange = null)
         }
-        TimeRow("Empieza", start) { onChange(settings.copy(start = it)) }
-        TimeRow("Termina", end) { onChange(settings.copy(end = it)) }
+        TimeRow("Empieza", start, "Empieza") { onChange(settings.copy(start = it)) }
+        TimeRow("Termina", end, "Termina") { onChange(settings.copy(end = it)) }
         if (start == end) ErrorText("Empieza y termina a la misma hora: así no rige nunca.")
         Text("Qué noches", style = MaterialTheme.typography.titleMedium)
         HintText("Cada noche es del día en que empieza: la del viernes va del viernes al sábado.")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             DayOfWeek.values().forEach { day ->
-                NightToggle(day, on = day in days) { on -> onChange(settings.copy(days = if (on) days + day else days - day)) }
+                DayToggle(day, on = day in days, description = "Noche del ${dayName(day)}") { on ->
+                    onChange(settings.copy(days = if (on) days + day else days - day))
+                }
             }
         }
         if (days.isEmpty()) ErrorText("Sin ninguna noche elegida, no rige nunca.")
     }
 }
 
-/** Un día, como un círculo con su inicial: lleno si esa noche rige. */
+/** Un día, como un círculo con su inicial: lleno si ese día rige. También lo usa Flow State. */
 @Composable
-private fun NightToggle(day: DayOfWeek, on: Boolean, onToggle: (Boolean) -> Unit) {
+internal fun DayToggle(day: DayOfWeek, on: Boolean, description: String, onToggle: (Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
@@ -77,7 +79,7 @@ private fun NightToggle(day: DayOfWeek, on: Boolean, onToggle: (Boolean) -> Unit
             .background(if (on) colors.onSurface else colors.background, CircleShape)
             .border(1.dp, if (on) colors.onSurface else colors.outline, CircleShape)
             .toggleable(value = on, role = Role.Checkbox, onValueChange = onToggle)
-            .semantics { contentDescription = "Noche del ${day.getDisplayName(TextStyle.FULL, SPANISH)}" },
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -90,22 +92,29 @@ private fun NightToggle(day: DayOfWeek, on: Boolean, onToggle: (Boolean) -> Unit
 
 private val SPANISH = Locale.forLanguageTag("es-AR")
 
-/** Una hora con dos ruedas, horas y minutos, que dan la vuelta solas. */
+/** «lunes», «martes»… */
+internal fun dayName(day: DayOfWeek): String = day.getDisplayName(TextStyle.FULL, SPANISH)
+
+/**
+ * Una hora con dos ruedas, horas y minutos, que dan la vuelta solas. [name]
+ * es cómo las nombra el lector de pantalla («[name], hora»): con varios
+ * horarios en la misma pantalla, tiene que decir de cuál.
+ */
 @Composable
-private fun TimeRow(label: String, minutes: Int, onChange: (Int) -> Unit) {
+internal fun TimeRow(label: String, minutes: Int, name: String, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         NumberWheel(
             count = 24,
             value = minutes / 60,
-            label = "$label, hora",
+            label = "$name, hora",
             onValueChange = { onChange(it * 60 + minutes % 60) },
         )
         Text(":", style = MaterialTheme.typography.headlineSmall)
         NumberWheel(
             count = 60,
             value = minutes % 60,
-            label = "$label, minutos",
+            label = "$name, minutos",
             onValueChange = { onChange((minutes / 60) * 60 + it) },
         )
     }

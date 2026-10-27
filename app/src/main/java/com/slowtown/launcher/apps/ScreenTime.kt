@@ -9,7 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.PowerManager
 import android.os.Process
-import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneId
 
 /**
@@ -40,10 +40,16 @@ object ScreenTime {
     }
 
     /** Milisegundos de pantalla de hoy, o null sin acceso. Recorre los eventos del día: fuera del hilo principal. */
-    fun today(context: Context, now: Long = System.currentTimeMillis()): Long? = runCatching {
+    fun today(context: Context, now: Long = System.currentTimeMillis()): Long? =
+        byApp(context, now)?.values?.sum()?.coerceIn(0L, now - midnight(now))
+
+    /**
+     * Lo mismo, por app: para los límites de cada una ([com.slowtown.launcher.admin.Limits]).
+     * Null sin acceso. Fuera del hilo principal.
+     */
+    fun byApp(context: Context, now: Long = System.currentTimeMillis()): Map<String, Long>? = runCatching {
         if (!hasAccess(context)) return null
-        val zone = ZoneId.systemDefault()
-        val midnight = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val midnight = midnight(now)
         val query = context.getSystemService(UsageStatsManager::class.java).queryEvents(midnight - LOOK_BEHIND, now)
         val events = buildList {
             val event = UsageEvents.Event()
@@ -53,8 +59,13 @@ object ScreenTime {
             }
         }
         val interactive = context.getSystemService(PowerManager::class.java).isInteractive
-        foreground(events, midnight, now, excluded(context), interactive).coerceIn(0L, now - midnight)
+        foreground(events, midnight, now, excluded(context), interactive)
     }.getOrNull()
+
+    private fun midnight(now: Long): Long {
+        val zone = ZoneId.systemDefault()
+        return Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+    }
 
     /** Bienestar digital: el de Samsung y el de Google. Con Slowtown activo se abre siempre (ver Policies). */
     val WELLBEING = listOf("com.samsung.android.forest", "com.google.android.apps.wellbeing")
@@ -94,7 +105,7 @@ object ScreenTime {
     internal data class Event(val time: Long, val type: Int, val packageName: String?, val className: String? = null)
 
     /**
-     * Suma el tiempo adelante de cada app entre [start] y [end]. Una pantalla
+     * El tiempo adelante de cada app entre [start] y [end]. Una pantalla
      * empieza con RESUMED y termina con su PAUSED; apagar la pantalla, la
      * pantalla de bloqueo o apagar el teléfono terminan lo que esté abierto. Lo
      * que sigue abierto al final cuenta hasta [end] sólo con la pantalla prendida.
@@ -111,14 +122,15 @@ object ScreenTime {
         end: Long,
         excluded: Set<String>,
         openAtEnd: Boolean,
-    ): Long {
+    ): Map<String, Long> {
         var current: String? = null
         var currentClass: String? = null
         var since = 0L
-        var total = 0L
+        val total = mutableMapOf<String, Long>()
         fun close(at: Long) {
             val app = current ?: return
-            if (app !in excluded) total += (minOf(at, end) - maxOf(since, start)).coerceAtLeast(0L)
+            val span = (minOf(at, end) - maxOf(since, start)).coerceAtLeast(0L)
+            if (app !in excluded && span > 0) total[app] = (total[app] ?: 0L) + span
             current = null
             currentClass = null
         }
@@ -143,12 +155,17 @@ object ScreenTime {
         return total
     }
 
-    /** Lo que no es «usar el teléfono»: Slowtown, los launchers y la barra del sistema. */
+    /**
+     * Lo que no es «usar el teléfono»: Slowtown, los launchers y la barra del
+     * sistema. Ajustes no, aunque también se anuncia como Inicio: es la
+     * pantalla de respaldo del arranque, con prioridad negativa.
+     */
     private fun excluded(context: Context): Set<String> = buildSet {
         add(context.packageName)
         add("com.android.systemui")
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         context.packageManager.queryIntentActivities(home, PackageManager.MATCH_ALL)
+            .filter { it.priority >= 0 }
             .mapTo(this) { it.activityInfo.packageName }
     }
 }

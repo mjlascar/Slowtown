@@ -14,7 +14,6 @@ import android.os.SystemClock
 import android.provider.AlarmClock
 import android.util.Log
 import com.slowtown.launcher.Prefs
-import com.slowtown.launcher.security.CrashGuard
 import java.time.DayOfWeek
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -35,6 +34,10 @@ import kotlin.concurrent.thread
  *
  * La noche no corta llamadas ([CallGuard]): mientras hay una, sonando o en
  * curso, también de WhatsApp, la noche espera; al cortar, la lista se achica.
+ *
+ * La ráfaga y los horarios son también los de Flow State ([FlowState]): una
+ * ráfaga suelta las dos cosas, y [Tick] agenda los bordes de las dos (y la
+ * medianoche, para los límites por app).
  */
 object Bedtime {
     const val BURST_MS = 5 * 60_000L
@@ -42,6 +45,7 @@ object Bedtime {
     private const val TAG = "Slowtown"
     private const val EXTRA_BURST_END = "fin_de_rafaga"
     private const val EXTRA_CALL_CHECK = "llamada"
+    private const val EXTRA_LIMIT_CHECK = "limite"
 
     /** Cada cuánto se vuelve a mirar si sigue la llamada que posterga la noche. */
     private const val CALL_CHECK_MS = 60_000L
@@ -124,8 +128,9 @@ object Bedtime {
     }
 
     /**
-     * Cinco minutos con las apps de siempre. Sin contraseña y sin tope: la
-     * fricción es tener que volver a pedirla. Fuera del hilo principal.
+     * Cinco minutos con las apps de siempre, de noche o en Flow State. Sin
+     * contraseña y sin tope: la fricción es tener que volver a pedirla. Fuera
+     * del hilo principal.
      */
     fun startBurst(context: Context) {
         val app = context.applicationContext
@@ -155,16 +160,22 @@ object Bedtime {
     }
 
     /**
-     * Rearma la lista de lock task según la hora, si Slowtown está activo.
-     * Escribe sólo si cambió. Si una llamada posterga la noche, se vuelve a
-     * mirar cada minuto mientras dure: el corte avisa por el modo de audio y
-     * por el lector de notificaciones, y esto es por si se pierden los dos.
+     * Pone al día lo que se puede abrir, si Slowtown está activo: los límites
+     * por app (a la medianoche vuelven las que habían llegado), la lista de
+     * lock task con Device Owner (escribe sólo si cambió) y, sin cable, la
+     * guardia, que mira ya lo que está adelante. Si una llamada posterga la
+     * noche, se vuelve a mirar cada minuto mientras dure: el corte avisa por
+     * el modo de audio y por el lector de notificaciones, y esto es por si se
+     * pierden los dos.
      */
     fun refresh(context: Context) {
-        val prefs = Prefs(context)
-        if (prefs.closed && !CrashGuard.inSafeMode(context) && Policies.isDeviceOwner(context)) {
-            Policies.refreshPackages(context, prefs.allowedPackages)
-            val app = context.applicationContext
+        val mode = Rules.mode(context)
+        if (mode == Rules.Mode.PAUSED) return
+        val app = context.applicationContext
+        val prefs = Prefs(app)
+        if (prefs.appLimits.isNotEmpty()) Limits.check(app)
+        if (mode == Rules.Mode.LOCK_TASK) {
+            Policies.refreshPackages(app, prefs.allowedPackages)
             val am = app.getSystemService(AlarmManager::class.java)
             if (restricts(app) && CallGuard.inCall(app)) {
                 am.setAndAllowWhileIdle(
@@ -176,11 +187,31 @@ object Bedtime {
                 am.cancel(callCheckIntent(app))
             }
         }
+        Guard.update(app)
     }
 
     /**
-     * Empezó o terminó una llamada ([CallGuard]). Sólo de noche cambia algo:
-     * de día, las apps de la llamada ya están en la lista. Al terminar, con
+     * Cuándo se le acaba el tiempo a la app con límite que está adelante: lo
+     * mira la guardia, y esto es por si Slowtown no sigue corriendo.
+     */
+    fun scheduleLimitCheck(context: Context, delayMs: Long) {
+        val app = context.applicationContext
+        val am = app.getSystemService(AlarmManager::class.java)
+        val at = SystemClock.elapsedRealtime() + delayMs + LIMIT_MARGIN_MS
+        if (am.canScheduleExactAlarms()) {
+            am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, limitCheckIntent(app))
+        } else {
+            am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, limitCheckIntent(app))
+        }
+    }
+
+    /** Un poco después del límite: los datos de uso de Android se anotan con un instante de atraso. */
+    private const val LIMIT_MARGIN_MS = 2_000L
+
+    /**
+     * Empezó o terminó una llamada ([CallGuard]). Cambia algo sólo de noche o
+     * con apps frenadas (Flow State, un límite): si no, las apps de la llamada
+     * ya están en la lista. Al terminar, con
      * unos segundos de margen: al atender, algunas apps cambian la
      * notificación que suena por la de la llamada en curso, o pasan un
      * instante por el audio normal, y en el medio no se ve ninguna llamada.
@@ -188,31 +219,43 @@ object Bedtime {
      * del hilo principal.
      */
     fun callChanged(context: Context, ended: Boolean) {
-        if (!isNight(context)) return
+        if (!isNight(context) && FlowState.held(context).isEmpty() && Limits.reached(context).isEmpty()) return
         if (ended) Thread.sleep(CALL_SETTLE_MS)
         refresh(context)
     }
 
     /**
-     * Agenda el próximo cambio (que empiece o que termine la noche). Exacta si
-     * Android lo deja (provisionar.sh da el permiso), si no, aproximada.
+     * Agenda el próximo cambio de los horarios: que empiece o termine la noche
+     * o un horario de Flow State, o la medianoche si hay límites por app (ahí
+     * vuelven las que llegaron al suyo). Exacta si Android lo deja
+     * (provisionar.sh da el permiso), si no, aproximada.
      */
     fun schedule(context: Context) {
         val app = context.applicationContext
         val am = app.getSystemService(AlarmManager::class.java)
-        val prefs = Prefs(app)
         val intent = tickIntent(app)
-        if (!prefs.bedtimeEnabled || prefs.bedtimeStart == prefs.bedtimeEnd) {
+        val at = nextTick(app, LocalDateTime.now())
+        if (at == null) {
             am.cancel(intent)
             return
         }
-        val at = nextBoundary(LocalDateTime.now(), prefs.bedtimeStart, prefs.bedtimeEnd)
         val millis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (am.canScheduleExactAlarms()) {
             am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent)
         } else {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent)
         }
+    }
+
+    /** Lo que agenda [schedule], o null si no hay nada que agendar. */
+    internal fun nextTick(context: Context, now: LocalDateTime): LocalDateTime? {
+        val prefs = Prefs(context)
+        return listOfNotNull(
+            nextBoundary(now, prefs.bedtimeStart, prefs.bedtimeEnd)
+                .takeIf { prefs.bedtimeEnabled && prefs.bedtimeStart != prefs.bedtimeEnd },
+            FlowState.nextBoundary(prefs.flowWindows, now).takeIf { prefs.flowEnabled },
+            now.toLocalDate().plusDays(1).atStartOfDay().takeIf { prefs.appLimits.isNotEmpty() },
+        ).minOrNull()
     }
 
     /** El primer momento después de [now] en que empieza o termina la noche. */
@@ -245,23 +288,31 @@ object Bedtime {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
+    private fun limitCheckIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        5,
+        Intent(context, Tick::class.java).putExtra(EXTRA_LIMIT_CHECK, true),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
     /**
-     * Empieza o termina la noche, termina una ráfaga o toca mirar si sigue una
-     * llamada: llega aunque Slowtown no esté corriendo.
+     * Los horarios: empieza o termina la noche o Flow State, es medianoche,
+     * termina una ráfaga, toca mirar si sigue una llamada o se le acaba el
+     * tiempo a una app con límite. Llega aunque Slowtown no esté corriendo.
      */
     class Tick : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val pending = goAsync()
             val app = context.applicationContext
             val burstEnd = intent.getBooleanExtra(EXTRA_BURST_END, false)
-            val callCheck = intent.getBooleanExtra(EXTRA_CALL_CHECK, false)
+            val check = intent.getBooleanExtra(EXTRA_CALL_CHECK, false) || intent.getBooleanExtra(EXTRA_LIMIT_CHECK, false)
             thread(name = "hora-de-dormir") {
                 try {
                     runCatching {
                         when {
                             burstEnd -> endBurst(app)
                             // Si la llamada sigue, refresh agenda la próxima mirada.
-                            callCheck -> refresh(app)
+                            check -> refresh(app)
                             else -> {
                                 endBurstIfExpired(app)
                                 refresh(app)

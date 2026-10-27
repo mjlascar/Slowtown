@@ -23,9 +23,11 @@
 # chats de grupo esperan la entrega y vuelven solos a su hora, los de a dos
 # llegan en el momento), usa el menú de una app en la lista de todas (la
 # oculta y la vuelve a mostrar, abre su información con la contraseña y la
-# desinstala), abre Ajustes desde la administración, reinicia (y los hábitos
-# siguen), cuenta las reglas de Inicio fijo, fuerza tres crashes y usa la
-# salida por cable.
+# desinstala), prueba Flow State (un horario armado con las ruedas frena una
+# app, con su ráfaga) y un límite por app (al cumplirse, Android la cierra),
+# abre Ajustes desde la administración, reinicia (y los hábitos siguen),
+# cuenta las reglas de Inicio fijo, fuerza tres crashes, usa la salida por
+# cable y, ya sin Device Owner, prueba la guardia sin cable.
 #
 # Las llamadas por internet y las oleadas se prueban con «Avisos de prueba»
 # (scripts/prueba-avisos/, se arma con javac, d8 y aapt2), que imita a
@@ -53,6 +55,7 @@
 #   ./scripts/probar-emulador.sh --build           # compila antes
 #   ./scripts/probar-emulador.sh --limpio          # libera, desinstala y arranca de cero
 #   ./scripts/probar-emulador.sh --build --limpio
+#   ./scripts/probar-emulador.sh --pasos=4c,9h,15  # sólo esos (y el 0, el 1 y el 2, que instalan y activan)
 #
 # Variables:
 #   SLOWTOWN_CLAVE       contraseña de prueba: letras y números, 4 o más (por
@@ -104,7 +107,8 @@ TXT_INICIO_SIN_PERMITIDAS_RE='^Mantené apretada la (hora|fecha) para elegir las
 TXT_INICIO_FALLOS='se colgó varias veces seguidas y se pausó solo'   # un pedazo del aviso en Inicio
 TXT_REVISAR_HORA='Mantené apretada la hora para revisarlo.'     # el final de ese aviso, con la hora grande...
 TXT_REVISAR_FECHA='Mantené apretada la fecha para revisarlo.'   # ...y sin ella
-TXT_TODAS='↑ todas las apps'                 # al pie de Inicio: abre la lista de todas las apps
+TXT_TODAS='↑ todas las apps'                 # al pie de Inicio, si se elige verlo: abre la lista de todas las apps
+TXT_TODAS_PARTE='Todas las apps'             # su parte en «Cómo se ve Inicio»: viene apagada (la lista se abre deslizando)
 TXT_CREAR_CLAVE='Elegí una contraseña'
 TXT_GUARDAR='Guardar'
 TXT_ENTRAR='Entrar'
@@ -189,6 +193,22 @@ TXT_USAR_5='Usar 5 minutos'                  # la ráfaga, en Inicio, sin contra
 TXT_RAFAGA='Ráfaga de 5 minutos: hasta las ' # el aviso de Inicio mientras dura
 DORMIR_DESDE=$((23 * 60))                    # la noche de fábrica, en minutos del día: de 23:00...
 DORMIR_HASTA=$((7 * 60))                     # ...a 07:00
+TXT_FLOW='Flow State'                        # el botón de la administración y el título de su pantalla
+TXT_FLOW_PRENDIDO=Prendido                   # su interruptor
+FLOW_HORARIO='Horario 1'                     # su primer horario: «Horario 1, empieza, hora: 09», «Horario 1: sábado»
+TXT_ELEGIR_LAS_APPS='Elegir las apps'        # el botón de Flow State y el de los límites por app
+TXT_FLOW_APPS='Apps de Flow State'           # el título de su selector
+TXT_ES_FLOW_RE='^Es Flow State hasta las [0-9]{2}:[0-9]{2}$'   # el aviso de Inicio en Flow State: tocarlo muestra la ráfaga
+TXT_FLOW_FRENADA_RE='^Es Flow State: (.+) vuelve a las [0-9]{2}:[0-9]{2}\.$'   # lo que dice Inicio al tocar una app frenada
+TXT_LIMITES='Límites por app'                # el botón de la administración y el título de su pantalla
+TXT_LIMITES_APPS='Apps con límite'           # el título de su selector
+TXT_NINGUNA='Ninguna todavía.'               # los límites, sin ninguno
+TXT_MAS_TIEMPO='Más tiempo: '                # el «+» de cada app con límite, por su descripción: «Más tiempo: Camera»
+TXT_SACAR=Sacar                              # sacarle el límite a una app
+TXT_LIMITE_FRENADA_RE='^(.+) llegó a su límite de hoy \((.+)\)\. Vuelve mañana\.$'   # lo que dice Inicio al cerrarla
+TXT_NO_PERMITIDA_RE='^(.+) no está entre las apps permitidas\.$'   # lo que dice Inicio cuando la guardia frena una app
+TXT_SIN_CABLE='activo, sin cable'            # el estado de Slowtown en la administración, sin Device Owner
+APP_FLOW=Camera                              # la permitida que frenan Flow State y su límite (el Reloj no: es de las alarmas)
 TXT_NOTIFICACIONES=Notificaciones            # el botón de la administración y el título de su pantalla
 TXT_OLEADAS='Llegan por oleadas'             # su interruptor
 TXT_OLEADAS_PISTA='en silencio, a las horas de abajo'   # un pedazo de su explicación: las entregas no suenan
@@ -965,15 +985,19 @@ activar_slowtown() {   # en Administración: deja Slowtown activo pasando siempr
 }
 
 etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una por línea
-  # «ui textos» ya deja afuera lo de un widget de otra app; lo que va al pie,
-  # debajo de «↑ todas las apps» (ese widget o los hábitos), tampoco son apps.
+  # «ui textos» ya deja afuera lo de un widget de otra app; lo que va al pie
+  # tampoco son apps: «↑ todas las apps», si se ve, y los hábitos, que
+  # arrancan con la fila de iniciales de los días.
   local x y arriba abajo t pie
-  pie=$(ui textos | awk -F'\t' -v t="$TXT_TODAS" '$5 == t { print $3; exit }')
+  pie=$(ui textos | awk -F'\t' -v t="$TXT_TODAS" -v r="$TXT_RACHA" -v i="$INICIALES" \
+    '$5 == t || index($5, r) == 1 || (length($5) == 1 && index(i, $5)) { print $3; exit }')
   while IFS=$'\t' read -r x y arriba abajo t; do
     [[ -n $pie ]] && (( arriba >= pie )) && continue
     [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE || $t =~ $TXT_PANTALLA_CORTO_RE ]] && continue
     [[ $t == "$TXT_INICIO_SIN_APPS" || $t =~ $TXT_INICIO_SIN_PERMITIDAS_RE || $t == "$TXT_TODAS" ]] && continue
-    [[ $t == "$TXT_ES_DE_NOCHE" || $t == "$TXT_USAR_5" ]] && continue
+    [[ $t == "$TXT_ES_DE_NOCHE" || $t == "$TXT_USAR_5" || $t =~ $TXT_ES_FLOW_RE ]] && continue
+    # Por qué se frenó una app: aviso, no app.
+    [[ $t =~ $TXT_NO_PERMITIDA_RE || $t =~ $TXT_FLOW_FRENADA_RE || $t =~ $TXT_LIMITE_FRENADA_RE ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
   done < <(ui textos)
@@ -1192,10 +1216,19 @@ esperar_apps() {   # esperar_apps SEGUNDOS FUNCIÓN APP...: hasta que FUNCIÓN l
 # no cambia, se la reconoce por lo que muestra. Arriba pueden ir carpetas
 # (cajas con el nombre en mayúsculas), que sólo se tocan; las apps son las
 # filas que se mantienen apretadas.
-abrir_cajon() {   # desde Inicio, con «↑ todas las apps», hasta la lista de todas las apps
-  tocar_en_inicio texto "$TXT_TODAS" || return 1
-  # No tiene título: la delata el buscador, el único campo de texto.
-  esperar_ui 10 campo 1
+esperar_inicio() { esperar_ui "$1" regex "$TXT_FECHA_RE"; }   # esperar_inicio SEGUNDOS: hasta que se vea Inicio (la fecha está siempre)
+
+abrir_cajon() {   # desde Inicio, deslizando para arriba, hasta la lista de todas las apps
+  # «↑ todas las apps» viene escondido: la lista se abre como la abre
+  # cualquiera, deslizando para arriba en Inicio.
+  local vuelta
+  esperar_inicio 15 || return 1
+  for vuelta in 1 2; do
+    arrastrar 60 25
+    # No tiene título: la delata el buscador, el único campo de texto.
+    esperar_ui 5 campo 1 && return 0
+  done
+  return 1
 }
 
 etiquetas_cajon() { ui filas | cut -f1; }   # las apps de la lista en el último volcado
@@ -1241,7 +1274,7 @@ volver_del_cajon() {   # Atrás hasta Inicio
   local vuelta
   for vuelta in 1 2 3; do
     adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
-    esperar_ui 5 texto "$TXT_TODAS" && return 0
+    esperar_inicio 5 && return 0
   done
   return 1
 }
@@ -1839,6 +1872,11 @@ paso_4c() {
   else
     mal "Slowtown no tiene WRITE_SECURE_SETTINGS (pm grant, de provisionar.sh): no puede esconder la hora de la barra"
   fi
+  if esperar_inicio 10 && ! ui texto "$TXT_TODAS" >/dev/null; then
+    ok "de entrada, Inicio no muestra «$TXT_TODAS»: la lista se abre deslizando para arriba"
+  elif (( LIMPIO )); then
+    mal "de entrada, Inicio muestra «$TXT_TODAS» (o no se ve Inicio)"
+  fi
   if ! abrir_como_se_ve; then
     mal "Administración no lleva a «$TXT_COMO_SE_VE»"
     ir_a_inicio
@@ -1915,19 +1953,34 @@ paso_4c() {
   fi
   captura inicio-sin-la-hora-grande
 
+  # «↑ todas las apps», que viene escondido, a la vista con su interruptor.
+  if abrir_como_se_ve && marcar_casilla "$TXT_TODAS_PARTE" true; then
+    ir_a_inicio
+    if esperar_ui 10 texto "$TXT_TODAS" && tocar_en_inicio texto "$TXT_TODAS" && esperar_ui 10 campo 1; then
+      ok "con «$TXT_TODAS_PARTE» prendido, Inicio muestra «$TXT_TODAS», y tocarlo abre la lista"
+    else
+      mal "con «$TXT_TODAS_PARTE» prendido, Inicio no muestra «$TXT_TODAS» o tocarlo no abre la lista"
+    fi
+    volver_del_cajon || ir_a_inicio
+  else
+    mal "no pude prender «$TXT_TODAS_PARTE» en «$TXT_COMO_SE_VE»"
+    ir_a_inicio
+  fi
+
   # Y de vuelta a lo de entrada, entrando sin la hora grande.
-  if abrir_como_se_ve && inicio_de_entrada; then
+  if abrir_como_se_ve && inicio_de_entrada && marcar_casilla "$TXT_TODAS_PARTE" false; then
     ok "sin la hora grande se entra igual, por la fecha; Inicio vuelve al $TAMANIO_ENTRADA % con la hora grande, y se guarda"
   else
     mal "no pude volver Inicio a lo de entrada (guardado: $(inicio_guardado)): lo que sigue lo ve distinto"
   fi
   ir_a_inicio
-  if esperar_ui 10 regex "$TXT_HORA_RE" && esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}"; then
+  if esperar_ui 10 regex "$TXT_HORA_RE" && esperar_apps 10 etiquetas_inicio "${APPS_INICIO[@]}" &&
+    ! ui texto "$TXT_TODAS" >/dev/null; then
     f100=$(alto_de "$TXT_FECHA_RE")
     a100=$(alto_de "^$APP_RELOJ\$")
-    ok "Inicio vuelve a la hora grande, con ${APPS_INICIO[*]}"
+    ok "Inicio vuelve a la hora grande, con ${APPS_INICIO[*]} y sin «$TXT_TODAS»"
   else
-    mal "Inicio no vuelve a la hora grande con ${APPS_INICIO[*]} (apps: $(etiquetas_inicio | en_una_linea))"
+    mal "Inicio no vuelve a la hora grande con ${APPS_INICIO[*]} y sin «$TXT_TODAS» (apps: $(etiquetas_inicio | en_una_linea))"
   fi
   # Achica todo junto: la letra de la fecha y el renglón de cada app, con su margen.
   if [[ $f80 =~ ^[0-9]+$ && $f100 =~ ^[0-9]+$ && $a80 =~ ^[0-9]+$ && $a100 =~ ^[0-9]+$ ]] &&
@@ -2075,14 +2128,13 @@ paso_7() {
   local esperadas
   esperadas=$(printf '%s\n' "${APPS_INICIO[@]}" | sort -u)
   ir_a_inicio
-  # Con «↑ todas las apps» y no deslizando: un toque no depende de la
-  # velocidad del dedo.
+  # Deslizando para arriba, sin inercia: «↑ todas las apps» viene escondido.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
     return
   fi
-  ok "«$TXT_TODAS» abre la lista de todas las apps"
+  ok "deslizar para arriba abre la lista de todas las apps"
   if esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
     ok "lista justo las permitidas, ${APPS_INICIO[*]}: ni $APP_CALENDARIO ni $APP_AJUSTES"
   else
@@ -2138,7 +2190,7 @@ paso_8() {
 
   # Sacarla: mantenerla apretada en la lista abre un diálogo con su nombre.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
     return
   fi
@@ -2161,7 +2213,7 @@ paso_8() {
   # arriba no le deje otro Inicio a lo que sigue ni a la corrida siguiente;
   # las que ya llevan la nota no se tocan (mantenerlas apretadas las sacaría).
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
     return
   fi
@@ -2212,11 +2264,10 @@ paso_8b() {
   fi
   e=$(iniciales_vistas)
   xy_b=$(ui texto "$TXT_HOY_MEDITAR")
-  xy_t=$(ui texto "$TXT_TODAS") || xy_t='0 99999'
   if [ "$e" != "$(iniciales_de "$hoy")" ]; then
     mal "los días del widget de hábitos dicen «$e» y tendrían que ser «$(iniciales_de "$hoy")»"
-  elif (( ${xy_b#* } < ${xy_t#* } )); then
-    mal "los hábitos no están al pie: quedan arriba de «$TXT_TODAS»"
+  elif (( ${xy_b#* } < ALTO * 2 / 3 )); then
+    mal "los hábitos no están al pie: quedan en la parte de arriba de la pantalla"
   else
     ok "sin widget elegido, Inicio muestra los hábitos al pie, con los últimos 7 días: $e (hoy a la derecha)"
   fi
@@ -2314,7 +2365,7 @@ paso_8b() {
   captura habitos-resumen
   # «Volver», la flecha de arriba, vuelve a Inicio. Queda fija: se toca sin
   # correr el resumen, aunque se haya bajado hasta las cuentas.
-  if tocar texto "$TXT_VOLVER" && esperar_ui 10 texto "$TXT_TODAS"; then
+  if tocar texto "$TXT_VOLVER" && esperar_inicio 10; then
     ok "«$TXT_VOLVER», arriba, vuelve a Inicio"
   else
     mal "«$TXT_VOLVER» no vuelve del resumen a Inicio ($(foco))"
@@ -2404,7 +2455,7 @@ abrir_lista_de_widgets() {   # desde Inicio hasta la lista de widgets de la admi
   tocar_desplazando texto "$TXT_ELEGIR_WIDGET" && esperar_ui 10 texto "$TXT_WIDGET_TITULO"
 }
 elegir_habitos_en_la_lista() {   # en la lista de widgets: «Hábitos de Slowtown», y de vuelta en Inicio
-  tocar_desplazando texto "$TXT_HABITOS_WIDGET" && esperar_ui 15 texto "$TXT_TODAS"
+  tocar_desplazando texto "$TXT_HABITOS_WIDGET" && esperar_inicio 15
 }
 paso_9() {
   titulo 9 "Widget de Inicio: $WIDGET_RELOJ y los hábitos"
@@ -2438,7 +2489,7 @@ paso_9() {
   fi
   # Inicio y la lista de widgets son la misma actividad: la vuelta se ve en
   # la pantalla, no en el foco.
-  if ! esperar_ui 15 texto "$TXT_TODAS"; then
+  if ! esperar_inicio 15; then
     if [[ $(foco) == *"$FOCO_PERMISO_WIDGET"* ]]; then
       mal "Android pidió permiso con su diálogo: falta appwidget grantbind (provisionar.sh)"
       adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
@@ -2551,7 +2602,7 @@ paso_9b() {
   ir_a_inicio
 
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
     return
   fi
@@ -2907,7 +2958,7 @@ nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se 
   intento_navegador "con Slowtown en pausa" NONE
   # En pausa la lista de todas tiene todo lo instalado, menos lo del nivel 2.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
   else
     if esperar_ui 10 texto "$APP_CALENDARIO"; then
@@ -3876,7 +3927,7 @@ paso_9g() {
 
   # Ocultarla: sale de la lista, pero buscándola aparece.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
   else
     if ! esperar_apps 10 etiquetas_cajon "${con[@]}"; then
@@ -3924,7 +3975,7 @@ paso_9g() {
   # 22/10), en una sesión chica que suma sólo Ajustes. El Calendario, que no
   # está permitido, tiene que seguir afuera.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
   else
     if accion_en_cajon "$AVISOS_NOMBRE" "$TXT_INFO_APP" && esperar 20 "$(c_foco "$FOCO_AJUSTES")" &&
@@ -3945,7 +3996,7 @@ paso_9g() {
 
   # Desinstalarla: pregunta Slowtown y, con Device Owner, sin el diálogo de Android.
   if ! abrir_cajon; then
-    mal "«$TXT_TODAS» no abre la lista de todas las apps"
+    mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
   elif ! { accion_en_cajon "$AVISOS_NOMBRE" "$TXT_DESINSTALAR" && esperar_ui 10 texto "¿$TXT_DESINSTALAR $AVISOS_NOMBRE?"; }; then
     mal "mantener apretada «$AVISOS_NOMBRE» no ofrece «$TXT_DESINSTALAR», o no pregunta «¿$TXT_DESINSTALAR $AVISOS_NOMBRE?»"
@@ -4402,13 +4453,370 @@ paso_14_forzar() {
   fi
 }
 
+# ── 9h. Flow State y límites por app ────────────────────────────────────────
+# Flow State frena las apps elegidas en sus horarios; un límite, la app que ya
+# usó lo suyo del día. Con Device Owner, las dos cosas la sacan de la lista de
+# lock task (Android la cierra si estaba abierta), e Inicio la deja en gris y
+# dice por qué al tocarla. El horario se arma con las ruedas alrededor de la
+# hora del emulador, con los siete días. El límite se elige en la pantalla
+# (de a 15 minutos), y para no esperar un cuarto de hora la prueba lo baja a
+# 1 minuto escribiendo las preferencias.
+abrir_flow() {   # desde Inicio hasta «Flow State» de la administración
+  entrar_admin && tocar_desplazando texto "$TXT_FLOW" && esperar_ui 10 texto "$TXT_FLOW_PRENDIDO"
+}
+abrir_limites() {   # desde Inicio hasta «Límites por app» de la administración
+  entrar_admin && tocar_desplazando texto "$TXT_LIMITES" && esperar_ui 10 texto "$TXT_ELEGIR_LAS_APPS"
+}
+valor_guardado() {   # valor_guardado CLAVE: el value="…" de CLAVE en shared_prefs/slowtown.xml, o nada
+  disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml |
+    awk -v c="name=\"$1\"" 'index($0, c) { v = $0; sub(/.*value="/, "", v); sub(/".*/, "", v); print v; exit }'
+}
+texto_guardado() {   # texto_guardado CLAVE: el <string> de CLAVE en shared_prefs/slowtown.xml, como quedó escrito
+  disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml |
+    awk -v c="name=\"$1\">" 'index($0, c) { v = $0; sub(/.*name="[^"]*">/, "", v); sub(/<\/string>.*/, "", v); print v; exit }'
+}
+esperar_guardado() {   # esperar_guardado CLAVE VALOR: hasta que Slowtown lo tenga guardado así (guarda con apply)
+  local fin=$((SECONDS + 10))
+  until [ "$(valor_guardado "$1")" = "$2" ]; do
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
+elegir_en_selector() {   # elegir_en_selector TÍTULO APP: en un selector de apps recién abierto, marca APP y toca «Listo (1)»
+  local n
+  esperar_ui 10 texto "$1" || return 1
+  tocar_desplazando texto "$2" || return 1
+  volcar_ui || return 1
+  n=$(contar_listo)
+  [ "$n" = 1 ] || { nota "el selector dice «Listo (${n:-?})» después de marcar $2"; return 1; }
+  tocar regex "$TXT_LISTO_RE"
+}
+PY_PREF='
+import sys, xml.etree.ElementTree as ET
+clave, valor = sys.argv[1], sys.argv[2]
+raiz = ET.fromstring(sys.stdin.read())
+nodo = next((n for n in raiz if n.get("name") == clave), None)
+if nodo is None:
+    nodo = ET.SubElement(raiz, "string", name=clave)
+nodo.text = valor
+sys.stdout.write("<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\" ?>\n" + ET.tostring(raiz, encoding="unicode"))
+'
+escribir_preferencia() {   # escribir_preferencia CLAVE TEXTO: lo pone en shared_prefs/slowtown.xml y reinicia Slowtown para que lo lea
+  # Slowtown guarda sus preferencias en memoria: se escribe el archivo y
+  # enseguida se mata el proceso, que Android vuelve a abrir (es el Inicio).
+  # Siendo Device Owner, am force-stop no lo para: hace falta root.
+  local xml archivo="$SALIDA/slowtown.xml" pid
+  xml=$(disp run-as "$PAQUETE" cat shared_prefs/slowtown.xml)
+  python3 -I -c "$PY_PREF" "$1" "$2" <<<"$xml" >"$archivo" || return 1
+  adb_como 0 || return 1
+  adb_t 30 push "$archivo" /data/local/tmp/slowtown.xml >/dev/null 2>&1 || return 1
+  disp chmod 644 /data/local/tmp/slowtown.xml >/dev/null
+  pid=$(disp pidof "$PAQUETE")
+  disp run-as "$PAQUETE" cp /data/local/tmp/slowtown.xml shared_prefs/slowtown.xml >/dev/null
+  [[ $pid =~ ^[0-9]+$ ]] && disp kill -9 "$pid" >/dev/null
+  disp rm -f /data/local/tmp/slowtown.xml >/dev/null
+  esperar 30 "pidof $PAQUETE >/dev/null && $(c_foco "$FOCO_INICIO")"
+}
+flow_abierta() {   # la condición de que la app de Flow State está al frente (o su pedido de permisos, que es suyo)
+  echo "dumpsys activity activities | grep -qE 'ResumedActivity.*($PAQUETE_CAMARA/|permissioncontroller)'"
+}
+
+paso_9h() {
+  titulo 9h "Flow State y límites por app"
+  local ahora desde hasta xy t uid root=0 aviso_flow
+  ir_a_inicio
+
+  # ── Flow State ──
+  if ! abrir_flow; then
+    mal "Administración no lleva a «$TXT_FLOW»"
+    ir_a_inicio
+    return
+  fi
+  ok "Administración lleva a «$TXT_FLOW»"
+  # Un horario de media hora antes a media hora después de ahora, con los
+  # siete días (el de entrada es de lunes a viernes): así rige cruce o no la
+  # medianoche, sea el día que sea.
+  ahora=$(minutos_hhmm "$(disp date +%H:%M)")
+  desde=$(( (ahora - 30 + 1440) % 1440 ))
+  hasta=$(( (ahora + 30) % 1440 ))
+  if asomar_ruedas "$FLOW_HORARIO, empieza" && poner_hora "$FLOW_HORARIO, empieza" "$desde" &&
+    asomar_ruedas "$FLOW_HORARIO, termina" && poner_hora "$FLOW_HORARIO, termina" "$hasta"; then
+    ok "con las ruedas, el $FLOW_HORARIO va de $(hhmm "$desde") a $(hhmm "$hasta")"
+  else
+    mal "no pude girar las ruedas del $FLOW_HORARIO hasta $(hhmm "$desde") y $(hhmm "$hasta")"
+  fi
+  if marcar_casilla "$FLOW_HORARIO: sábado" true && marcar_casilla "$FLOW_HORARIO: domingo" true; then
+    ok "y suma el sábado y el domingo a los días de entrada"
+  else
+    mal "no pude sumar el sábado y el domingo al $FLOW_HORARIO"
+  fi
+  if tocar_desplazando texto "$TXT_ELEGIR_LAS_APPS" && elegir_en_selector "$TXT_FLOW_APPS" "$APP_FLOW" &&
+    esperar_ui 10 texto "$TXT_FLOW_PRENDIDO" && esperar 10 "run-as $PAQUETE cat shared_prefs/slowtown.xml | grep -q '<string>$PAQUETE_CAMARA</string>'"; then
+    ok "«$TXT_ELEGIR_LAS_APPS» elige $APP_FLOW, y Slowtown la guarda por paquete"
+  else
+    mal "no pude elegir $APP_FLOW para Flow State"
+  fi
+  if marcar_casilla "$TXT_FLOW_PRENDIDO" true arriba && esperar_guardado flow_enabled true; then
+    ok "«$TXT_FLOW_PRENDIDO» se prende y se guarda"
+  else
+    mal "no pude prender Flow State (flow_enabled: $(valor_guardado flow_enabled))"
+  fi
+  captura flow-state
+  ir_a_inicio
+  if esperar_ui 10 regex "$TXT_ES_FLOW_RE"; then
+    aviso_flow=$(ui textos | cut -f5 | grep -Em1 "$TXT_ES_FLOW_RE")
+    if [ "$aviso_flow" = "Es Flow State hasta las $(hhmm "$hasta")" ]; then
+      ok "Inicio dice «$aviso_flow»"
+    else
+      mal "Inicio dice «$aviso_flow», y el horario termina a las $(hhmm "$hasta")"
+    fi
+  else
+    mal "en el horario de Flow State, Inicio no lo dice"
+  fi
+  if esperar 15 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "$APP_FLOW ($PAQUETE_CAMARA) sale de la lista de lock task"
+  else
+    mal "en Flow State, $APP_FLOW sigue en la lista de lock task"
+  fi
+  if tocar_en_inicio texto "$APP_FLOW" && esperar_ui 5 regex "$TXT_FLOW_FRENADA_RE" &&
+    sostener 3 "$(c_foco "$FOCO_INICIO")"; then
+    ok "tocar $APP_FLOW en Inicio no la abre, y dice «$(ui textos | cut -f5 | grep -Em1 "$TXT_FLOW_FRENADA_RE")»"
+  else
+    mal "tocar $APP_FLOW en Inicio en Flow State no dice por qué, o la abre ($(foco))"
+    ir_a_inicio
+  fi
+  intento_am_start "$APP_FLOW con am start en Flow State" "$PAQUETE_CAMARA/" -n "$CAMARA_ACTIVIDAD"
+
+  # La ráfaga de 5 minutos, la misma de Bedtime: tocando el aviso.
+  if tocar_en_inicio regex "$TXT_ES_FLOW_RE" && esperar_ui 5 texto "$TXT_USAR_5" &&
+    tocar_en_inicio texto "$TXT_USAR_5" && esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "tocar el aviso muestra «$TXT_USAR_5», y la ráfaga devuelve $APP_FLOW a la lista"
+    disp am start -n "$CAMARA_ACTIVIDAD" >/dev/null
+    if esperar 10 "$(flow_abierta)"; then
+      ok "en la ráfaga, $APP_FLOW se abre"
+    else
+      mal "en la ráfaga, $APP_FLOW no se abre ($(resumida))"
+    fi
+    uid=$(uid_adb)
+    if [ "$uid" = 0 ] || adb_como 0; then root=1; fi
+    if (( root )); then
+      terminar_rafaga
+      if esperar 10 "! $(c_en_lock_task "$PAQUETE_CAMARA")" && esperar 10 "$(c_resumida "$PAQUETE/.HomeActivity")"; then
+        ok "al terminar la ráfaga, $APP_FLOW sale de la lista y Android la cierra: queda Inicio"
+      else
+        mal "terminada la ráfaga, $APP_FLOW no se cerró (primer plano: $(resumida))"
+      fi
+      if [ "$uid" != 0 ]; then adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"; fi
+    else
+      mal "no pude pasar adb a root para terminar la ráfaga"
+    fi
+  else
+    mal "la ráfaga de Flow State no devuelve $APP_FLOW a la lista"
+  fi
+  cerrar_cartel_bloqueo
+  ir_a_inicio
+
+  # Apagado, vuelve todo.
+  if abrir_flow && marcar_casilla "$TXT_FLOW_PRENDIDO" false arriba && esperar_guardado flow_enabled false; then
+    ir_a_inicio
+    if esperar_que_no 10 regex "$TXT_ES_FLOW_RE" && esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+      ok "apagado, Inicio ya no dice Flow State y $APP_FLOW vuelve a la lista"
+    else
+      mal "apagado Flow State, Inicio lo sigue diciendo o $APP_FLOW no vuelve a la lista"
+    fi
+  else
+    mal "no pude apagar Flow State"
+    ir_a_inicio
+  fi
+
+  # ── Límites por app ──
+  if ! abrir_limites; then
+    mal "Administración no lleva a «$TXT_LIMITES»"
+    ir_a_inicio
+    return
+  fi
+  if ui texto "$TXT_NINGUNA" >/dev/null; then
+    ok "«$TXT_LIMITES» empieza sin ninguna"
+  elif (( LIMPIO )); then
+    mal "«$TXT_LIMITES» no empieza vacía"
+  fi
+  if tocar_desplazando texto "$TXT_ELEGIR_LAS_APPS" && elegir_en_selector "$TXT_LIMITES_APPS" "$APP_FLOW" &&
+    esperar_ui 10 texto "$APP_FLOW: 1 h por día"; then
+    ok "elegida $APP_FLOW, arranca con 1 h por día"
+  else
+    mal "no pude ponerle límite a $APP_FLOW (o no arranca con 1 h)"
+  fi
+  if ui regex '^Hoy: [0-9]+ (min|h)' >/dev/null; then
+    ok "y dice cuánto lleva hoy: «$(ui textos | cut -f5 | grep -Em1 '^Hoy: [0-9]+ (min|h)')»"
+  else
+    mal "el límite de $APP_FLOW no dice cuánto lleva hoy"
+  fi
+  if tocar texto "$TXT_MAS_TIEMPO$APP_FLOW" && esperar_ui 5 texto "$APP_FLOW: 1 h 15 min por día" &&
+    esperar 10 "run-as $PAQUETE cat shared_prefs/slowtown.xml | grep -q '$PAQUETE_CAMARA&quot;:75'"; then
+    ok "«+» lo sube a 1 h 15 min, y se guarda"
+  else
+    mal "«+» no sube el límite de $APP_FLOW a 1 h 15 min (guardado: $(texto_guardado app_limits))"
+  fi
+  captura limites
+  ir_a_inicio
+
+  # Un minuto, para no esperar un cuarto de hora: con la app abierta, al
+  # cumplirse la guardia mira el uso del día, la saca de la lista y vuelve a Inicio.
+  if escribir_preferencia app_limits "{\"$PAQUETE_CAMARA\":1}"; then
+    ok "límite de $APP_FLOW bajado a 1 minuto (preferencias escritas y Slowtown reiniciado)"
+  else
+    mal "no pude bajar el límite de $APP_FLOW a 1 minuto en las preferencias"
+  fi
+  adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"
+  ir_a_inicio
+  disp am start -n "$CAMARA_ACTIVIDAD" >/dev/null
+  if ! esperar 10 "$(flow_abierta)"; then
+    mal "$APP_FLOW no se abre antes de llegar a su límite ($(resumida))"
+  elif esperar 100 "$(c_resumida "$PAQUETE/.HomeActivity")" && esperar 10 "! $(c_en_lock_task "$PAQUETE_CAMARA")"; then
+    ok "al minuto de uso, $APP_FLOW sale de la lista de lock task y Android la cierra: queda Inicio"
+    if esperar_ui 10 regex "$TXT_LIMITE_FRENADA_RE"; then
+      ok "e Inicio dice «$(ui textos | cut -f5 | grep -Em1 "$TXT_LIMITE_FRENADA_RE")»"
+    else
+      mal "Inicio no dice por qué se cerró $APP_FLOW"
+    fi
+  else
+    mal "pasado el minuto, $APP_FLOW sigue abierta o en la lista ($(resumida))"
+  fi
+  captura limite-cumplido
+  ir_a_inicio
+  intento_am_start "$APP_FLOW con am start, con el límite cumplido" "$PAQUETE_CAMARA/" -n "$CAMARA_ACTIVIDAD"
+  if grep -q "$PAQUETE_CAMARA" <<<"$(texto_guardado limits_reached)"; then
+    ok "Slowtown anota el límite cumplido, con la fecha: «$(texto_guardado limits_reached)»"
+  else
+    mal "Slowtown no anota el límite cumplido (limits_reached: $(texto_guardado limits_reached))"
+  fi
+
+  # Sacarle el límite la devuelve enseguida.
+  if abrir_limites && tocar texto "$TXT_SACAR" && esperar_ui 10 texto "$TXT_NINGUNA"; then
+    ir_a_inicio
+    if esperar 15 "$(c_en_lock_task "$PAQUETE_CAMARA")"; then
+      ok "sin el límite, $APP_FLOW vuelve a la lista"
+    else
+      mal "sacado el límite, $APP_FLOW no vuelve a la lista"
+    fi
+  else
+    mal "no pude sacarle el límite a $APP_FLOW"
+    ir_a_inicio
+  fi
+  afirmar_en_inicio "Flow State y los límites no tocan el cierre: Slowtown y LOCKED"
+}
+
+# ── 15. Sin cable: la guardia ───────────────────────────────────────────────
+# Sin Device Owner (como en un teléfono sin paso 3, o el de alguien que la
+# baja de una tienda), Slowtown cierra con la guardia: con el acceso a los
+# datos de uso y siendo el Inicio, vuelve a Inicio si adelante queda una app
+# que no corresponde. Se libera por cable, se activa desde la administración y
+# se prueba con una app no permitida, con Ajustes, con una permitida, con una
+# sesión de administración y en pausa.
+actividad_de() {   # actividad_de PAQUETE: su pantalla de inicio, como paquete/clase
+  disp cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$1" | tail -n 1
+}
+frenada_por_la_guardia() {   # frenada_por_la_guardia QUÉ FOCO ARGUMENTOS_DE_AM_START...: se abre y la guardia vuelve a Inicio
+  local que=$1 foco_app=$2
+  shift 2
+  disp am start "$@" >/dev/null
+  # La app llega a abrirse, y la guardia la frena en menos de un segundo: a
+  # veces el foco ni se llega a ver en ella. Lo que importa es que después de
+  # unos segundos esté Inicio, y que se quede.
+  sleep 3
+  if esperar 5 "$(c_foco "$FOCO_INICIO")" && sostener 3 "! $(c_foco "$foco_app")"; then
+    ok "$que: la guardia vuelve a Inicio"
+    return 0
+  fi
+  mal "$que: se queda abierta ($(foco))"
+  ir_a_inicio
+  return 1
+}
+
+paso_15() {
+  titulo 15 "Sin cable: la guardia"
+  local salida rc calendario
+  adb_como 2000 || mal "no pude sacarle root a adb: liberar.sh llamaría a Slowtown como root"
+  salida=$(cd "$RAIZ" && ./scripts/liberar.sh </dev/null 2>&1)
+  rc=$?
+  if (( rc == 0 )) && ! es_device_owner; then
+    ok "liberada por cable: Slowtown ya no es Device Owner"
+  else
+    mal "liberar.sh no la soltó (rc $rc): $(tail -n 2 <<<"$salida" | en_una_linea)"
+    return
+  fi
+  # El Inicio de siempre, sin Inicio fijo.
+  disp cmd package set-home-activity "$INICIO_COMPONENTE" >/dev/null
+  ir_a_inicio || nota "Inicio no lleva a Slowtown ($(foco))"
+  if ! entrar_admin; then
+    mal "no pude entrar a la administración sin Device Owner"
+    return
+  fi
+  # El estado va arriba de todo, y el botón más abajo: se vuelve a subir para leerlo.
+  if tocar_desplazando texto "$TXT_ACTIVAR" && esperar_ui 10 texto "$TXT_PAUSAR" &&
+    asomar texto "$TXT_SIN_CABLE" arriba && ui texto "$TXT_SIN_CABLE" >/dev/null; then
+    ok "sin Device Owner, «$TXT_ACTIVAR» la deja «$TXT_SIN_CABLE»"
+  else
+    mal "sin Device Owner, «$TXT_ACTIVAR» no la deja «$TXT_SIN_CABLE» (¿falta el acceso a los datos de uso?)"
+    ir_a_inicio
+    return
+  fi
+  captura sin-cable-activo
+  ir_a_inicio
+  afirmar_en_inicio "sin cable no hay lock task" NONE
+  calendario=$(actividad_de com.android.calendar)
+  if frenada_por_la_guardia "$APP_CALENDARIO, que no está permitida" "$FOCO_CALENDARIO" -n "$calendario"; then
+    if esperar_ui 10 regex "$TXT_NO_PERMITIDA_RE"; then
+      ok "e Inicio dice «$(ui textos | cut -f5 | grep -Em1 "$TXT_NO_PERMITIDA_RE")»"
+    else
+      mal "Inicio no dice por qué volvió"
+    fi
+  fi
+  captura guardia
+  frenada_por_la_guardia "$APP_AJUSTES" "$FOCO_AJUSTES" -a android.settings.SETTINGS
+  disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+  if esperar 8 "$(c_foco "$FOCO_RELOJ")" && sostener 4 "$(c_foco "$FOCO_RELOJ")"; then
+    ok "$APP_RELOJ, que está permitida, se abre y se queda"
+  else
+    mal "$APP_RELOJ, que está permitida, no se queda abierta ($(foco))"
+  fi
+  ir_a_inicio
+
+  # Con la sesión de administración, Ajustes pasa; al volver a Inicio, ya no.
+  if entrar_admin && tocar_desplazando texto "$TXT_IR_AJUSTES" && esperar 10 "$(c_foco "$FOCO_AJUSTES")" &&
+    sostener 4 "$(c_foco "$FOCO_AJUSTES")"; then
+    ok "«$TXT_IR_AJUSTES», con la contraseña, abre Ajustes y la guardia lo deja"
+  else
+    mal "«$TXT_IR_AJUSTES» sin cable no deja Ajustes abierto ($(foco))"
+  fi
+  ir_a_inicio
+  frenada_por_la_guardia "$APP_AJUSTES, terminada la sesión al volver a Inicio" "$FOCO_AJUSTES" -a android.settings.SETTINGS
+
+  # En pausa, nada.
+  if entrar_admin && tocar_desplazando texto "$TXT_PAUSAR" && esperar_ui 10 texto "$TXT_ACTIVAR"; then
+    ir_a_inicio
+    disp am start -n "$calendario" >/dev/null
+    if esperar 8 "$(c_foco "$FOCO_CALENDARIO")" && sostener 4 "$(c_foco "$FOCO_CALENDARIO")"; then
+      ok "en pausa, la guardia no frena nada: $APP_CALENDARIO se queda abierta"
+    else
+      mal "en pausa, $APP_CALENDARIO no se queda abierta ($(foco))"
+    fi
+  else
+    mal "no pude pausar Slowtown sin cable"
+  fi
+  ir_a_inicio
+  nota "queda sin Device Owner y en pausa: la próxima corrida, con --limpio"
+}
+
 # ── Principal ───────────────────────────────────────────────────────────────
 COMPILAR=0
 LIMPIO=0
+PASOS=''
 for arg in "$@"; do
   case $arg in
     --build) COMPILAR=1 ;;
     --limpio) LIMPIO=1 ;;
+    --pasos=*) PASOS=${arg#--pasos=} ;;
     -h | --help)
       sed -n '2,/^# Mientras corre, no tocar/{s/^# \{0,1\}//;p}' "$0"
       exit 0
@@ -4429,31 +4837,17 @@ mkdir -p "$SALIDA" || { echo "🚨 No puedo crear $SALIDA." >&2; exit 2; }
 UI_XML="$SALIDA/ui.xml"
 trap 'echo; aviso "cortado a mano"; resumen; exit 130' INT TERM
 
+correr() {   # correr PASO: el paso, salvo que --pasos elija otros (el 0, el 1 y el 2 van siempre: instalan y activan)
+  case $1 in
+    0 | 1 | 2) ;;
+    *) [[ -z $PASOS || ",$PASOS," == *",$1,"* ]] || return 0 ;;
+  esac
+  "paso_$1"
+}
+
 echo "Slowtown: prueba de punta a punta en el emulador"
-paso_0
-paso_1
-paso_2
-paso_3
-paso_4
-paso_4b
-paso_4c
-paso_5
-paso_6
-paso_7
-paso_8
-paso_8b
-paso_8c
-paso_9
-paso_9b
-paso_9c
-paso_9d
-paso_9e
-paso_9f
-paso_9g
-paso_10
-paso_11
-paso_12
-paso_13
-paso_14
+for paso in 0 1 2 3 4 4b 4c 5 6 7 8 8b 8c 9 9b 9c 9d 9e 9f 9g 9h 10 11 12 13 14 15; do
+  correr "$paso"
+done
 resumen
 (( ${#FALLAS[@]} == 0 ))

@@ -3,16 +3,19 @@ package com.slowtown.launcher
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.KeyguardManager
+import android.app.role.RoleManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Process
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -36,9 +39,13 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.admin.AdminSession
 import com.slowtown.launcher.admin.Bedtime
 import com.slowtown.launcher.admin.Fixed
+import com.slowtown.launcher.admin.FlowState
 import com.slowtown.launcher.admin.FreeSession
+import com.slowtown.launcher.admin.Guard
+import com.slowtown.launcher.admin.Limits
 import com.slowtown.launcher.admin.LockTaskEvents
 import com.slowtown.launcher.admin.Policies
+import com.slowtown.launcher.admin.Rules
 import com.slowtown.launcher.apps.AppCatalog
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
@@ -51,6 +58,7 @@ import com.slowtown.launcher.security.CrashGuard
 import com.slowtown.launcher.security.Password
 import com.slowtown.launcher.ui.AdminScreen
 import com.slowtown.launcher.ui.AdminStatus
+import com.slowtown.launcher.ui.AppLimit
 import com.slowtown.launcher.ui.AppActions
 import com.slowtown.launcher.ui.BedtimeScreen
 import com.slowtown.launcher.ui.BedtimeSettings
@@ -58,6 +66,8 @@ import com.slowtown.launcher.ui.NotificationsScreen
 import com.slowtown.launcher.ui.ChooseAppsScreen
 import com.slowtown.launcher.ui.CreatePasswordScreen
 import com.slowtown.launcher.ui.DrawerScreen
+import com.slowtown.launcher.ui.FlowSettings
+import com.slowtown.launcher.ui.FlowStateScreen
 import com.slowtown.launcher.ui.FolderScreen
 import com.slowtown.launcher.ui.FreeSessionInfo
 import com.slowtown.launcher.ui.FoldersScreen
@@ -67,6 +77,8 @@ import com.slowtown.launcher.ui.HabitsWidget
 import com.slowtown.launcher.ui.HomeLook
 import com.slowtown.launcher.ui.HomeLookScreen
 import com.slowtown.launcher.ui.HomeScreen
+import com.slowtown.launcher.ui.LimitsScreen
+import com.slowtown.launcher.ui.Pause
 import com.slowtown.launcher.ui.SitesScreen
 import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
@@ -98,7 +110,10 @@ import java.time.format.DateTimeFormatter
  */
 class HomeActivity : ComponentActivity() {
 
-    private enum class Screen { Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits, HabitsPicker, Bedtime, Notifications, HomeLook }
+    private enum class Screen {
+        Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits,
+        HabitsPicker, Bedtime, FlowState, FlowApps, Limits, LimitApps, Notifications, HomeLook,
+    }
 
     private lateinit var prefs: Prefs
     private var screen by mutableStateOf(Screen.Home)
@@ -122,9 +137,17 @@ class HomeActivity : ComponentActivity() {
     /** Las ocultas de la lista de todas las apps: aparecen sólo buscándolas. */
     private var hidden by mutableStateOf<Set<String>>(emptySet())
 
-    /** Si ahora manda la noche (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
-    private var night by mutableStateOf(false)
+    /** Si ahora mandan la noche o Flow State (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
+    private var pause by mutableStateOf<Pause?>(null)
     private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
+    private var flowSettings by mutableStateOf(FlowSettings(false, emptyList(), emptySet()))
+    private var limitRows by mutableStateOf<List<AppLimit>>(emptyList())
+
+    /** Las apps de Inicio frenadas ahora (Flow State, su límite), por paquete: en gris, y tocarlas dice por qué. */
+    private var held by mutableStateOf<Map<String, Rules.Hold>>(emptyMap())
+
+    /** Por qué se frenó una app recién (la guardia, o tocarla en Inicio): se dice hasta irse de Inicio. */
+    private var heldNotice: String? = null
 
     /** Cómo se ve Inicio: el tamaño, si va la hora grande, y el tamaño y el lugar de cada parte. */
     private var homeLook by mutableStateOf(HomeLook(100, false))
@@ -148,6 +171,12 @@ class HomeActivity : ComponentActivity() {
 
     /** El widget que se está armando, hasta que lo confirme su configuración. */
     private var pendingWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+
+    /** Elegir Slowtown como Inicio, con el diálogo de Android: al volver, la guardia ya puede mirar. */
+    private val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        refreshStatus()
+        Guard.update(this)
+    }
 
     /** Si Android no deja crear el widget sin preguntar, pregunta él (una vez, con «Permitir siempre»). */
     private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -214,8 +243,10 @@ class HomeActivity : ComponentActivity() {
             override fun handleOnBackPressed() = when (screen) {
                 Screen.Folder -> screen = Screen.Drawer
                 Screen.HabitsPicker -> screen = Screen.Habits
+                Screen.FlowApps -> screen = Screen.FlowState
+                Screen.LimitApps -> screen = Screen.Limits
                 Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders, Screen.Bedtime,
-                Screen.Notifications, Screen.HomeLook ->
+                Screen.FlowState, Screen.Limits, Screen.Notifications, Screen.HomeLook ->
                     screen = Screen.Admin
                 else -> goHome()
             }
@@ -231,14 +262,14 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
-        // Si la noche empieza o termina con Inicio a la vista, el aviso y las
-        // apps cambian solos. Consulta barata: una vez cada medio minuto.
+        // Si la noche o Flow State empiezan o terminan con Inicio a la vista,
+        // el aviso y las apps cambian solos. Consulta barata: cada medio minuto.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                var was = Bedtime.restricts(this@HomeActivity)
+                var was = pauseKey()
                 while (true) {
                     delay(30_000L)
-                    val now = Bedtime.restricts(this@HomeActivity)
+                    val now = pauseKey()
                     if (now != was) {
                         was = now
                         refreshStatus()
@@ -280,12 +311,14 @@ class HomeActivity : ComponentActivity() {
                         hint = homeHint,
                         safeMode = status.safeMode,
                         notice = notice,
-                        onBurst = if (night) ::startBurst else null,
+                        pause = pause,
+                        onBurst = ::startBurst,
                         update = updateState,
                         onUpdate = { Updater.update(this@HomeActivity) },
                         screenTime = screenTime,
                         onScreenTime = wellbeing?.let { intent -> { openWellbeing(intent) } },
                         look = homeLook,
+                        dimmed = held.keys,
                         widget = if (showHabits) {
                             @Composable { align: Alignment.Horizontal ->
                                 HabitsWidget(
@@ -364,6 +397,13 @@ class HomeActivity : ComponentActivity() {
                             )
                             screen = Screen.Bedtime
                         },
+                        onFlowState = {
+                            flowSettings = FlowSettings(prefs.flowEnabled, prefs.flowWindows, prefs.flowApps)
+                            screen = Screen.FlowState
+                        },
+                        onLimits = ::openLimits,
+                        onUsageAccess = { startAdminSession(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
+                        onChooseHome = ::askToBeHome,
                         onNotifications = { screen = Screen.Notifications },
                         onToggleClosed = ::toggleClosed,
                         onOpenSettings = { startAdminSession(Intent(Settings.ACTION_SETTINGS)) },
@@ -388,6 +428,45 @@ class HomeActivity : ComponentActivity() {
                         settings = bedtimeSettings,
                         onChange = ::saveBedtime,
                         onBack = { screen = Screen.Admin },
+                    )
+                    Screen.FlowState -> FlowStateScreen(
+                        settings = flowSettings,
+                        appNames = permittable.filter { it.packageName in flowSettings.apps }
+                            .map { it.label }.distinct(),
+                        onChange = ::saveFlow,
+                        onChooseApps = { screen = Screen.FlowApps },
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.FlowApps -> ChooseAppsScreen(
+                        apps = permittable,
+                        chosen = permittable.filter { it.packageName in flowSettings.apps }.mapTo(mutableSetOf()) { it.key },
+                        onDone = { keys ->
+                            saveFlow(flowSettings.copy(apps = packagesOf(keys)))
+                            screen = Screen.FlowState
+                        },
+                        onBack = { screen = Screen.FlowState },
+                        title = "Apps de Flow State",
+                        hint = "Las que marques no se abren en los horarios de Flow State. Las llamadas, " +
+                            "también de WhatsApp, entran igual.",
+                    )
+                    Screen.Limits -> LimitsScreen(
+                        limits = limitRows,
+                        onChange = ::saveLimit,
+                        onChooseApps = { screen = Screen.LimitApps },
+                        onBack = { screen = Screen.Admin },
+                    )
+                    Screen.LimitApps -> ChooseAppsScreen(
+                        apps = permittable,
+                        chosen = permittable.filter { app -> limitRows.any { it.packageName == app.packageName } }
+                            .mapTo(mutableSetOf()) { it.key },
+                        onDone = { keys ->
+                            saveLimitApps(packagesOf(keys))
+                            screen = Screen.Limits
+                        },
+                        onBack = { screen = Screen.Limits },
+                        title = "Apps con límite",
+                        hint = "Las que marques arrancan con ${Limits.format(Limits.DEFAULT)} por día; " +
+                            "después se cambia en «Límites por app».",
                     )
                     Screen.HomeLook -> HomeLookScreen(
                         look = homeLook,
@@ -458,14 +537,20 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Si la guardia (o la lista de lock task) acaba de frenar una app, Inicio dice por qué.
+        Guard.lastHeld?.let { last ->
+            Guard.clearLastHeld()
+            if (SystemClock.elapsedRealtime() - last.at < HELD_NOTICE_MS) heldNotice = holdText(last.packageName, last.hold)
+        }
         // Si una alarma de fin se atrasó, la sesión se cierra acá.
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
                 AdminSession.endIfExpired(this@HomeActivity)
                 Bedtime.endBurstIfExpired(this@HomeActivity)
-                // Por si la alarma de la noche se atrasó: escribe sólo si cambió.
-                if (shouldBeClosed()) Policies.refreshPackages(this@HomeActivity, prefs.allowedPackages)
                 FreeSession.endIfExpired(this@HomeActivity)
+                // Por si una alarma de los horarios se atrasó: los límites, la
+                // lista de lock task (escribe sólo si cambió) y la guardia.
+                Bedtime.refresh(this@HomeActivity)
             }
             refreshStatus()
             refreshApps()
@@ -507,6 +592,8 @@ class HomeActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         widgetHost.stopListening()
+        // Lo que se frenó ya se dijo: al volver a Inicio, el aviso no sigue.
+        heldNotice = null
         // Una sesión de administración no sobrevive a apagar la pantalla ni a
         // irse a otra app: al volver, contraseña de nuevo.
         screen = Screen.Home
@@ -537,6 +624,12 @@ class HomeActivity : ComponentActivity() {
     private fun unlocked() = showIfStarted(Screen.Admin)
 
     private fun launch(app: LaunchableApp) {
+        // Frenada (Flow State, su límite): ni se intenta, se dice por qué.
+        held[app.packageName]?.let { hold ->
+            heldNotice = holdText(app.packageName, hold)
+            refreshStatus()
+            return
+        }
         runCatching { startActivity(app.intent()) }
             .onFailure { Log.w(TAG, "No pude abrir ${app.key}", it) }
     }
@@ -586,7 +679,7 @@ class HomeActivity : ComponentActivity() {
      */
     private fun openAppInfo(app: LaunchableApp) {
         val info = AppCatalog.infoIntent(app.packageName)
-        if (isLocked() && !FreeSession.isActive(this)) {
+        if (Rules.active(this) && !FreeSession.isActive(this)) {
             startAdminSession(info, infoOnly = true)
             return
         }
@@ -660,17 +753,21 @@ class HomeActivity : ComponentActivity() {
             refreshStatus()
             refreshApps()
         }
+        // Sin cable, lo que cierra es la guardia: arranca o para.
+        Guard.update(this)
     }
 
     /**
      * Ajustes y la Play Store: todo el teléfono queda a mano hasta volver a
-     * Inicio, apagar la pantalla o pasar [AdminSession.LENGTH_MS].
+     * Inicio, apagar la pantalla o pasar [AdminSession.LENGTH_MS]. Con Device
+     * Owner agranda la lista de lock task; sin cable, la guardia deja pasar.
      */
     private fun startAdminSession(target: Intent?, infoOnly: Boolean = false) {
         if (target == null) return
         screen = Screen.Home
         lifecycleScope.launch {
-            if (isLocked()) {
+            // Con Slowtown activo, con cable o sin él: la sesión es lo que deja pasar.
+            if (Rules.active(this@HomeActivity)) {
                 withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages, infoOnly) }
             }
             runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -705,6 +802,69 @@ class HomeActivity : ComponentActivity() {
             refreshStatus()
             refreshApps()
         }
+    }
+
+    /** Flow State: rige desde ya (si es uno de sus horarios, frena sus apps) y se agenda el próximo cambio. */
+    private fun saveFlow(settings: FlowSettings) {
+        prefs.flowEnabled = settings.enabled
+        prefs.flowWindows = settings.windows
+        prefs.flowApps = settings.apps
+        flowSettings = settings
+        rearm()
+    }
+
+    /** Los límites, con lo que lleva hoy cada app. Recorrer el uso del día tarda: fuera del hilo principal. */
+    private fun openLimits() {
+        screen = Screen.Limits
+        lifecycleScope.launch { limitRows = withContext(Dispatchers.Default) { loadLimits() } }
+    }
+
+    private fun loadLimits(): List<AppLimit> {
+        val usage = ScreenTime.byApp(this)
+        return prefs.appLimits.map { (pkg, minutes) -> AppLimit(pkg, appLabel(pkg), minutes, usage?.let { it[pkg] ?: 0L }) }
+            .sortedBy { it.label.lowercase() }
+    }
+
+    /** Otro límite para una app, o ninguno ([minutes] null). Rige desde ya. */
+    private fun saveLimit(packageName: String, minutes: Int?) {
+        val limits = prefs.appLimits
+        prefs.appLimits = if (minutes == null) limits - packageName else limits + (packageName to Limits.round(minutes))
+        limitRows = if (minutes == null) {
+            limitRows.filterNot { it.packageName == packageName }
+        } else {
+            limitRows.map { if (it.packageName == packageName) it.copy(minutes = Limits.round(minutes)) else it }
+        }
+        rearm()
+    }
+
+    /** Las apps con límite: las nuevas, con el de entrada; las que se desmarcaron, sin. */
+    private fun saveLimitApps(packages: Set<String>) {
+        val limits = prefs.appLimits
+        prefs.appLimits = packages.associateWith { limits[it] ?: Limits.DEFAULT }
+        lifecycleScope.launch {
+            limitRows = withContext(Dispatchers.Default) { loadLimits() }
+        }
+        rearm()
+    }
+
+    /** Lo que cambió en los horarios o los límites rige desde ya: agenda, mira el uso y rearma lo que cierra. */
+    private fun rearm() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                Bedtime.schedule(this@HomeActivity)
+                Limits.check(this@HomeActivity)
+                Bedtime.refresh(this@HomeActivity)
+            }
+            refreshStatus()
+            refreshApps()
+        }
+    }
+
+    /** Elegir Slowtown como Inicio: sin cable, la guardia lo necesita para volver a Inicio. */
+    private fun askToBeHome() {
+        val roles = getSystemService(RoleManager::class.java)
+        runCatching { chooseHome.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
+            .onFailure { startAdminSession(Intent(Settings.ACTION_HOME_SETTINGS)) }
     }
 
     /** Cómo se ve Inicio: no hay nada que rearmar, Inicio lo toma al volver. */
@@ -765,7 +925,7 @@ class HomeActivity : ComponentActivity() {
      */
     private fun pickWidget(choice: WidgetChoice) {
         lifecycleScope.launch {
-            if (isLocked()) {
+            if (Rules.active(this@HomeActivity)) {
                 withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages) }
             }
             discardPendingWidget()
@@ -917,24 +1077,68 @@ class HomeActivity : ComponentActivity() {
             closed = prefs.closed,
             locked = isLocked(),
             safeMode = CrashGuard.inSafeMode(this),
+            usageAccess = ScreenTime.hasAccess(this),
+            home = Guard.isHome(this),
         )
+        val active = Rules.active(this)
         val freeUntil = FreeSession.until(this)
         val burstUntil = Bedtime.burstUntil(this)
-        val bedtime = shouldBeClosed() && Bedtime.isNight(this)
-        night = bedtime && burstUntil == 0L
-        notice = when {
-            freeUntil > 0 -> "Todo habilitado hasta las ${hhmm(freeUntil)}"
-            bedtime && burstUntil > 0 -> "Ráfaga de 5 minutos: hasta las ${hhmm(burstUntil)}"
-            // De noche el aviso es otro, y lo arma HomeScreen: «Es Bedtime, andá a dormir».
+        val nightNow = active && Bedtime.isNight(this)
+        val flowNow = active && FlowState.isOn(this)
+        // De noche o en Flow State, el aviso lo arma HomeScreen: «Es Bedtime, andá a dormir».
+        pause = when {
+            burstUntil > 0L -> null
+            nightNow -> Pause.Night
+            flowNow -> Pause.Flow(FlowState.endsAt(this)?.format(HHMM))
             else -> null
         }
+        val session = when {
+            freeUntil > 0 -> "Todo habilitado hasta las ${hhmm(freeUntil)}"
+            (nightNow || flowNow) && burstUntil > 0 -> "Ráfaga de 5 minutos: hasta las ${hhmm(burstUntil)}"
+            else -> null
+        }
+        notice = listOfNotNull(heldNotice, session).joinToString("\n").ifEmpty { null }
         // El botón sólo tiene sentido con Slowtown activo y sin una sesión en curso.
-        freeInfo = if (isLocked() && freeUntil == 0L) {
+        freeInfo = if (active && freeUntil == 0L) {
             FreeSessionInfo(FreeSession.remaining(this), FreeSession.nextAt(this)?.let(::whenText))
         } else {
             null
         }
     }
+
+    /** Lo que cambia solo con la hora: la noche y Flow State. */
+    private fun pauseKey(): Pair<Boolean, Boolean> = Bedtime.restricts(this) to FlowState.held(this).isNotEmpty()
+
+    /** Las de [apps] que Flow State o su límite frenan ahora, por paquete. */
+    private fun heldOf(apps: List<LaunchableApp>): Map<String, Rules.Hold> =
+        apps.map { it.packageName }.distinct().mapNotNull { pkg ->
+            Rules.hold(this, pkg)?.takeIf { it is Rules.Hold.Flow || it is Rules.Hold.Limit }?.let { pkg to it }
+        }.toMap()
+
+    /** Por qué no se abre [packageName], para el aviso de Inicio. */
+    private fun holdText(packageName: String, hold: Rules.Hold): String {
+        val label = appLabel(packageName)
+        return when (hold) {
+            Rules.Hold.NotAllowed -> "$label no está entre las apps permitidas."
+            Rules.Hold.Night -> "Es Bedtime: $label vuelve a las ${minutesText(prefs.bedtimeEnd)}."
+            is Rules.Hold.Flow -> hold.until?.let { "Es Flow State: $label vuelve a las ${it.format(HHMM)}." }
+                ?: "Es Flow State: $label vuelve cuando termine."
+            is Rules.Hold.Limit -> "$label llegó a su límite de hoy (${Limits.format(hold.minutes)}). Vuelve mañana."
+        }
+    }
+
+    private fun minutesText(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
+
+    /** El nombre de una app, o su paquete si no se encuentra. */
+    // La variante con ApplicationInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    private fun appLabel(packageName: String): String = runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+    }.getOrDefault(packageName)
+
+    /** Los paquetes de unas apps elegidas, que se eligen como `paquete/actividad`. */
+    private fun packagesOf(keys: Set<String>): Set<String> =
+        keys.mapNotNullTo(mutableSetOf()) { ComponentName.unflattenFromString(it)?.packageName }
 
     private fun hhmm(millis: Long): String =
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(HHMM)
@@ -956,7 +1160,7 @@ class HomeActivity : ComponentActivity() {
             val vetoed = if (Policies.isDeviceOwner(this@HomeActivity)) prefs.vetoed + Fixed.APPS else emptySet()
             val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
                 .filterNot { it.packageName in vetoed }
-            val active = shouldBeClosed()
+            val active = Rules.active(this@HomeActivity)
             val allowed = prefs.allowed
             // Con «Habilitar todo» en curso se ven todas, como sin Slowtown. De
             // noche, sólo el reloj y las alarmas.
@@ -975,6 +1179,7 @@ class HomeActivity : ComponentActivity() {
             hidden = prefs.hiddenApps
             folders = prefs.folders
             homeApps = if (nightNow) visible else visible.filter { it.key in chosen }
+            held = if (active && !nightNow) withContext(Dispatchers.Default) { heldOf(visible) } else emptyMap()
             homeHint = if (active && visible.isEmpty()) {
                 "Mantené apretada ${if (prefs.showClock) "la hora" else "la fecha"} para elegir las apps permitidas."
             } else {
@@ -988,6 +1193,9 @@ class HomeActivity : ComponentActivity() {
         const val WIDGET_HOST_ID = 0x5107
         const val REQUEST_CONFIGURE_WIDGET = 1
         const val KEY_PENDING_WIDGET = "pending_widget"
+
+        /** Cuánto después de que la guardia frenó una app Inicio todavía dice por qué. */
+        const val HELD_NOTICE_MS = 15_000L
         val HHMM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     }
 }

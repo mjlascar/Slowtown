@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
@@ -57,6 +58,17 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
+ * Lo que frena ahora las apps de siempre, con su ráfaga de 5 minutos: la
+ * noche o Flow State. Inicio lo dice, y la ráfaga aparece recién al tocarlo.
+ */
+sealed interface Pause {
+    data object Night : Pause
+
+    /** Flow State, hasta [until] («13:00»), o null si no se sabe. */
+    data class Flow(val until: String?) : Pause
+}
+
+/**
  * La hora grande (si se eligió) con la fecha y el tiempo de pantalla, los
  * avisos, las apps de Inicio en texto y, abajo de todo, el widget si hay uno:
  * cada parte con el tamaño y el lugar de «Cómo se ve Inicio». Manteniendo
@@ -75,10 +87,11 @@ fun HomeScreen(
     /** Un aviso corto abajo de la fecha, por ejemplo «Todo habilitado hasta las 17:52». */
     notice: String?,
     /**
-     * De noche, la ráfaga de 5 minutos con las apps de siempre: Inicio dice
-     * «Es Bedtime, andá a dormir», y el botón aparece recién al tocarlo.
+     * De noche o en Flow State, Inicio lo dice («Es Bedtime, andá a dormir»), y
+     * al tocarlo aparece la ráfaga de 5 minutos con las apps de siempre ([onBurst]).
      */
-    onBurst: (() -> Unit)?,
+    pause: Pause?,
+    onBurst: () -> Unit,
     /**
      * La actualización de Slowtown: Inicio la muestra sólo si hay una versión
      * nueva, en un renglón que se toca ([onUpdate]).
@@ -91,6 +104,8 @@ fun HomeScreen(
     onScreenTime: (() -> Unit)?,
     /** El tamaño de todo Inicio, si va la hora grande, y el tamaño y el lugar de cada parte. */
     look: HomeLook,
+    /** Los paquetes de las apps de Inicio frenadas ahora (Flow State, su límite): en gris. */
+    dimmed: Set<String>,
     /** El widget, que recibe hacia dónde va a lo ancho. */
     widget: (@Composable (Alignment.Horizontal) -> Unit)?,
     /**
@@ -126,11 +141,13 @@ fun HomeScreen(
                 screenTime = screenTime,
                 onScreenTime = onScreenTime,
                 notice = notice,
+                pause = pause,
                 onBurst = onBurst,
                 update = update,
                 onUpdate = onUpdate,
                 safeMode = safeMode,
                 apps = apps,
+                dimmed = dimmed,
                 hint = hint,
                 widget = widget,
                 scaleWidget = scaleWidget,
@@ -170,11 +187,13 @@ internal fun HomeContent(
     screenTime: String?,
     onScreenTime: (() -> Unit)?,
     notice: String?,
-    onBurst: (() -> Unit)?,
+    pause: Pause?,
+    onBurst: () -> Unit,
     update: UpdateState,
     onUpdate: () -> Unit,
     safeMode: Boolean,
     apps: List<LaunchableApp>?,
+    dimmed: Set<String>,
     hint: String,
     widget: (@Composable (Alignment.Horizontal) -> Unit)?,
     scaleWidget: Boolean,
@@ -187,9 +206,9 @@ internal fun HomeContent(
     val blocks = look.blocks
     Column(modifier.padding(horizontal = 28.dp, vertical = 32.dp)) {
         HomeHeader(look.showClock, blocks, screenTime, onScreenTime, onAdmin)
-        Notices(blocks[HomeBlock.NOTICES], notice, onBurst, update, onUpdate, safeMode, look.showClock)
+        Notices(blocks[HomeBlock.NOTICES], notice, pause, onBurst, update, onUpdate, safeMode, look.showClock)
         Spacer(Modifier.height(40.dp))
-        HomeApps(blocks[HomeBlock.APPS], apps, hint, onOpen)
+        HomeApps(blocks[HomeBlock.APPS], apps, dimmed, hint, onOpen)
         Spacer(Modifier.weight(1f))
         val allApps = blocks[HomeBlock.ALL_APPS]
         if (allApps.shown) AllAppsLink(allApps, onDrawer)
@@ -401,12 +420,16 @@ private fun ScreenTimeText(screenTime: String, align: BlockAlign, onOpen: (() ->
     )
 }
 
-/** Los avisos, debajo de la cabecera: «Todo habilitado…», el de la noche, la actualización y los cuelgues. */
+/**
+ * Los avisos, debajo de la cabecera: «Todo habilitado…» o por qué se frenó
+ * una app, el de la noche o Flow State, la actualización y los cuelgues.
+ */
 @Composable
 private fun Notices(
     place: BlockLook,
     notice: String?,
-    onBurst: (() -> Unit)?,
+    pause: Pause?,
+    onBurst: () -> Unit,
     update: UpdateState,
     onUpdate: () -> Unit,
     safeMode: Boolean,
@@ -424,13 +447,13 @@ private fun Notices(
                     textAlign = textAlign,
                 )
             }
-            if (onBurst != null) {
+            if (pause != null) {
                 // La ráfaga no está siempre a la vista (lo pidió Marcos): hay que
                 // tocar el aviso. Al irse de Inicio o al terminar la noche, se esconde.
                 var burstShown by remember { mutableStateOf(false) }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    BEDTIME_NOTICE,
+                    pauseNotice(pause),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = textAlign,
@@ -466,10 +489,16 @@ private fun Notices(
  * Las apps de Inicio, en texto. Una columna común y no una lista con scroll:
  * así deslizar para arriba en cualquier lado abre todas las apps, sin
  * pelearse con el scroll. Cada renglón se toca a todo lo ancho, esté el
- * nombre donde esté.
+ * nombre donde esté. Las frenadas ([dimmed]) van en gris: tocarlas dice por qué.
  */
 @Composable
-private fun HomeApps(place: BlockLook, apps: List<LaunchableApp>?, hint: String, onOpen: (LaunchableApp) -> Unit) {
+private fun HomeApps(
+    place: BlockLook,
+    apps: List<LaunchableApp>?,
+    dimmed: Set<String>,
+    hint: String,
+    onOpen: (LaunchableApp) -> Unit,
+) {
     val textAlign = place.align.textAlign
     Scaled(place.percent) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = place.align.horizontal) {
@@ -485,6 +514,7 @@ private fun HomeApps(place: BlockLook, apps: List<LaunchableApp>?, hint: String,
                 Text(
                     app.label,
                     style = MaterialTheme.typography.headlineMedium,
+                    color = if (app.packageName in dimmed) MaterialTheme.colorScheme.outline else Color.Unspecified,
                     textAlign = textAlign,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -523,10 +553,19 @@ private fun AllAppsLink(place: BlockLook, onDrawer: () -> Unit) {
 
 private val SPANISH = Locale.forLanguageTag("es-AR")
 
-private val BEDTIME_NOTICE = buildAnnotatedString {
+/** «Es *Bedtime*, andá a dormir» o «Es *Flow State* hasta las 13:00». */
+private fun pauseNotice(pause: Pause) = buildAnnotatedString {
     append("Es ")
-    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append("Bedtime") }
-    append(", andá a dormir")
+    when (pause) {
+        Pause.Night -> {
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append("Bedtime") }
+            append(", andá a dormir")
+        }
+        is Pause.Flow -> {
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append("Flow State") }
+            pause.until?.let { append(" hasta las $it") }
+        }
+    }
 }
 private val HOUR = DateTimeFormatter.ofPattern("HH:mm")
 private val DATE = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", SPANISH)

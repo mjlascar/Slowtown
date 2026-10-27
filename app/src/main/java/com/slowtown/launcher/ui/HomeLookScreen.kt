@@ -325,11 +325,13 @@ private fun HomePreview(look: HomeLook, screen: DpSize, modifier: Modifier = Mod
                         onScreenTime = null,
                         notice = null,
                         // De muestra, el aviso de la noche: «Es Bedtime, andá a dormir».
+                        pause = Pause.Night,
                         onBurst = {},
                         update = UpdateState.None,
                         onUpdate = {},
                         safeMode = false,
                         apps = apps,
+                        dimmed = emptySet(),
                         hint = "",
                         widget = { align ->
                             HabitsWidget(
@@ -437,9 +439,9 @@ private fun SizeStepper(name: String, percent: Int, onChange: (Int) -> Unit) {
     }
 }
 
-/** El «−» o el «+», dibujados: sin la biblioteca de íconos, y bien en el centro. */
+/** El «−» o el «+», dibujados: sin la biblioteca de íconos, y bien en el centro. También en los límites por app. */
 @Composable
-private fun StepButton(plus: Boolean, enabled: Boolean, description: String, onClick: () -> Unit) {
+internal fun StepButton(plus: Boolean, enabled: Boolean, description: String, onClick: () -> Unit) {
     val color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
     Box(
         Modifier

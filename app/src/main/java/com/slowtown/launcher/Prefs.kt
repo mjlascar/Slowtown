@@ -3,6 +3,9 @@ package com.slowtown.launcher
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import com.slowtown.launcher.admin.FlowState
+import com.slowtown.launcher.admin.FlowWindow
+import com.slowtown.launcher.admin.Limits
 import com.slowtown.launcher.apps.Folder
 import com.slowtown.launcher.apps.Folders
 import com.slowtown.launcher.apps.HabitKind
@@ -197,6 +200,42 @@ class Prefs(context: Context) {
             prefs.edit().putLong(KEY_BEDTIME_BURST_UNTIL, value).commit()
         }
 
+    /** Si Flow State está prendido ([com.slowtown.launcher.admin.FlowState]). Con contraseña. */
+    var flowEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FLOW_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_FLOW_ENABLED, value).apply()
+
+    /** Los horarios de Flow State, como JSON. De entrada, de lunes a viernes de 9 a 13. */
+    var flowWindows: List<FlowWindow>
+        get() = FlowState.parseWindows(prefs.getString(KEY_FLOW_WINDOWS, null))
+        set(value) = prefs.edit().putString(KEY_FLOW_WINDOWS, FlowState.serializeWindows(value)).apply()
+
+    /** Las apps que Flow State frena, como paquetes (lo que entienden lock task y la guardia). */
+    var flowApps: Set<String>
+        get() = prefs.getStringSet(KEY_FLOW_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_FLOW_APPS, value).apply()
+
+    /**
+     * El límite de cada app, en minutos por día, por paquete
+     * ([com.slowtown.launcher.admin.Limits]). Con contraseña: subirlo o
+     * sacarlo afloja.
+     */
+    var appLimits: Map<String, Int>
+        get() = Limits.parse(prefs.getString(KEY_APP_LIMITS, null))
+        set(value) = prefs.edit().putString(KEY_APP_LIMITS, Limits.serialize(value)).apply()
+
+    /**
+     * Las apps que ya llegaron a su límite, y de qué día: `2026-10-27|paquete,paquete`.
+     * Se guarda para que la lista de lock task no dependa de que Slowtown siga
+     * vivo; al cambiar el día no vale más.
+     */
+    var limitsReached: String
+        get() = prefs.getString(KEY_LIMITS_REACHED, "").orEmpty()
+        // commit: es lo que decide qué se cierra.
+        set(value) {
+            prefs.edit().putString(KEY_LIMITS_REACHED, value).commit()
+        }
+
     /** El widget de Inicio, o [AppWidgetManager.INVALID_APPWIDGET_ID] si no hay. */
     var widgetId: Int
         get() = prefs.getInt(KEY_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -227,6 +266,11 @@ class Prefs(context: Context) {
         const val KEY_BEDTIME_END = "bedtime_end"
         const val KEY_BEDTIME_DAYS = "bedtime_days"
         const val KEY_BEDTIME_BURST_UNTIL = "bedtime_burst_until"
+        const val KEY_FLOW_ENABLED = "flow_enabled"
+        const val KEY_FLOW_WINDOWS = "flow_windows"
+        const val KEY_FLOW_APPS = "flow_apps"
+        const val KEY_APP_LIMITS = "app_limits"
+        const val KEY_LIMITS_REACHED = "limits_reached"
         const val KEY_HABIT_PREFIX = "habit_"
         const val KEY_HABIT_PLAN = "habit_plan"
     }
