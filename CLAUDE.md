@@ -116,8 +116,9 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
 - **Tiempo de pantalla** (`apps/ScreenTime.kt`): arriba a la derecha de
   Inicio, sólo el número («1 h 5 min»; Marcos quiere menos texto en Inicio, y
   el lector de pantalla dice «Hoy: 1 h 5 min de pantalla»). Tocarlo abre
-  Bienestar digital (`ScreenTime.wellbeing`: el de Samsung no tiene ícono, así
-  que se busca su pantalla principal), que está siempre en la lista de lock
+  Bienestar digital (`ScreenTime.wellbeing`: el de Samsung puede no tener
+  ícono, y entonces se busca su pantalla principal; en el S10e abre su resumen
+  del día), que está siempre en la lista de lock
   task: muestra el uso y suma límites, no afloja nada. Mantenerlo apretado
   entra a la administración, como el resto de la cabecera. Bienestar digital no comparte sus números, así que se
   calcula igual que él, con los datos de uso de Android (sin contar Inicio).
@@ -231,6 +232,11 @@ encima: los bancos los miran mal.
   datos de uso. La app frenada llega a verse menos de un segundo. El nivel 2
   no existe sin Device Owner: lo de `Fixed.APPS` frena sólo por no estar
   permitido.
+- **En el S10e** (27/10, con la 0.4.0, probado por adb y vuelto a pausar):
+  frenó Ajustes, Maps y el engranaje del panel en menos de un segundo, y con
+  el Reloj adelante 5 minutos Samsung no congeló la guardia (el proceso queda
+  perceptible, `prcl`). Falta la prueba larga y el consumo (`docs/sin-cable.md`,
+  sección 7).
 
 ## Notificaciones por oleadas
 
@@ -473,8 +479,8 @@ de releases deja sin actualizaciones a todos los que la instalaron.
   desconocidas» para Slowtown y quizás una confirmación. En la administración
   están la versión, «Buscar actualización» y, si falla, lo que dijo Android.
   Con esto el nivel 2 cambia también con una release (Marcos lo aceptó). Play
-  Protect frenó el APK bajado con Chrome; si frena también lo que instala
-  Slowtown se sabe con la primera actualización en el S10e. Falta probar en el
+  Protect frenó el APK bajado con Chrome, pero no lo que instala Slowtown: el
+  S10e se actualizó solo a la 0.3.2 (23/10) y a la 0.4.0 (27/10). Falta probar en el
   emulador qué hace lock task cuando Slowtown se reemplaza estando activa.
 
 ## La red contra el peor caso

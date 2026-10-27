@@ -4,8 +4,8 @@ Relevado el 27/10/2026 para publicar Slowtown en Google Play algún día, sin
 adb ni Device Owner, y para el S10e de Marcos (Android 12 / One UI 4.1). Lo
 que no tiene marca sale de la documentación oficial, de las políticas de Play
 o del código de AOSP (con la rama); lo *inferido* está marcado así. La guardia
-se probó en el emulador con Android 12 (paso 15 de `scripts/probar-emulador.sh`);
-en el teléfono, todavía no.
+se probó en el emulador con Android 12 (paso 15 de `scripts/probar-emulador.sh`),
+y en el S10e a mano, por adb, con la 0.4.0 (sección 7).
 
 ## En corto
 
@@ -30,9 +30,10 @@ versiones, de Android 12 a 17 (sección 2), y no congela su proceso
    la lista, confirmar una actualización). Antes pasaba siempre, y cualquier
    app permitida que ofreciera desinstalar podía sacar a Slowtown (sección
    10). La Play Store, si está permitida, desinstala sin pasar por él.
-4. **Falta probar en el S10e** que Samsung no congele el proceso de Inicio con
-   otra app adelante: AOSP no lo hace, Samsung tiene su propio congelador y no
-   lo documenta (sección 7).
+4. **En el S10e, 5 minutos con otra app adelante no congelaron la guardia**
+   (27/10): AOSP no congela el Inicio y Samsung, que tiene su propio
+   congelador sin documentar, tampoco lo hizo. Falta la prueba larga
+   (sección 7).
 
 **Recomendación:**
 
@@ -318,9 +319,16 @@ desinstalar.
   es una operación de AppOps y forzar la detención no lo toca.
 - **Si Samsung congelara la guardia:** un servicio en primer plano (en Android
   12 sin tipo; desde 14, `specialUse` con declaración y video en Play).
-- **Prueba:** el S10e con otra app adelante 30 minutos y la pantalla
-  prendida, mirando en logcat que la guardia siga frenando, y el consumo en
-  `dumpsys batterystats`.
+- **Probado en el S10e** (27/10, Slowtown 0.4.0 activa sin cable, por adb):
+  con el Reloj adelante 5 minutos, el proceso de Slowtown siguió siendo el
+  mismo y quedó en `prcl BFGS` (`dumpsys activity lru`): perceptible, más
+  protegido que un Inicio común. *Inferido:* por el lector de notificaciones,
+  que Android mantiene ligado. Maps, abierta a los 5 minutos, volvió a
+  Inicio en medio segundo; antes, Ajustes por adb en 0,4 s, el engranaje del
+  panel en 0,2 s y Maps en 0,9 s.
+- **Falta:** la prueba larga, 30 minutos o más con la pantalla prendida
+  (logcat: «La guardia frenó»), el consumo en `dumpsys batterystats`, y lo
+  mismo sin el lector de notificaciones.
 
 ## 8. Protección avanzada
 
@@ -382,8 +390,8 @@ desinstalar.
 
 ## Pendiente
 
-- En el S10e: la guardia con otra app adelante 30 minutos (el congelador de
-  Samsung) y su consumo.
+- En el S10e: la guardia con otra app adelante 30 minutos o más (el
+  congelador de Samsung) y su consumo. La de 5 minutos anduvo (sección 7).
 - En el emulador con Android 15 o 16: instalar desde un archivo y ver el
   acceso a datos de uso gris; después autoactualizar y ver si sigue
   restringida.

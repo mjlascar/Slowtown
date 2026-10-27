@@ -72,9 +72,10 @@ object ScreenTime {
 
     /**
      * Bienestar digital, para ver el detalle de hoy por app: lo abre tocar el
-     * tiempo de pantalla de Inicio. El de Samsung no tiene ícono (se entra
-     * desde Ajustes): sin pantalla de inicio de la app, va la primera
-     * principal que se pueda abrir. Null si el teléfono no tiene ninguno.
+     * tiempo de pantalla de Inicio. El de Samsung puede no tener ícono (se
+     * entra desde Ajustes; en el S10e lo tiene): sin pantalla de inicio de la
+     * app, va la primera principal que se pueda abrir. Null si el teléfono no
+     * tiene ninguno.
      */
     // La variante con ResolveInfoFlags recién existe en API 33.
     @Suppress("DEPRECATION")
