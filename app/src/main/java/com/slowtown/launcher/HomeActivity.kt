@@ -140,6 +140,9 @@ class HomeActivity : ComponentActivity() {
 
     /** Lo mismo que muestra Bienestar digital, calculado con los datos de uso de Android. */
     private var screenTime by mutableStateOf<String?>(null)
+
+    /** Bienestar digital, que se abre tocando el tiempo de pantalla; null si el teléfono no lo tiene. */
+    private var wellbeing by mutableStateOf<Intent?>(null)
     private var today by mutableStateOf(LocalDate.now())
     private var widgetChoices by mutableStateOf<List<WidgetChoice>>(emptyList())
 
@@ -281,6 +284,7 @@ class HomeActivity : ComponentActivity() {
                         update = updateState,
                         onUpdate = { Updater.update(this@HomeActivity) },
                         screenTime = screenTime,
+                        onScreenTime = wellbeing?.let { intent -> { openWellbeing(intent) } },
                         look = homeLook,
                         widget = if (showHabits) {
                             @Composable { align: Alignment.Horizontal ->
@@ -470,6 +474,7 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             val millis = withContext(Dispatchers.Default) { ScreenTime.today(this@HomeActivity) }
             screenTime = millis?.let { ScreenTime.format(it) }
+            wellbeing = withContext(Dispatchers.Default) { ScreenTime.wellbeing(this@HomeActivity) }
         }
         if (screen == Screen.Home && pendingWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // Volver de Ajustes con Atrás también termina la sesión, no sólo Inicio.
@@ -536,6 +541,12 @@ class HomeActivity : ComponentActivity() {
             .onFailure { Log.w(TAG, "No pude abrir ${app.key}", it) }
     }
 
+    /** Bienestar digital, con el detalle de hoy por app. Con Slowtown activo está en la lista (ver Policies). */
+    private fun openWellbeing(intent: Intent) {
+        runCatching { startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { Log.w(TAG, "No pude abrir Bienestar digital", it) }
+    }
+
     /** Desde la lista de todas o una carpeta: al volver, Inicio y no la lista. */
     private fun launchFromList(app: LaunchableApp) {
         screen = Screen.Home
@@ -568,13 +579,10 @@ class HomeActivity : ComponentActivity() {
     }
 
     /**
-     * La información de una app es una pantalla de Ajustes: con Slowtown
-     * activo, con la contraseña y en una sesión de administración. Con Slowtown
-     * en pausa, o con «Habilitar todo», que ya abre Ajustes, directo.
-     */
-    /**
-     * Sin contraseña: con Slowtown activo, en una sesión que suma sólo Ajustes
-     * y termina como la de administración (ver AdminSession).
+     * La información de una app es una pantalla de Ajustes. Sin contraseña:
+     * con Slowtown activo, en una sesión que suma sólo Ajustes y termina como
+     * la de administración (ver AdminSession). Con Slowtown en pausa, o con
+     * «Habilitar todo», que ya abre Ajustes, directo.
      */
     private fun openAppInfo(app: LaunchableApp) {
         val info = AppCatalog.infoIntent(app.packageName)
@@ -670,10 +678,6 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * «Habilitar todo por 5 minutos», sin contraseña y con tope. No se corta
-     * al volver a Inicio: al terminar, se rearma la lista de siempre.
-     */
     /** Cinco minutos con las apps de siempre, de noche. Sin contraseña. */
     private fun startBurst() {
         lifecycleScope.launch {
@@ -711,6 +715,10 @@ class HomeActivity : ComponentActivity() {
         homeLook = look
     }
 
+    /**
+     * «Habilitar todo por 5 minutos», sin contraseña y con tope. No se corta
+     * al volver a Inicio: al terminar, se rearma la lista de siempre.
+     */
     private fun startFreeSession() {
         lifecycleScope.launch {
             withContext(Dispatchers.Default) { FreeSession.start(this@HomeActivity, prefs.allowedPackages) }

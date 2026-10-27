@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.UserManager
 import com.slowtown.launcher.HomeActivity
+import com.slowtown.launcher.apps.ScreenTime
 
 /**
  * Todo lo que Slowtown hace como Device Owner pasa por acá. Sin Device Owner
@@ -208,13 +209,16 @@ object Policies {
     /**
      * Slowtown, las apps de Inicio y lo que no puede faltar: lo esencial y el
      * reloj y las alarmas, de día y de noche (la alarma de la mañana tiene que
-     * poder mostrar su pantalla con Slowtown activo).
+     * poder mostrar su pantalla con Slowtown activo). Y Bienestar digital, que
+     * se abre tocando el tiempo de pantalla: muestra el uso y suma límites, no
+     * afloja nada.
      */
     private fun allowlist(context: Context, packages: Collection<String>): Set<String> = buildSet {
         add(context.packageName)
         addAll(packages)
         addAll(Essentials.packages(context))
         addAll(Bedtime.apps(context))
+        addAll(ScreenTime.WELLBEING)
     }
 
     /** Cada escritura guarda a disco y avisa a todo el sistema: sólo si cambió. */

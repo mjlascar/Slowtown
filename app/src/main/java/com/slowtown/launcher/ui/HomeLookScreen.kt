@@ -106,23 +106,34 @@ enum class BlockAlign(val key: String, val label: String) {
  * aparecen. La clave se guarda: no cambia nunca. Lo de entrada es como era
  * Inicio antes de poder acomodarlas: todo a la izquierda, salvo el tiempo de
  * pantalla (a la derecha, en el renglón de la hora) y «todas las apps» (al
- * centro).
+ * centro), que además viene escondido: la lista se abre deslizando para
+ * arriba, y Marcos no lo quiere a la vista (27/10).
+ *
+ * @param hideable si se puede sacar de Inicio. La hora tiene su interruptor
+ *   aparte, y la fecha no se saca: sin la hora es lo que se mantiene apretado
+ *   para entrar a la administración.
  */
-enum class HomeBlock(val key: String, val label: String, val defaultAlign: BlockAlign) {
+enum class HomeBlock(
+    val key: String,
+    val label: String,
+    val defaultAlign: BlockAlign,
+    val hideable: Boolean = false,
+    val shownByDefault: Boolean = true,
+) {
     CLOCK("hora", "La hora", BlockAlign.START),
     DATE("fecha", "La fecha", BlockAlign.START),
     SCREEN_TIME("pantalla", "El tiempo de pantalla", BlockAlign.END),
     NOTICES("avisos", "Los avisos", BlockAlign.START),
     APPS("apps", "Las apps", BlockAlign.START),
-    ALL_APPS("todas", "Todas las apps", BlockAlign.CENTER),
+    ALL_APPS("todas", "Todas las apps", BlockAlign.CENTER, hideable = true, shownByDefault = false),
     HABITS("habitos", "Los hábitos", BlockAlign.START),
     ;
 
-    val default: BlockLook get() = BlockLook(100, defaultAlign)
+    val default: BlockLook get() = BlockLook(100, defaultAlign, shownByDefault)
 }
 
-/** El tamaño de una parte, en por ciento sobre el de todo Inicio, y su lugar a lo ancho. */
-data class BlockLook(val percent: Int, val align: BlockAlign)
+/** El tamaño de una parte, en por ciento sobre el de todo Inicio, su lugar a lo ancho y si se ve. */
+data class BlockLook(val percent: Int, val align: BlockAlign, val shown: Boolean = true)
 
 /** Cada parte de Inicio con su tamaño y su lugar. Están siempre todas. */
 data class HomeBlocks(private val looks: Map<HomeBlock, BlockLook>) {
@@ -131,11 +142,11 @@ data class HomeBlocks(private val looks: Map<HomeBlock, BlockLook>) {
 
     fun with(block: HomeBlock, look: BlockLook): HomeBlocks = HomeBlocks(looks + (block to look))
 
-    /** Como JSON, para las preferencias: `{"hora":{"percent":100,"align":"izquierda"}, …}`. */
+    /** Como JSON, para las preferencias: `{"hora":{"percent":100,"align":"izquierda","shown":true}, …}`. */
     fun serialize(): String = JSONObject().apply {
         HomeBlock.entries.forEach { block ->
             val look = this@HomeBlocks[block]
-            put(block.key, JSONObject().put("percent", look.percent).put("align", look.align.key))
+            put(block.key, JSONObject().put("percent", look.percent).put("align", look.align.key).put("shown", look.shown))
         }
     }.toString()
 
@@ -155,6 +166,8 @@ data class HomeBlocks(private val looks: Map<HomeBlock, BlockLook>) {
                     BlockLook(
                         percent = roundPercent(item.optInt("percent", 100)),
                         align = BlockAlign.fromKey(item.optString("align")) ?: block.defaultAlign,
+                        // Lo guardado antes de poder esconderla (0.3.2) no lo dice: como viene.
+                        shown = !block.hideable || item.optBoolean("shown", block.shownByDefault),
                     )
                 },
             )
@@ -309,6 +322,7 @@ private fun HomePreview(look: HomeLook, screen: DpSize, modifier: Modifier = Mod
                     HomeContent(
                         look = look,
                         screenTime = "44 min",
+                        onScreenTime = null,
                         notice = null,
                         // De muestra, el aviso de la noche: «Es Bedtime, andá a dormir».
                         onBurst = {},
@@ -359,18 +373,42 @@ private fun sampleMarks(today: LocalDate): Map<HabitKind, Set<LocalDate>> = mapO
     HabitKind.EXERCISE to (0L..21L step 2).map { today.minusDays(it) }.toSet(),
 )
 
-/** Una parte: su nombre y, abajo, el tamaño a la izquierda y el lugar a la derecha. */
+/**
+ * Una parte: su nombre y, abajo, el tamaño a la izquierda y el lugar a la
+ * derecha. La que se puede sacar lleva al lado del nombre si se ve, y
+ * escondida no muestra el resto.
+ */
 @Composable
 private fun BlockRow(block: HomeBlock, look: BlockLook, onChange: (BlockLook) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
-        Text(block.label, style = MaterialTheme.typography.bodyLarge)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SizeStepper(block.label, look.percent) { onChange(look.copy(percent = it)) }
-            Spacer(Modifier.weight(1f))
-            AlignChoice(block.label, look.align) { onChange(look.copy(align = it)) }
+        if (block.hideable) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = look.shown, role = Role.Switch) { onChange(look.copy(shown = it)) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(block.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(checked = look.shown, onCheckedChange = null)
+            }
+            if (!look.shown) HintText(HIDDEN_HINT.getValue(block))
+        } else {
+            Text(block.label, style = MaterialTheme.typography.bodyLarge)
+        }
+        if (look.shown) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SizeStepper(block.label, look.percent) { onChange(look.copy(percent = it)) }
+                Spacer(Modifier.weight(1f))
+                AlignChoice(block.label, look.align) { onChange(look.copy(align = it)) }
+            }
         }
     }
 }
+
+/** Qué pasa sin una parte que se puede sacar. */
+private val HIDDEN_HINT = mapOf(
+    HomeBlock.ALL_APPS to "Sin el renglón, la lista se abre deslizando para arriba en Inicio.",
+)
 
 /** «−  100 %  +», de a diez. */
 @Composable

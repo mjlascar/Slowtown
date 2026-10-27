@@ -1,6 +1,7 @@
 package com.slowtown.launcher.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -20,7 +21,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,6 +33,7 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -41,11 +44,15 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.slowtown.launcher.apps.LaunchableApp
 import com.slowtown.launcher.update.UpdateState
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -80,6 +87,8 @@ fun HomeScreen(
     onUpdate: () -> Unit,
     /** El tiempo de pantalla de hoy, corto («1 h 5 min»), o null sin acceso a los datos de uso. */
     screenTime: String?,
+    /** Tocar el tiempo de pantalla: abre Bienestar digital, o null si el teléfono no lo tiene. */
+    onScreenTime: (() -> Unit)?,
     /** El tamaño de todo Inicio, si va la hora grande, y el tamaño y el lugar de cada parte. */
     look: HomeLook,
     /** El widget, que recibe hacia dónde va a lo ancho. */
@@ -115,6 +124,7 @@ fun HomeScreen(
             HomeContent(
                 look = look,
                 screenTime = screenTime,
+                onScreenTime = onScreenTime,
                 notice = notice,
                 onBurst = onBurst,
                 update = update,
@@ -158,6 +168,7 @@ internal fun Scaled(percent: Int, content: @Composable () -> Unit) {
 internal fun HomeContent(
     look: HomeLook,
     screenTime: String?,
+    onScreenTime: (() -> Unit)?,
     notice: String?,
     onBurst: (() -> Unit)?,
     update: UpdateState,
@@ -175,12 +186,13 @@ internal fun HomeContent(
 ) {
     val blocks = look.blocks
     Column(modifier.padding(horizontal = 28.dp, vertical = 32.dp)) {
-        HomeHeader(look.showClock, blocks, screenTime, onAdmin)
+        HomeHeader(look.showClock, blocks, screenTime, onScreenTime, onAdmin)
         Notices(blocks[HomeBlock.NOTICES], notice, onBurst, update, onUpdate, safeMode, look.showClock)
         Spacer(Modifier.height(40.dp))
         HomeApps(blocks[HomeBlock.APPS], apps, hint, onOpen)
         Spacer(Modifier.weight(1f))
-        AllAppsLink(blocks[HomeBlock.ALL_APPS], onDrawer)
+        val allApps = blocks[HomeBlock.ALL_APPS]
+        if (allApps.shown) AllAppsLink(allApps, onDrawer)
         // El widget va pegado al borde de abajo (lo pidió Marcos): arriba
         // quedan la fecha y las apps, como en un teléfono de teclas.
         if (widget != null) {
@@ -205,18 +217,20 @@ internal fun HomeContent(
  * cada cosa donde esté: sin la hora, es la fecha.
  */
 @Composable
-private fun HomeHeader(showClock: Boolean, blocks: HomeBlocks, screenTime: String?, onLongPress: () -> Unit) {
-    val now by produceState(LocalDateTime.now()) {
-        while (true) {
-            value = LocalDateTime.now()
-            // Despertar justo cuando cambia el minuto, no cada segundo.
-            delay(60_000L - System.currentTimeMillis() % 60_000L)
-        }
-    }
+private fun HomeHeader(
+    showClock: Boolean,
+    blocks: HomeBlocks,
+    screenTime: String?,
+    onScreenTime: (() -> Unit)?,
+    onLongPress: () -> Unit,
+) {
+    val now by rememberMinute()
     val date = now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) }
     val datePlace = blocks[HomeBlock.DATE]
     val timePlace = blocks[HomeBlock.SCREEN_TIME].takeIf { screenTime != null }
-    val time = @Composable { if (screenTime != null) ScreenTimeText(screenTime, blocks[HomeBlock.SCREEN_TIME].align) }
+    val time = @Composable {
+        if (screenTime != null) ScreenTimeText(screenTime, blocks[HomeBlock.SCREEN_TIME].align, onScreenTime, onLongPress)
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -245,6 +259,33 @@ private fun HomeHeader(showClock: Boolean, blocks: HomeBlocks, screenTime: Strin
         }
     }
 }
+
+/**
+ * La hora de ahora, al minuto, mirada una vez por segundo mientras Inicio se
+ * ve, y apenas vuelve a verse o recupera el foco (al cerrar el panel de
+ * notificaciones). Antes esperaba hasta el minuto siguiente con un delay, y un
+ * delay no corre con el teléfono dormido: al desbloquear, Inicio mostraba unos
+ * segundos la hora de cuando se apagó la pantalla, y a veces quedaba minutos
+ * atrás de la del sistema (lo vio Marcos). Mirarla cada segundo es una cuenta;
+ * Inicio se vuelve a dibujar sólo cuando cambia el minuto.
+ */
+@Composable
+private fun rememberMinute(): State<LocalDateTime> {
+    val minute = remember { mutableStateOf(currentMinute()) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val focused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(lifecycle, focused) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                minute.value = currentMinute()
+                delay(1_000L - System.currentTimeMillis() % 1_000L)
+            }
+        }
+    }
+    return minute
+}
+
+private fun currentMinute(): LocalDateTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES)
 
 /**
  * El primer renglón de la cabecera: la hora (sin ella, la fecha) y el tiempo
@@ -338,15 +379,25 @@ private fun DateText(date: String, align: BlockAlign) {
     )
 }
 
-/** El tiempo de pantalla de hoy, sólo el número: la explicación, para el lector de pantalla. */
+/**
+ * El tiempo de pantalla de hoy, sólo el número: la explicación, para el lector
+ * de pantalla. Tocándolo se abre Bienestar digital, con el detalle por app (lo
+ * pidió Marcos); mantenido apretado entra a la administración, como el resto de
+ * la cabecera.
+ */
 @Composable
-private fun ScreenTimeText(screenTime: String, align: BlockAlign) {
+private fun ScreenTimeText(screenTime: String, align: BlockAlign, onOpen: (() -> Unit)?, onLongPress: () -> Unit) {
+    val touch = if (onOpen == null) {
+        Modifier
+    } else {
+        Modifier.combinedClickable(onClickLabel = "Ver el detalle", onLongClick = onLongPress, onClick = onOpen)
+    }
     Text(
         screenTime,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.titleLarge,
         textAlign = align.textAlign,
-        modifier = Modifier.semantics { contentDescription = "Hoy: $screenTime de pantalla" },
+        modifier = touch.semantics { contentDescription = "Hoy: $screenTime de pantalla" },
     )
 }
 
@@ -445,7 +496,7 @@ private fun HomeApps(place: BlockLook, apps: List<LaunchableApp>?, hint: String,
     }
 }
 
-/** «↑ todas las apps», arriba del widget. */
+/** «↑ todas las apps», arriba del widget, si se eligió verlo (de entrada no: se desliza para arriba). */
 @Composable
 private fun AllAppsLink(place: BlockLook, onDrawer: () -> Unit) {
     // A un costado se corre lo que mide el margen del toque: así la flecha

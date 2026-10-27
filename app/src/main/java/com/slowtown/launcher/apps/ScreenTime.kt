@@ -56,6 +56,28 @@ object ScreenTime {
         foreground(events, midnight, now, excluded(context), interactive).coerceIn(0L, now - midnight)
     }.getOrNull()
 
+    /** Bienestar digital: el de Samsung y el de Google. Con Slowtown activo se abre siempre (ver Policies). */
+    val WELLBEING = listOf("com.samsung.android.forest", "com.google.android.apps.wellbeing")
+
+    /**
+     * Bienestar digital, para ver el detalle de hoy por app: lo abre tocar el
+     * tiempo de pantalla de Inicio. El de Samsung no tiene ícono (se entra
+     * desde Ajustes): sin pantalla de inicio de la app, va la primera
+     * principal que se pueda abrir. Null si el teléfono no tiene ninguno.
+     */
+    // La variante con ResolveInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    fun wellbeing(context: Context): Intent? {
+        val pm = context.packageManager
+        for (pkg in WELLBEING) {
+            pm.getLaunchIntentForPackage(pkg)?.let { return it }
+            val main = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).setPackage(pkg), 0)
+                .firstOrNull { it.activityInfo.exported } ?: continue
+            return Intent(Intent.ACTION_MAIN).setClassName(pkg, main.activityInfo.name)
+        }
+        return null
+    }
+
     /** «1 h 5 min», «2 h», «45 min» o «0 min»: corto, va arriba a la derecha de Inicio. */
     fun format(millis: Long): String {
         val minutes = millis / 60_000L
