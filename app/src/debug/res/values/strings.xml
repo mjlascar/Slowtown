@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sólo en la variante de prueba: el bloqueo de páginas mira también
+         «Direcciones de prueba» (scripts/prueba-direcciones/), con la que la
+         prueba del emulador lo pone a prueba, porque el emulador no tiene
+         Chrome. Las releases miran sólo Chrome. -->
+    <string name="page_guard_browsers" translatable="false">com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary,com.slowtown.prueba.direcciones</string>
+</resources>

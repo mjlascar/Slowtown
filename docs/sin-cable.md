@@ -388,6 +388,22 @@ desinstalar.
   Ajustes, el menú de apagado, el panel), Device Admin contra desinstalar, y
   su pantalla o superposición encima. Ninguna cierra el modo seguro.
 
+## 11. Lo que se hizo después (27/10)
+
+- **Las páginas sin cable, con accesibilidad** (`admin/PageGuard.kt`): de los
+  tres caminos (accesibilidad, una VPN local que filtra, el DNS privado de
+  Android con un filtro de afuera), Marcos eligió el que queda adentro de
+  Slowtown. Como pide la sección 3: apagado de entrada, explicado antes de
+  mandar a Ajustes, sólo Chrome y sólo su barra de direcciones, nada se guarda
+  ni sale del teléfono. No sirve para impedir desinstalar ni toca Ajustes.
+  En el S10e, Ajustes > Accesibilidad es `com.samsung.accessibility`, y el
+  servicio aparece en «Installed apps».
+- **La hora de la barra sin cable:** sin `WRITE_SECURE_SETTINGS`, Inicio
+  esconde la barra entera, como Olauncher (de Play), que además muestra la
+  batería junto a la fecha y abre las notificaciones deslizando para abajo
+  (`StatusBarManager.expandNotificationsPanel` por reflexión, con
+  `EXPAND_STATUS_BAR`, permiso normal). Nada de eso pide formulario en Play.
+
 ## Pendiente
 
 - En el S10e: la guardia con otra app adelante 30 minutos o más (el

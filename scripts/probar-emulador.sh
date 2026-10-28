@@ -27,7 +27,10 @@
 # app, con su ráfaga) y un límite por app (al cumplirse, Android la cierra),
 # abre Ajustes desde la administración, reinicia (y los hábitos siguen),
 # cuenta las reglas de Inicio fijo, fuerza tres crashes, usa la salida por
-# cable y, ya sin Device Owner, prueba la guardia sin cable.
+# cable y, ya sin Device Owner, prueba la guardia sin cable, el bloqueo de
+# páginas sin cable (con «Direcciones de prueba», scripts/prueba-direcciones/,
+# un navegador de mentira que la variante de prueba mira como a Chrome) y la
+# barra de arriba sin el permiso de adb.
 #
 # Las llamadas por internet y las oleadas se prueban con «Avisos de prueba»
 # (scripts/prueba-avisos/, se arma con javac, d8 y aapt2), que imita a
@@ -100,7 +103,8 @@ ATENDER_XY="${SLOWTOWN_ATENDER_XY:-542,459}"
 TXT_HORA_RE='^[0-9]{1,2}:[0-9]{2}$'          # la hora grande de Inicio: viene prendida, y se apaga en «Cómo se ve Inicio»
 # La fecha está siempre, con la hora grande o sin ella, y es parte de la
 # cabecera que se mantiene apretada para entrar a la administración.
-TXT_FECHA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+$'   # «Lunes 19 de octubre»
+TXT_FECHA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+( · [0-9]{1,3} %)?$'   # «Lunes 19 de octubre», con la batería si la barra está escondida
+TXT_FECHA_BATERIA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+ · [0-9]{1,3} %$'   # sin el permiso de adb: «Lunes 19 de octubre · 54 %»
 TXT_INICIO_SIN_APPS='Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá.'
 # Activo y sin permitidas. Nombra lo que se ve arriba: la hora grande o, sin ella, la fecha.
 TXT_INICIO_SIN_PERMITIDAS_RE='^Mantené apretada la (hora|fecha) para elegir las apps permitidas\.$'
@@ -208,6 +212,11 @@ TXT_SACAR=Sacar                              # sacarle el límite a una app
 TXT_LIMITE_FRENADA_RE='^(.+) llegó a su límite de hoy \((.+)\)\. Vuelve mañana\.$'   # lo que dice Inicio al cerrarla
 TXT_NO_PERMITIDA_RE='^(.+) no está entre las apps permitidas\.$'   # lo que dice Inicio cuando la guardia frena una app
 TXT_SIN_CABLE='activo, sin cable'            # el estado de Slowtown en la administración, sin Device Owner
+TXT_SIN_LISTA='Sin cable, Chrome no recibe esta lista: por ahora no bloquea ninguna.'   # «Páginas bloqueadas» sin Device Owner ni el permiso
+TXT_BLOQUEARLAS='Bloquearlas en Chrome'      # su botón: explica qué mira el permiso y manda a Ajustes
+TXT_BLOQUEARLAS_TITULO='Bloquearlas sin cable'   # el título de esa explicación
+TXT_IR_A_AJUSTES='Ir a Ajustes'              # su botón
+TXT_APAGARLO='Apagarlo en Ajustes'           # «Páginas bloqueadas» con el permiso prendido
 APP_FLOW=Camera                              # la permitida que frenan Flow State y su límite (el Reloj no: es de las alarmas)
 TXT_NOTIFICACIONES=Notificaciones            # el botón de la administración y el título de su pantalla
 TXT_OLEADAS='Llegan por oleadas'             # su interruptor
@@ -269,6 +278,15 @@ AVISOS_NOMBRE='Avisos de prueba'
 BUSQUEDA_AVISOS=avis                         # un pedazo de su nombre: buscándolo aparece aunque esté oculta
 AVISOS_PANTALLA=$AVISOS/.Principal           # la de la llamada: la abre la pantalla completa
 AVISOS_ORDEN="am broadcast -n $AVISOS/.Publicar -f 0x20"
+# «Direcciones de prueba» (scripts/prueba-direcciones/, armada con armar.sh):
+# muestra en su barra (url_bar) la dirección que se le pasa, y la variante de
+# prueba de Slowtown la mira como a Chrome (page_guard_browsers). Es un
+# navegador: el nivel 2 la pausaría, así que no queda instalada.
+DIRECCIONES=com.slowtown.prueba.direcciones
+DIRECCIONES_NOMBRE='Direcciones de prueba'
+DIRECCIONES_ACTIVIDAD=$DIRECCIONES/.Main
+FOCO_DIRECCIONES=$DIRECCIONES/
+PAGE_GUARD=$PAQUETE/$PAQUETE.admin.PageGuard   # el bloqueo de páginas sin cable, como lo nombra Ajustes
 TXT_ATENDER=Answer                           # el aviso de llamada (en pantalla dice ANSWER)
 TXT_GESTIONAR=Manage                         # botón al pie del panel de notificaciones
 ID_GESTIONAR=id/manage_text                  # el mismo (dice History si el historial está prendido)
@@ -1591,6 +1609,18 @@ paso_1() {
       else abortar "no pude desinstalar $PAQUETE: $(tail -n 1 <<<"$out")"; fi
     fi
   fi
+  # Si quedó de una corrida cortada, el nivel 2 la pausaría y cambiaría lo que se prueba.
+  if hay_paquete "$DIRECCIONES"; then
+    adb_t 60 uninstall "$DIRECCIONES" >/dev/null 2>&1
+    nota "«$DIRECCIONES_NOMBRE» había quedado de una corrida anterior: la saqué"
+  fi
+  # Lo mismo con el bloqueo de páginas (paso 16), que se prende por adb: el
+  # emulador no tiene otro servicio de accesibilidad.
+  disp settings delete secure enabled_accessibility_services >/dev/null
+  disp settings put secure accessibility_enabled 0 >/dev/null
+  # Y la hora de la barra: si una corrida cortada la dejó escondida, Slowtown
+  # recién instalada no la toca (la habría puesto otro), y el paso 4c falla.
+  if (( LIMPIO )); then disp settings delete secure icon_blacklist >/dev/null; fi
   # Sin terminal en stdin: si provisionar.sh no reconociera el emulador y
   # pidiera confirmación como en un teléfono real, lee vacío y cancela.
   (cd "$RAIZ" && ./scripts/provisionar.sh </dev/null) || abortar "provisionar.sh falló"
@@ -4815,6 +4845,189 @@ paso_15() {
   nota "queda sin Device Owner y en pausa: la próxima corrida, con --limpio"
 }
 
+# ── 16. Sin cable: las páginas y la barra de arriba ─────────────────────────
+DIRECCIONES_APK=''
+instalar_direcciones() {   # la deja instalada; sale 1 si no puede armarla o instalarla
+  local out
+  if [ -z "$DIRECCIONES_APK" ]; then
+    mkdir -p "$SALIDA/apk"
+    if ! out=$("$RAIZ/scripts/prueba-direcciones/armar.sh" "$SALIDA/apk" 2>&1 </dev/null); then
+      nota "${out:-armar.sh falló}"
+      return 1
+    fi
+    DIRECCIONES_APK=$SALIDA/apk/direcciones.apk
+  fi
+  out=$(adb_t 120 install -r "$DIRECCIONES_APK" 2>&1)
+  grep -q Success <<<"$out" || { nota "adb install: $(tail -n 1 <<<"$out")"; return 1; }
+}
+abrir_direccion() {   # abrir_direccion URL [EXTRAS...]: «Direcciones de prueba» con esa dirección en la barra
+  local url=$1
+  shift
+  disp am start -n "$DIRECCIONES_ACTIVIDAD" --es url "$url" "$@" >/dev/null
+}
+sacada_por_el_bloqueo() {   # sacada_por_el_bloqueo QUÉ URL: se abre, el bloqueo vuelve atrás y queda Inicio
+  # Primero que se abra: si no, Inicio seguiría adelante y la espera pasaría
+  # sin probar nada. Se queda un segundo (el bloqueo espera que la página
+  # entre) y Atrás la manda al fondo.
+  abrir_direccion "$2"
+  if esperar 5 "$(c_foco "$FOCO_DIRECCIONES")" && esperar 8 "$(c_foco "$FOCO_INICIO")" &&
+    sostener 4 "! $(c_foco "$FOCO_DIRECCIONES")"; then
+    ok "$1 se abre, el bloqueo vuelve atrás y queda Inicio"
+  else
+    mal "$1 no se va, o vuelve ($(foco))"
+  fi
+}
+# La barra de arriba escondida entera por la ventana de adelante (sin el
+# permiso de adb, Inicio la esconde así, como Olauncher).
+c_barra_escondida() { echo "dumpsys window | grep -q 'InsetsSource type=ITYPE_STATUS_BAR .* visible=false'"; }
+
+paso_16() {
+  titulo 16 "Sin cable: las páginas y la barra de arriba"
+  if es_device_owner; then
+    nota "sigue siendo Device Owner: este paso va después del 15, sin cable"
+    return
+  fi
+
+  # «Páginas bloqueadas» avisa que Chrome no recibe la lista y, antes de mandar
+  # a Ajustes, explica qué mira el permiso. Con Slowtown activo, Ajustes abre
+  # en la sesión chica, y la guardia lo deja.
+  if ! { entrar_admin && tocar_desplazando texto "$TXT_ACTIVAR" && esperar_ui 10 texto "$TXT_PAUSAR"; }; then
+    mal "no pude activar Slowtown sin cable"
+    ir_a_inicio
+    return
+  fi
+  if tocar_desplazando texto "$TXT_PAGINAS" && esperar_ui 10 texto "$TXT_SIN_LISTA"; then
+    ok "sin cable, «$TXT_PAGINAS» dice «$TXT_SIN_LISTA»"
+  else
+    mal "sin cable, «$TXT_PAGINAS» no avisa que Chrome no recibe la lista"
+  fi
+  if tocar texto "$TXT_BLOQUEARLAS" && esperar_ui 5 texto "$TXT_BLOQUEARLAS_TITULO"; then
+    ok "«$TXT_BLOQUEARLAS» explica qué mira antes de mandar a Ajustes"
+    captura paginas-explicacion
+    if tocar texto "$TXT_IR_A_AJUSTES" && esperar 10 "$(c_foco "$FOCO_AJUSTES")" &&
+      sostener 4 "$(c_foco "$FOCO_AJUSTES")"; then
+      ok "y «$TXT_IR_A_AJUSTES» abre la accesibilidad, que la guardia deja pasar"
+    else
+      mal "«$TXT_IR_A_AJUSTES» no deja abierta la accesibilidad ($(foco))"
+    fi
+  else
+    mal "«$TXT_BLOQUEARLAS» no explica nada"
+  fi
+  ir_a_inicio
+  if ! { entrar_admin && tocar_desplazando texto "$TXT_PAUSAR" && esperar_ui 10 texto "$TXT_ACTIVAR"; }; then
+    mal "no pude pausar Slowtown"
+  fi
+  ir_a_inicio
+
+  # El permiso, por adb (en un teléfono lo prende el usuario en Ajustes). En
+  # pausa, la guardia no frena «Direcciones de prueba»: lo que se ve es el
+  # bloqueo de páginas, que vale activo o en pausa, como el nivel 2.
+  if ! instalar_direcciones; then
+    mal "no pude armar ni instalar «$DIRECCIONES_NOMBRE»"
+    return
+  fi
+  disp settings put secure enabled_accessibility_services "$PAGE_GUARD" >/dev/null
+  disp settings put secure accessibility_enabled 1 >/dev/null
+  if esperar 15 "dumpsys accessibility | grep -q 'Bound services:{Service\[label=Slowtown'"; then
+    ok "con el permiso prendido, Android liga el bloqueo de páginas"
+  else
+    mal "Android no liga el bloqueo de páginas"
+  fi
+  # Atrás la saca y queda lo de antes, Inicio: sin Google encima.
+  sacada_por_el_bloqueo m.youtube.com https://m.youtube.com/watch
+  ir_a_inicio
+  abrir_direccion https://example.org/
+  if esperar 8 "$(c_foco "$FOCO_DIRECCIONES")" && sostener 4 "$(c_foco "$FOCO_DIRECCIONES")"; then
+    ok "example.org, que no está bloqueada, se queda"
+  else
+    mal "example.org no se queda ($(foco))"
+  fi
+  ir_a_inicio
+  abrir_direccion m.youtube.com --ez escribiendo true
+  if esperar 8 "$(c_foco "$FOCO_DIRECCIONES")" && sostener 4 "$(c_foco "$FOCO_DIRECCIONES")"; then
+    ok "mientras se escribe en la barra, no la toca"
+  else
+    mal "la sacó mientras se escribía ($(foco))"
+  fi
+  ir_a_inicio
+  # Si Atrás no hace nada (una pestaña que empezó en esa página), Google.
+  abrir_direccion https://www.youtube.com/ --ez terco true
+  sleep 6
+  if esperar 3 "$(c_foco "$FOCO_DIRECCIONES")" && volcar_ui && ui contiene google.com >/dev/null; then
+    ok "si Atrás no la saca, abre Google en su lugar"
+  else
+    mal "si Atrás no la saca, no abre Google ($(foco))"
+  fi
+  ir_a_inicio
+
+  # Las del nivel 1 rigen apenas se suman.
+  if entrar_admin && tocar_desplazando texto "$TXT_PAGINAS" && esperar_ui 10 texto "$TXT_APAGARLO"; then
+    ok "con el permiso prendido, «$TXT_PAGINAS» lo dice y ofrece «$TXT_APAGARLO»"
+    escribir_pagina "$PAGINA"
+    if esperar_apps 10 paginas_tuyas "$PAGINA"; then
+      ir_a_inicio
+      sacada_por_el_bloqueo "$PAGINA, recién sumada," "https://www.$PAGINA/"
+      ir_a_inicio
+      if ! { entrar_admin && tocar_desplazando texto "$TXT_PAGINAS" && esperar_ui 10 texto "$PAGINA" &&
+        tocar texto "$TXT_SACAR" && esperar_ui 10 texto "$TXT_SIN_PAGINAS"; }; then
+        mal "no pude sacar $PAGINA de la lista"
+      fi
+    else
+      mal "no pude sumar $PAGINA ($LISTA)"
+    fi
+  else
+    mal "con el permiso prendido, «$TXT_PAGINAS» no ofrece «$TXT_APAGARLO»"
+  fi
+  ir_a_inicio
+
+  # Apagado, no frena nada.
+  disp settings delete secure enabled_accessibility_services >/dev/null
+  disp settings put secure accessibility_enabled 0 >/dev/null
+  abrir_direccion https://m.youtube.com/watch
+  if esperar 8 "$(c_foco "$FOCO_DIRECCIONES")" && sostener 4 "$(c_foco "$FOCO_DIRECCIONES")"; then
+    ok "con el permiso apagado, no frena nada"
+  else
+    mal "con el permiso apagado, igual la sacó ($(foco))"
+  fi
+  ir_a_inicio
+  adb_t 60 uninstall "$DIRECCIONES" >/dev/null 2>&1 || nota "no pude desinstalar «$DIRECCIONES_NOMBRE»"
+
+  # La barra de arriba sin el permiso de adb, como instalada de una release:
+  # entera, con la batería junto a la fecha, y deslizando para abajo, las
+  # notificaciones. Se saca con otra app adelante: con Inicio, la hora quedaría
+  # escondida en la lista de la barra, y sin el permiso no la podría devolver.
+  disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+  esperar 10 "$(c_foco "$FOCO_RELOJ")"
+  disp pm revoke "$PAQUETE" android.permission.WRITE_SECURE_SETTINGS >/dev/null
+  ir_a_inicio
+  if esperar 8 "$(c_barra_escondida)"; then
+    ok "sin el permiso de adb, Inicio esconde la barra entera"
+  else
+    mal "sin el permiso de adb, la barra sigue a la vista en Inicio"
+  fi
+  if esperar_ui 10 regex "$TXT_FECHA_BATERIA_RE"; then
+    ok "y la fecha lleva la batería: «$(ui textos | cut -f5 | grep -Em1 "$TXT_FECHA_BATERIA_RE")»"
+  else
+    mal "la fecha no lleva la batería"
+  fi
+  captura inicio-sin-barra
+  arrastrar 40 70
+  if esperar 5 "$(c_foco "$FOCO_PANEL")"; then
+    ok "deslizando para abajo en Inicio, las notificaciones"
+    adb_t 20 shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+  else
+    mal "deslizar para abajo en Inicio no abre las notificaciones ($(foco))"
+  fi
+  disp pm grant "$PAQUETE" android.permission.WRITE_SECURE_SETTINGS >/dev/null
+  disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
+  ir_a_inicio
+  if esperar 8 "! $(c_barra_escondida)" && esperar 8 "$(c_barra_sin_hora)"; then
+    ok "con el permiso de vuelta, sólo se esconde la hora"
+  else
+    mal "con el permiso de vuelta, la barra no volvió a como era"
+  fi
+}
+
 # ── Principal ───────────────────────────────────────────────────────────────
 COMPILAR=0
 LIMPIO=0
@@ -4853,7 +5066,7 @@ correr() {   # correr PASO: el paso, salvo que --pasos elija otros (el 0, el 1 y
 }
 
 echo "Slowtown: prueba de punta a punta en el emulador"
-for paso in 0 1 2 3 4 4b 4c 5 6 7 8 8b 8c 9 9b 9c 9d 9e 9f 9g 9h 10 11 12 13 14 15; do
+for paso in 0 1 2 3 4 4b 4c 5 6 7 8 8b 8c 9 9b 9c 9d 9e 9f 9g 9h 10 11 12 13 14 15 16; do
   correr "$paso"
 done
 resumen

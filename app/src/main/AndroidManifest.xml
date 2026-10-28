@@ -35,6 +35,10 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Deslizar para abajo en Inicio abre las notificaciones, como en
+         Olauncher. Se da al instalar. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
     <!-- Para buscar y bajar las versiones nuevas de Slowtown de las releases
          de GitHub (update/Updater.kt). Es lo único que Slowtown hace por
          internet. -->
@@ -114,6 +118,23 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <!-- Las páginas bloqueadas sin cable (admin/PageGuard.kt): mira sólo la
+             barra de direcciones de Chrome (res/xml/page_guard.xml). Viene
+             apagado: lo prende el usuario en Ajustes, después de leer en
+             «Páginas bloqueadas» qué mira y para qué. -->
+        <service
+            android:name=".admin.PageGuard"
+            android:exported="true"
+            android:label="@string/page_guard_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/page_guard" />
         </service>
 
         <!-- La salida por cable (scripts/liberar.sh). Exportado sin permiso a

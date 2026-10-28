@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,10 +27,20 @@ import com.slowtown.launcher.admin.Fixed
  * Las páginas que Chrome no abre. Las que se suman acá son el nivel 1 (con la
  * contraseña, porque ya se está en la administración); de las fijas, el nivel
  * 2, se dice sólo cuántas son, y no se tocan.
+ *
+ * Sin Device Owner, Chrome no recibe la lista: la hace cumplir el bloqueo de
+ * páginas sin cable (PageGuard), si se prende. Antes de mandar a Ajustes, la
+ * pantalla dice qué mira y para qué (Play lo exige, y es lo justo).
  */
 @Composable
 fun SitesScreen(
     sites: Set<String>,
+    /** Con Device Owner, Chrome recibe la lista en sus políticas. */
+    deviceOwner: Boolean,
+    /** Si está prendido el bloqueo de páginas sin cable. */
+    pageGuard: Boolean,
+    /** Abre la pantalla de Ajustes donde se prende y se apaga. */
+    onPageGuard: () -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
     onBack: () -> Unit,
@@ -37,6 +48,7 @@ fun SitesScreen(
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var explaining by remember { mutableStateOf(false) }
     val fixedCount = remember { (Fixed.CORE_SITES + Fixed.listedSites(context)).distinct().size }
 
     fun add() {
@@ -54,7 +66,17 @@ fun SitesScreen(
     }
 
     FormScaffold(title = "Páginas bloqueadas", onBack = onBack) {
-        HintText("Chrome no las abre, ni a sus subdominios: bloquear 9gag.com bloquea también m.9gag.com.")
+        if (deviceOwner || pageGuard) {
+            HintText("Chrome no las abre, ni a sus subdominios: bloquear 9gag.com bloquea también m.9gag.com.")
+        }
+        if (!deviceOwner && pageGuard) {
+            HintText("Sin cable, Slowtown mira la dirección de Chrome y, si es de una de éstas, vuelve atrás.")
+            OutlinedButton(onClick = onPageGuard, modifier = Modifier.fillMaxWidth()) { Text("Apagarlo en Ajustes") }
+        }
+        if (!deviceOwner && !pageGuard) {
+            HintText("Sin cable, Chrome no recibe esta lista: por ahora no bloquea ninguna.")
+            Button(onClick = { explaining = true }, modifier = Modifier.fillMaxWidth()) { Text("Bloquearlas en Chrome") }
+        }
         OutlinedTextField(
             value = text,
             onValueChange = { text = it; message = null },
@@ -83,8 +105,26 @@ fun SitesScreen(
         // Sin nombrar qué bloquea (lo pidió Marcos): quien navega se da cuenta solo.
         HintText(
             "Son $fixedCount. No se cambian desde acá, ni con la contraseña: sólo " +
-                "con una versión nueva de Slowtown, instalada por cable desde la compu. " +
-                "Para saber si una página ya está, probá agregarla.",
+                "con una versión nueva de Slowtown. Para saber si una página ya está, probá agregarla.",
+        )
+    }
+
+    if (explaining) {
+        ConfirmDialog(
+            title = "Bloquearlas sin cable",
+            text = "Slowtown necesita el permiso de accesibilidad de Android. Con él mira la dirección " +
+                "de la página abierta en Chrome y, si es una de las bloqueadas, vuelve atrás. No mira " +
+                "otras apps ni el resto de la pantalla, no guarda lo que visitás y no manda nada a " +
+                "ningún lado.\n\n" +
+                "En Ajustes, buscá «Slowtown: páginas bloqueadas» (en Samsung, adentro de «Apps " +
+                "instaladas») y prendelo. Android va a avisar que Slowtown puede ver y controlar la " +
+                "pantalla: así se llama el permiso, aunque Slowtown use sólo esto. Algunos bancos " +
+                "desconfían de las apps que lo tienen; si alguno deja de andar, se apaga desde acá.\n\n" +
+                "Si Android no deja prenderlo («configuración restringida»), en la información de " +
+                "Slowtown tocá ⋮ y «Permitir configuración restringida».",
+            confirm = "Ir a Ajustes",
+            onConfirm = onPageGuard,
+            onDismiss = { explaining = false },
         )
     }
 }

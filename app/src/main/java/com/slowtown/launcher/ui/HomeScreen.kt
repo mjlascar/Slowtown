@@ -1,23 +1,35 @@
 package com.slowtown.launcher.ui
 
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +45,7 @@ import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -73,12 +86,14 @@ sealed interface Pause {
  * avisos, las apps de Inicio en texto y, abajo de todo, el widget si hay uno:
  * cada parte con el tamaño y el lugar de «Cómo se ve Inicio». Manteniendo
  * apretada la cabecera se abre la administración; deslizando para arriba,
- * todas las apps.
+ * todas las apps, y para abajo, las notificaciones (como en Olauncher: sin la
+ * barra de arriba, que a veces se esconde, es lo más a mano).
  *
  * @param apps las apps de Inicio, o null mientras se cargan (para no mostrar
  *   el cartel de ayuda un instante en cada vuelta a Inicio).
  * @param hint qué decir si no hay ninguna.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     apps: List<LaunchableApp>?,
@@ -104,6 +119,11 @@ fun HomeScreen(
     onScreenTime: (() -> Unit)?,
     /** El tamaño de todo Inicio, si va la hora grande, y el tamaño y el lugar de cada parte. */
     look: HomeLook,
+    /**
+     * Si la barra de arriba está escondida entera (ver StatusBarClock): Inicio
+     * muestra la batería junto a la fecha, como Olauncher.
+     */
+    showBattery: Boolean,
     /** Los paquetes de las apps de Inicio frenadas ahora (Flow State, su límite): en gris. */
     dimmed: Set<String>,
     /** El widget, que recibe hacia dónde va a lo ancho. */
@@ -117,21 +137,27 @@ fun HomeScreen(
     onOpen: (LaunchableApp) -> Unit,
     onAdmin: () -> Unit,
     onDrawer: () -> Unit,
+    onNotifications: () -> Unit,
 ) {
     var dragged by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     // El gesto, en medidas de verdad: el dedo no se achica con Inicio.
     val threshold = with(density) { 80.dp.toPx() }
+    val battery = if (showBattery) rememberBattery().value else null
     Box(
         Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = { dragged = 0f },
-                    onDragEnd = { if (dragged < -threshold) onDrawer() },
+                    onDragEnd = {
+                        if (dragged < -threshold) onDrawer() else if (dragged > threshold) onNotifications()
+                    },
                 ) { _, amount -> dragged += amount }
             }
-            .safeDrawingPadding(),
+            // El lugar de la barra de arriba queda aunque se esconda: Inicio no
+            // salta cada vez que aparece o se va.
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.statusBarsIgnoringVisibility)),
     ) {
         // Todo Inicio de una vez (letras, márgenes, hábitos). La lista de todas
         // las apps y la administración no pasan por acá.
@@ -140,6 +166,7 @@ fun HomeScreen(
                 look = look,
                 screenTime = screenTime,
                 onScreenTime = onScreenTime,
+                battery = battery,
                 notice = notice,
                 pause = pause,
                 onBurst = onBurst,
@@ -186,6 +213,8 @@ internal fun HomeContent(
     look: HomeLook,
     screenTime: String?,
     onScreenTime: (() -> Unit)?,
+    /** La batería en por ciento, junto a la fecha, o null para no mostrarla. */
+    battery: Int?,
     notice: String?,
     pause: Pause?,
     onBurst: () -> Unit,
@@ -205,7 +234,7 @@ internal fun HomeContent(
 ) {
     val blocks = look.blocks
     Column(modifier.padding(horizontal = 28.dp, vertical = 32.dp)) {
-        HomeHeader(look.showClock, blocks, screenTime, onScreenTime, onAdmin)
+        HomeHeader(look.showClock, blocks, screenTime, onScreenTime, battery, onAdmin)
         Notices(blocks[HomeBlock.NOTICES], notice, pause, onBurst, update, onUpdate, safeMode, look.showClock)
         Spacer(Modifier.height(40.dp))
         HomeApps(blocks[HomeBlock.APPS], apps, dimmed, hint, onOpen)
@@ -233,7 +262,8 @@ internal fun HomeContent(
  * explicación, el tiempo de pantalla de hoy (lo pidió Marcos: menos texto, y
  * la cabecera más pareja); la explicación queda para quien lee la pantalla en
  * voz alta. Se mantiene apretada entera para abrir la administración, esté
- * cada cosa donde esté: sin la hora, es la fecha.
+ * cada cosa donde esté: sin la hora, es la fecha. Con [battery], la fecha
+ * lleva la batería al lado: «Martes 27 de octubre · 54 %».
  */
 @Composable
 private fun HomeHeader(
@@ -241,10 +271,12 @@ private fun HomeHeader(
     blocks: HomeBlocks,
     screenTime: String?,
     onScreenTime: (() -> Unit)?,
+    battery: Int?,
     onLongPress: () -> Unit,
 ) {
     val now by rememberMinute()
-    val date = now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) }
+    val day = now.format(DATE).replaceFirstChar { it.titlecase(SPANISH) }
+    val date = if (battery != null) "$day · $battery %" else day
     val datePlace = blocks[HomeBlock.DATE]
     val timePlace = blocks[HomeBlock.SCREEN_TIME].takeIf { screenTime != null }
     val time = @Composable {
@@ -307,6 +339,36 @@ private fun rememberMinute(): State<LocalDateTime> {
 private fun currentMinute(): LocalDateTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES)
 
 /**
+ * La batería en por ciento, mientras Inicio se ve. Android avisa cada vez que
+ * cambia y guarda el último aviso, así que llega apenas se pide.
+ */
+// RECEIVER_NOT_EXPORTED es de API 33; en Android 12 el sistema lo ignora, y
+// el aviso de la batería lo manda sólo el sistema igual.
+@SuppressLint("InlinedApi")
+@Composable
+private fun rememberBattery(): State<Int?> {
+    val context = LocalContext.current
+    val percent = remember { mutableStateOf<Int?>(null) }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                percent.value = percentOf(intent)
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+            ?.let { percent.value = percentOf(it) }
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    return percent
+}
+
+private fun percentOf(battery: Intent): Int? {
+    val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+    val scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+    return if (level >= 0 && scale > 0) level * 100 / scale else null
+}
+
+/**
  * El primer renglón de la cabecera: la hora (sin ella, la fecha) y el tiempo
  * de pantalla. Comparten el renglón si van en lugares distintos y entran sin
  * tocarse; si no, el tiempo de pantalla va en su renglón, justo debajo. Con la
@@ -347,8 +409,17 @@ private fun HeaderLine(
         // Si no le quedara ni un tercio, mejor que el tiempo de pantalla baje.
         val wraps = !clock && opposite && beside >= width / 3
         val l = leadPart.measure(if (wraps) Constraints(maxWidth = beside) else free)
-        val lx = xOf(lead.align, l.width, width)
+        var lx = xOf(lead.align, l.width, width)
         val sx = xOf(side.align, s.width, width)
+        // Centrada, la hora (o la fecha) se corre un poco para que el tiempo de
+        // pantalla entre a su lado: si no, según lo que dijera, bajaba un
+        // renglón o no (a Marcos le quedaba debajo por un pelo, y feo).
+        if (lead.align == BlockAlign.CENTER && side.align != BlockAlign.CENTER) {
+            val toEnd = side.align == BlockAlign.END
+            val overlap = if (toEnd) lx + l.width + gap - sx else sx + s.width + gap - lx
+            val room = if (toEnd) lx else width - lx - l.width
+            if (overlap in 1..minOf(MAX_NUDGE.roundToPx(), room)) lx += if (toEnd) -overlap else overlap
+        }
         val apart = if (lx <= sx) lx + l.width + gap <= sx else sx + s.width + gap <= lx
         if (lead.align == side.align || !apart) {
             return@Layout layout(width, constraints.constrainHeight(l.height + s.height)) {
@@ -387,6 +458,9 @@ private const val LEAD = "hora o fecha"
 private const val SIDE = "tiempo de pantalla"
 private val HEADER_GAP = 12.dp
 private val DIGITS_TOP = 10.dp
+
+/** Lo más que se corre la hora centrada para que el tiempo de pantalla entre a su lado. */
+private val MAX_NUDGE = 24.dp
 
 @Composable
 private fun DateText(date: String, align: BlockAlign) {

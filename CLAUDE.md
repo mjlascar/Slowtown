@@ -73,7 +73,9 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   y viene sacado); la fecha no, porque sin la hora grande es lo que se mantiene
   apretado para entrar. El tiempo de pantalla comparte el renglón de la
   hora (sin ella, el de la fecha) si van en lugares distintos y entran; si no,
-  va justo debajo. El widget de otra app no cambia. Arriba, fija, una vista
+  va justo debajo. La hora centrada se corre hasta 24 dp para hacerle lugar:
+  a Marcos le quedaba debajo por un pelo, según lo que dijera, y se veía feo
+  (27/10). El widget de otra app no cambia. Arriba, fija, una vista
   previa: Inicio en miniatura, armado con las mismas piezas (`HomeContent`).
 - **Una sola hora en Inicio** (`StatusBarClock`): con la hora grande a la
   vista, la de la barra de arriba se esconde mientras Inicio está al frente, y
@@ -82,7 +84,17 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   escondidos de SystemUI (`icon_blacklist`), un ajuste seguro, con
   `WRITE_SECURE_SETTINGS` que da `provisionar.sh` por adb. Guarda cómo estaba
   la lista y la deja igual al mostrarla; la salida por cable también. Sin la
-  hora grande, la fecha encabeza Inicio y la barra queda como siempre.
+  hora grande, la fecha encabeza Inicio y la barra queda como siempre. **Sin
+  ese permiso** (instalada sin cable, como sería desde Play) se esconde la
+  barra entera mientras Inicio está al frente, como hacía Olauncher, el
+  launcher que Marcos usaba antes (se lo recordó el 27/10): la fecha lleva al
+  lado la batería («Martes 27 de octubre · 54 %»), y la barra vuelve un rato
+  deslizando desde arriba. El lugar de la barra queda igual, así Inicio no
+  salta.
+- **Deslizar para abajo** en Inicio abre las notificaciones, como en
+  Olauncher (`StatusBarManager.expandNotificationsPanel` por reflexión, con
+  `EXPAND_STATUS_BAR`, que se da al instalar; si un día no anda, el gesto no
+  hace nada). Probado en el S10e.
 - **La hora de Inicio** se mira una vez por segundo mientras Inicio se ve, y
   apenas vuelve a verse o recupera el foco (`rememberMinute`). Antes esperaba
   el minuto siguiente con un delay, que no corre con el teléfono dormido: al
@@ -231,12 +243,58 @@ encima: los bancos los miran mal.
   permitida, o una sesión de administración usada para sacar el acceso a los
   datos de uso. La app frenada llega a verse menos de un segundo. El nivel 2
   no existe sin Device Owner: lo de `Fixed.APPS` frena sólo por no estar
-  permitido.
+  permitido, y alcanza (lo dijo Marcos el 27/10: «es casi lo mismo»).
 - **En el S10e** (27/10, con la 0.4.0, probado por adb y vuelto a pausar):
   frenó Ajustes, Maps y el engranaje del panel en menos de un segundo, y con
   el Reloj adelante 5 minutos Samsung no congeló la guardia (el proceso queda
   perceptible, `prcl`). Falta la prueba larga y el consumo (`docs/sin-cable.md`,
   sección 7).
+
+## Las páginas sin cable
+
+`admin/Pages.kt` y `admin/PageGuard.kt`. Sin Device Owner, Chrome no recibe
+la lista (sus políticas las pone sólo un administrador): la hace cumplir un
+servicio de accesibilidad que mira la barra de direcciones de Chrome y, si es
+de una página bloqueada, vuelve atrás y lo dice. Marcos lo eligió el 27/10,
+entre las tres maneras de `docs/sin-cable.md`, porque queda adentro de
+Slowtown, sin otra app ni otro servicio.
+
+- **Lo prende el usuario.** Viene apagado; en «Páginas bloqueadas», sin cable,
+  «Bloquearlas en Chrome» explica antes qué mira y para qué (Play lo exige) y
+  abre Ajustes > Accesibilidad. En el S10e eso es otra app,
+  `com.samsung.accessibility`, que la sesión chica deja pasar con Slowtown
+  activo (`Rules.INFO_SCREENS`), y el servicio está en «Installed apps». La
+  pantalla de un servicio suelto la abre sólo el sistema (pide un permiso que
+  una app no tiene). En el teléfono no se prende por adb: es un permiso de
+  seguridad, lo da él.
+- **Mira poco**: sólo Chrome y sus versiones de prueba
+  (`page_guard_browsers`, que lee también `res/xml/page_guard.xml`), sólo la
+  barra (`url_bar`), y nada mientras se escribe en ella. Las mismas páginas que
+  las políticas (nivel 2, nivel 1 y las excepciones), sin el tope de 1.000.
+  Vale con Slowtown activo o en pausa, como el nivel 2. Con Device Owner o en
+  el modo a prueba de fallos no hace nada.
+- **Si Atrás no alcanza** (la pestaña empezó en esa página, o Chrome se reabre
+  en ella), abre Google en la pestaña de Slowtown (siempre la misma, con
+  `Browser.EXTRA_APPLICATION_ID`), y si da vueltas, Inicio: Chrome nunca queda
+  trabado. Después de Atrás espera 2 segundos y vuelve a mirar: antes los
+  avisos son de la página que se va (en el emulador, eso abría Google sin
+  hacer falta).
+- **En contra**, lo de `docs/sin-cable.md`: algunos bancos desconfían de las
+  apps con accesibilidad (por eso apagado de entrada, y el aviso lo dice),
+  forzar la detención lo apaga, y la Protección avanzada de Android 17 lo saca.
+- **Prueba**: «Direcciones de prueba» (`scripts/prueba-direcciones/`, con
+  `armar.sh`) es un navegador de mentira con su barra `url_bar`; la variante
+  de prueba de Slowtown la suma a `page_guard_browsers`
+  (`src/debug/res/values/strings.xml`), las releases no. El paso 16 de
+  `probar-emulador.sh` la usa. **Ojo:** `uiautomator dump` apaga los servicios
+  de accesibilidad mientras mira (y al volver arrancan de cero): mientras se
+  espera que el bloqueo actúe, mirar con `dumpsys`, y volcar recién después.
+  En el S10e eso hizo creer que no frenaba Instagram.
+- **En el S10e** (27/10, versión de prueba 0.4.1 por adb, con el permiso
+  prendido por Marcos): youtube.com escrita en Chrome avisa y al segundo
+  vuelve a la página anterior; un enlace a Instagram desde afuera cierra la
+  pestaña y vuelve a Inicio. Chrome 145 muestra en la barra el dominio y el
+  camino, sin «https://» («example.org», «sitio.com/pagina»).
 
 ## Notificaciones por oleadas
 

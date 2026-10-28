@@ -248,7 +248,10 @@ fun HomeLookScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("La hora grande", style = MaterialTheme.typography.titleMedium)
-                            HintText("Con la hora grande, la de la barra de arriba se esconde en Inicio.")
+                            HintText(
+                                "Con la hora grande, la de la barra de arriba se esconde en Inicio. Sin " +
+                                    "cable se esconde la barra entera, y la batería pasa junto a la fecha.",
+                            )
                         }
                         Spacer(Modifier.width(16.dp))
                         Switch(checked = look.showClock, onCheckedChange = null)
@@ -323,6 +326,7 @@ private fun HomePreview(look: HomeLook, screen: DpSize, modifier: Modifier = Mod
                         look = look,
                         screenTime = "44 min",
                         onScreenTime = null,
+                        battery = null,
                         notice = null,
                         // De muestra, el aviso de la noche: «Es Bedtime, andá a dormir».
                         pause = Pause.Night,

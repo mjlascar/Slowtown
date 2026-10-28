@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La barra de direcciones: PageGuard la busca por este nombre (url_bar, como la de Chrome). -->
+    <item name="url_bar" type="id" />
+</resources>

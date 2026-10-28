@@ -10,11 +10,12 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
 
 ## Qué hace
 
-- **Inicio en texto:** la hora (una sola: la de la barra se esconde), el
+- **Inicio en texto:** la hora (una sola: la de la barra se esconde, o la
+  barra entera si se instaló sin cable, y la batería pasa junto a la fecha), el
   tiempo de pantalla del día (tocándolo, Bienestar digital), las apps que
   elegiste y tus hábitos, cada parte del tamaño y en el lugar que quieras.
   Deslizando para arriba, todas las apps, con carpetas, buscador y apps
-  ocultas que sólo aparecen al buscarlas.
+  ocultas que sólo aparecen al buscarlas; para abajo, las notificaciones.
 - **Slowtown activo:** sólo se abren las apps permitidas. Con Device Owner
   (por cable) es lock task: no hay Recientes ni ajustes rápidos, e Inicio es
   siempre Slowtown. Sin cable, una guardia vuelve a Inicio si se abre algo que
@@ -75,7 +76,10 @@ Con el acceso a datos de uso y Slowtown como Inicio, se activa sin cable
 (mantené apretada la hora → «Activar Slowtown»): sólo las apps permitidas,
 Bedtime, Flow State y los límites por app, con una guardia que vuelve a Inicio
 si se abre algo que no corresponde. Se esquiva más fácil que el cierre por
-cable (con el modo seguro, por ejemplo).
+cable (con el modo seguro, por ejemplo). Las páginas bloqueadas, sin cable,
+las hace cumplir Slowtown mirando la dirección de Chrome, con el permiso de
+accesibilidad: viene apagado, y se prende en «Páginas bloqueadas», que antes
+explica qué mira.
 
 Lo que cierra el teléfono de verdad (Device Owner: lock task y el nivel 2) se
 activa por cable, con una compu y `scripts/provisionar.sh`, y exige sacar un

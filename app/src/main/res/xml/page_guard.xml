@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lo que mira PageGuard: sólo Chrome (y sus versiones de prueba,
+     page_guard_browsers), cuando cambia de pantalla o de contenido, y sólo
+     para leer su barra de direcciones (por eso los nombres de las vistas). No
+     es una herramienta de accesibilidad: Play lo pide declarado. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/page_guard_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="250"
+    android:packageNames="@string/page_guard_browsers" />

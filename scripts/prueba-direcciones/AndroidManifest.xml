@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Direcciones de prueba», sólo para el emulador: un navegador de mentira
+     con una barra de direcciones, para que el paso 16 de probar-emulador.sh
+     pruebe el bloqueo de páginas sin cable (PageGuard). La variante de prueba
+     de Slowtown la mira como a Chrome; las releases, no. Ver Main.java. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.slowtown.prueba.direcciones">
+
+    <uses-sdk
+        android:minSdkVersion="28"
+        android:targetSdkVersion="31" />
+
+    <application android:label="Direcciones de prueba">
+        <activity
+            android:name=".Main"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Lo que abre PageGuard cuando Atrás no alcanza: Google en la pestaña de Slowtown. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

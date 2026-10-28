@@ -86,7 +86,7 @@ object Rules {
      */
     fun hold(context: Context, pkg: String): Hold? {
         if (FreeSession.isActive(context)) return null
-        if (AdminSession.isActive(context) && (!AdminSession.isInfoOnly(context) || pkg == SETTINGS)) return null
+        if (AdminSession.isActive(context) && (!AdminSession.isInfoOnly(context) || pkg in INFO_SCREENS)) return null
         if (pkg in always(context) || pkg in CallGuard.packages(context)) return null
         val prefs = Prefs(context)
         return when {
@@ -100,6 +100,13 @@ object Rules {
 
     /** Ajustes, que suma la sesión chica de la información de una app ([AdminSession]). */
     const val SETTINGS = "com.android.settings"
+
+    /**
+     * Lo que la guardia deja pasar en la sesión chica: Ajustes y, en Samsung,
+     * la app de sus pantallas de accesibilidad, por si Ajustes le pasa la de
+     * prender el bloqueo de páginas ([PageGuard]).
+     */
+    private val INFO_SCREENS = setOf(SETTINGS, "com.samsung.accessibility")
 
     /**
      * Slowtown y lo que no puede faltar, de día y de noche: lo esencial

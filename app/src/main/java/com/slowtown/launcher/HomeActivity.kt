@@ -44,6 +44,7 @@ import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.Guard
 import com.slowtown.launcher.admin.Limits
 import com.slowtown.launcher.admin.LockTaskEvents
+import com.slowtown.launcher.admin.Pages
 import com.slowtown.launcher.admin.Policies
 import com.slowtown.launcher.admin.Rules
 import com.slowtown.launcher.apps.AppCatalog
@@ -152,6 +153,15 @@ class HomeActivity : ComponentActivity() {
     /** Cómo se ve Inicio: el tamaño, si va la hora grande, y el tamaño y el lugar de cada parte. */
     private var homeLook by mutableStateOf(HomeLook(100, false))
 
+    /**
+     * Si Inicio esconde sólo la hora de la barra (con el permiso de adb) y no
+     * la barra entera, que se lleva la batería ([StatusBarClock]).
+     */
+    private var clockOnly by mutableStateOf(true)
+
+    /** Si está prendido el bloqueo de páginas sin cable ([Pages]), para «Páginas bloqueadas». */
+    private var pageGuardOn by mutableStateOf(false)
+
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
     private var widget by mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null)
@@ -210,13 +220,14 @@ class HomeActivity : ComponentActivity() {
         )
         prefs = Prefs(this)
         homeLook = HomeLook(prefs.homeScalePercent, prefs.showClock, prefs.homeBlocks)
-        // Con Inicio al frente y la hora grande, la de la barra se esconde; al
-        // ir a otra pantalla de Slowtown, vuelve. Escribir el ajuste es una
-        // llamada corta: en el hilo principal, para que no se crucen.
+        // Con Inicio al frente y la hora grande, la de la barra se esconde (sin
+        // el permiso de adb, la barra entera); al ir a otra pantalla de
+        // Slowtown, vuelve. Escribir el ajuste es una llamada corta: en el hilo
+        // principal, para que no se crucen.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 snapshotFlow { screen == Screen.Home && homeLook.showClock }
-                    .collect { StatusBarClock.setHidden(this@HomeActivity, it) }
+                    .collect { StatusBarClock.apply(this@HomeActivity, it) }
             }
         }
         widgetHost = AppWidgetHost(applicationContext, WIDGET_HOST_ID)
@@ -318,6 +329,7 @@ class HomeActivity : ComponentActivity() {
                         screenTime = screenTime,
                         onScreenTime = wellbeing?.let { intent -> { openWellbeing(intent) } },
                         look = homeLook,
+                        showBattery = homeLook.showClock && !clockOnly,
                         dimmed = held.keys,
                         widget = if (showHabits) {
                             @Composable { align: Alignment.Horizontal ->
@@ -337,6 +349,7 @@ class HomeActivity : ComponentActivity() {
                         onOpen = ::launch,
                         onAdmin = ::askForAdmin,
                         onDrawer = { screen = Screen.Drawer },
+                        onNotifications = ::openNotifications,
                     )
                     Screen.Drawer -> DrawerScreen(
                         apps = openable,
@@ -383,6 +396,7 @@ class HomeActivity : ComponentActivity() {
                         onChooseApps = { screen = Screen.ChooseApps },
                         onSites = {
                             blockedSites = prefs.blockedSites
+                            pageGuardOn = Pages.isOn(this@HomeActivity)
                             screen = Screen.Sites
                         },
                         onChooseWidget = ::openWidgetPicker,
@@ -476,6 +490,9 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.Sites -> SitesScreen(
                         sites = blockedSites,
+                        deviceOwner = status.deviceOwner,
+                        pageGuard = pageGuardOn,
+                        onPageGuard = ::openPageGuardSettings,
                         onAdd = { site -> saveSites(blockedSites + site) },
                         onRemove = { site -> saveSites(blockedSites - site) },
                         onBack = { screen = Screen.Admin },
@@ -526,8 +543,22 @@ class HomeActivity : ComponentActivity() {
     // La hora de la barra vuelve apenas Inicio deja de estar al frente: otra
     // app, la pantalla apagada, un cuelgue que reinicia. Ver StatusBarClock.
     override fun onPause() {
-        StatusBarClock.setHidden(this, false)
+        StatusBarClock.apply(this, false)
         super.onPause()
+    }
+
+    /**
+     * Deslizar para abajo en Inicio abre las notificaciones, como en Olauncher:
+     * sin la barra de arriba es lo más a mano. Android no tiene una manera
+     * pública; ésta es la de la barra misma, con EXPAND_STATUS_BAR, y si un
+     * día deja de andar, el gesto no hace nada.
+     */
+    @SuppressLint("WrongConstant", "PrivateApi")
+    private fun openNotifications() {
+        runCatching {
+            Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel")
+                .invoke(getSystemService("statusbar"))
+        }.onFailure { Log.w(TAG, "No pude abrir las notificaciones", it) }
     }
 
     override fun onDestroy() {
@@ -537,6 +568,9 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Los dos se cambian afuera: el permiso por adb, la accesibilidad en Ajustes.
+        clockOnly = StatusBarClock.canHideClockOnly(this)
+        pageGuardOn = Pages.isOn(this)
         // Si la guardia (o la lista de lock task) acaba de frenar una app, Inicio dice por qué.
         Guard.lastHeld?.let { last ->
             Guard.clearLastHeld()
@@ -685,6 +719,22 @@ class HomeActivity : ComponentActivity() {
         }
         runCatching { startActivity(info) }
             .onFailure { Log.w(TAG, "No pude abrir la información de ${app.packageName}", it) }
+    }
+
+    /**
+     * La pantalla de Ajustes donde se prende (o se apaga) el bloqueo de
+     * páginas sin cable. Con Slowtown activo va en la sesión chica, como la
+     * información de una app, y al terminar se vuelve a Inicio; si no, directo,
+     * y al volver «Páginas bloqueadas» dice cómo quedó.
+     */
+    private fun openPageGuardSettings() {
+        val settings = Pages.settingsIntent()
+        if (Rules.active(this) && !FreeSession.isActive(this)) {
+            startAdminSession(settings, infoOnly = true)
+            return
+        }
+        runCatching { startActivity(settings) }
+            .onFailure { Log.w(TAG, "No pude abrir los ajustes de accesibilidad", it) }
     }
 
     /**
