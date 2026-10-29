@@ -19,26 +19,43 @@ class Prefs(context: Context) {
     private val prefs = context.getSharedPreferences("slowtown", Context.MODE_PRIVATE)
 
     /**
-     * Las apps que se pueden abrir con Slowtown activo, como componentes
-     * (`paquete/actividad`) y no como paquetes: un mismo paquete puede tener
-     * más de un ícono (Teléfono y Contactos, por ejemplo). Se eligen en la
-     * administración, detrás de la contraseña, porque aflojan las reglas.
+     * Las apps que no se abren con Slowtown activo, como componentes
+     * (`paquete/actividad`), igual que [favorites]: lo que se marca es un
+     * ícono, y lo que se bloquea es su paquete ([blockedPackages]). Hasta el
+     * 29/10 se elegían las permitidas; Marcos prefirió elegir las bloqueadas,
+     * y lo que se instala después queda abierto hasta bloquearlo. Se eligen en
+     * la administración, con la contraseña: sacar una de la lista afloja.
      */
-    var allowed: Set<String>
-        get() = prefs.getStringSet(KEY_ALLOWED, null)?.toSet() ?: emptySet()
-        set(value) = prefs.edit().putStringSet(KEY_ALLOWED, value).apply()
+    var blocked: Set<String>
+        get() = prefs.getStringSet(KEY_BLOCKED, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_BLOCKED, value).apply()
 
-    /** Los paquetes de [allowed], que es lo que entiende la lista de lock task. */
-    val allowedPackages: Set<String>
-        get() = allowed.mapNotNull { ComponentName.unflattenFromString(it)?.packageName }.toSet()
+    /** Los paquetes de [blocked]: lo que entienden la guardia y la lista de lock task. */
+    val blockedPackages: Set<String>
+        get() = blocked.mapNotNull { ComponentName.unflattenFromString(it)?.packageName }.toSet()
 
     /**
-     * Las que se ven en Inicio. Se eligen sin contraseña (no aflojan nada:
-     * con Slowtown activo, de las permitidas se muestran sólo éstas). Hasta
-     * que alguien las elige, son las permitidas, que es como funcionaba antes.
+     * La lista de antes, la de las permitidas, si todavía no se pasó a
+     * bloqueadas: la pasa una sola vez [com.slowtown.launcher.SlowtownApp]
+     * con [migrateToBlocked]. Null si no hay nada que pasar.
      */
+    val legacyAllowed: Set<String>?
+        get() = if (prefs.contains(KEY_BLOCKED)) null else prefs.getStringSet(KEY_ALLOWED, null)?.toSet()
+
+    /**
+     * Pasa la lista de permitidas a bloqueadas: [blocked] son las que no
+     * estaban permitidas, y si nadie había elegido las de Inicio, quedan las
+     * que eran permitidas, que es lo que Inicio mostraba.
+     */
+    fun migrateToBlocked(blocked: Set<String>, allowed: Set<String>) {
+        val edit = prefs.edit().putStringSet(KEY_BLOCKED, blocked).remove(KEY_ALLOWED)
+        if (!prefs.contains(KEY_FAVORITES)) edit.putStringSet(KEY_FAVORITES, allowed)
+        edit.commit()
+    }
+
+    /** Las que se ven en Inicio. Se eligen sin contraseña: no aflojan nada. */
     var favorites: Set<String>
-        get() = prefs.getStringSet(KEY_FAVORITES, null)?.toSet() ?: allowed
+        get() = prefs.getStringSet(KEY_FAVORITES, null)?.toSet() ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_FAVORITES, value).apply()
 
     /**
@@ -210,6 +227,15 @@ class Prefs(context: Context) {
         get() = FlowState.parseWindows(prefs.getString(KEY_FLOW_WINDOWS, null))
         set(value) = prefs.edit().putString(KEY_FLOW_WINDOWS, FlowState.serializeWindows(value)).apply()
 
+    /**
+     * Las apps que se abren de noche ([com.slowtown.launcher.admin.Bedtime]),
+     * además de lo que no puede faltar (llamadas, SMS, el reloj y las
+     * alarmas), como paquetes. Las eligió Marcos el 29/10; de entrada, ninguna.
+     */
+    var bedtimeApps: Set<String>
+        get() = prefs.getStringSet(KEY_BEDTIME_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_BEDTIME_APPS, value).apply()
+
     /** Las apps que Flow State frena, como paquetes (lo que entienden lock task y la guardia). */
     var flowApps: Set<String>
         get() = prefs.getStringSet(KEY_FLOW_APPS, null)?.toSet() ?: emptySet()
@@ -243,6 +269,8 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_ALLOWED = "allowed"
+        const val KEY_BLOCKED = "blocked"
+        const val KEY_BEDTIME_APPS = "bedtime_apps"
         const val KEY_FAVORITES = "favorites"
         const val KEY_FOLDERS = "folders"
         const val KEY_HIDDEN_APPS = "hidden_apps"

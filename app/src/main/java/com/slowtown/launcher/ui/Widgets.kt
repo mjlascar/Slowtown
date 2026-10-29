@@ -63,8 +63,8 @@ fun WidgetPickerScreen(
 ) {
     FormScaffold(title = "Widget de Inicio", onBack = onBack) {
         HintText(
-            "Va abajo de todo, pegado al borde. Para que al tocarlo se abra su app, esa app " +
-                "tiene que estar entre las permitidas.",
+            "Va abajo de todo, pegado al borde. Con Slowtown activo, si su app está bloqueada, " +
+                "al tocarlo no se abre.",
         )
         if (hasWidget) {
             OutlinedButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text("Sacar el widget") }

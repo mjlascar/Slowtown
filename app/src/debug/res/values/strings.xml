@@ -5,4 +5,8 @@
          prueba del emulador lo pone a prueba, porque el emulador no tiene
          Chrome. Las releases miran sólo Chrome. -->
     <string name="page_guard_browsers" translatable="false">com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary,com.slowtown.prueba.direcciones</string>
+
+    <!-- Y «Avisos de prueba» (scripts/prueba-avisos/), que imita a WhatsApp,
+         ofrece «sólo los grupos» como WhatsApp. -->
+    <string name="waves_group_apps" translatable="false">com.whatsapp,com.whatsapp.w4b,com.slowtown.prueba.avisos</string>
 </resources>

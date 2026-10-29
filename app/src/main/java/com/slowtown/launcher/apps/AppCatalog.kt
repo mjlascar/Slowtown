@@ -42,13 +42,13 @@ object AppCatalog {
     const val PLAY_STORE = "com.android.vending"
 
     /**
-     * No se pueden permitir: son las puertas que la contraseña cierra. Se
-     * abren desde la administración, por una sesión que termina sola. La Play
-     * Store sí se puede permitir (lo decidió Marcos el 22/10, para bajar una
-     * app fuera de casa): lo que se instala no abre hasta permitirlo, y los
-     * navegadores y lo del nivel 2 se pausan apenas se instalan.
+     * Las puertas que la contraseña cierra: con Slowtown activo no se abren
+     * nunca ([com.slowtown.launcher.admin.Rules.alwaysBlocked]), y se llega a
+     * ellas desde la administración, por una sesión que termina sola. La Play
+     * Store no está (Marcos la quiere a mano para bajar una app fuera de casa,
+     * 22/10): se puede bloquear como cualquier otra.
      */
-    private val ADMIN_ONLY = setOf(
+    val ADMIN_ONLY = setOf(
         "com.android.settings",
         "com.sec.android.app.samsungapps",
     )
@@ -70,7 +70,7 @@ object AppCatalog {
             .sortedWith(compareBy(collator) { it.label })
     }
 
-    /** Lo que se puede permitir: todo menos las puertas de la administración. */
+    /** Lo que se elige en Flow State, los límites y las notificaciones: todo menos las puertas de la administración. */
     fun permittable(apps: List<LaunchableApp>): List<LaunchableApp> =
         apps.filter { it.packageName !in ADMIN_ONLY }
 

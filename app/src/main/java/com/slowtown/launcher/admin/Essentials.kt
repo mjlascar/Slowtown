@@ -38,7 +38,7 @@ object Essentials {
      * selector de «Compartir» y «Abrir con» (paquete `android`), los permisos,
      * el selector de archivos y el inicio de sesión de Google. Con
      * BLOCK_ACTIVITY_START_IN_TASK, lo que no está en la lista se bloquea
-     * también adentro de una app permitida.
+     * también adentro de una app que se puede abrir.
      *
      * Contracara: la lista es por paquete, así que cualquier pantalla de estos
      * paquetes se puede abrir, también como tarea nueva (por ejemplo, desde un

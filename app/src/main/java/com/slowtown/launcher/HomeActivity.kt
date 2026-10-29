@@ -113,7 +113,7 @@ class HomeActivity : ComponentActivity() {
 
     private enum class Screen {
         Home, Drawer, Folder, Unlock, CreatePassword, Admin, ChooseApps, Sites, WidgetPicker, Folders, Habits,
-        HabitsPicker, Bedtime, FlowState, FlowApps, Limits, LimitApps, Notifications, HomeLook,
+        HabitsPicker, Bedtime, BedtimeApps, FlowState, FlowApps, Limits, LimitApps, Notifications, HomeLook,
     }
 
     private lateinit var prefs: Prefs
@@ -121,10 +121,17 @@ class HomeActivity : ComponentActivity() {
     private var status by mutableStateOf(AdminStatus())
     private var appsLoad: Job? = null
 
-    /** Lo que se puede permitir, para la pantalla de elegir. */
+    /** Lo que se elige en Flow State, los límites y las notificaciones: todo menos Ajustes y la tienda de Samsung. */
     private var permittable by mutableStateOf<List<LaunchableApp>>(emptyList())
 
-    /** Lo que se puede abrir ahora: con Slowtown activo, sólo lo permitido. */
+    /**
+     * Lo que se puede bloquear: [permittable] sin lo que no puede faltar
+     * (llamadas, SMS, alarmas), que no se bloquea, ni lo que no se abre nunca
+     * ([Rules.alwaysBlocked]). También es lo que se elige para Bedtime.
+     */
+    private var blockable by mutableStateOf<List<LaunchableApp>>(emptyList())
+
+    /** Lo que se puede abrir ahora: con Slowtown activo, sin lo bloqueado. */
     private var openable by mutableStateOf<List<LaunchableApp>>(emptyList())
     private var favorites by mutableStateOf<Set<String>>(emptySet())
     private var folders by mutableStateOf<List<Folder>>(emptyList())
@@ -141,6 +148,9 @@ class HomeActivity : ComponentActivity() {
     /** Si ahora mandan la noche o Flow State (con Slowtown activo): Inicio ofrece la ráfaga de 5 minutos. */
     private var pause by mutableStateOf<Pause?>(null)
     private var bedtimeSettings by mutableStateOf(BedtimeSettings(false, 23 * 60, 7 * 60, emptySet()))
+
+    /** Las apps que se abren de noche, por paquete ([Prefs.bedtimeApps]). */
+    private var bedtimeApps by mutableStateOf<Set<String>>(emptySet())
     private var flowSettings by mutableStateOf(FlowSettings(false, emptyList(), emptySet()))
     private var limitRows by mutableStateOf<List<AppLimit>>(emptyList())
 
@@ -244,7 +254,7 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
                 if (!armingWidget) AdminSession.end(this@HomeActivity)
-                if (shouldBeClosed() && !armingWidget) Policies.apply(this@HomeActivity, prefs.allowedPackages)
+                if (shouldBeClosed() && !armingWidget) Policies.apply(this@HomeActivity)
             }
             lockIfNeeded()
         }
@@ -254,6 +264,7 @@ class HomeActivity : ComponentActivity() {
             override fun handleOnBackPressed() = when (screen) {
                 Screen.Folder -> screen = Screen.Drawer
                 Screen.HabitsPicker -> screen = Screen.Habits
+                Screen.BedtimeApps -> screen = Screen.Bedtime
                 Screen.FlowApps -> screen = Screen.FlowState
                 Screen.LimitApps -> screen = Screen.Limits
                 Screen.ChooseApps, Screen.Sites, Screen.WidgetPicker, Screen.Folders, Screen.Bedtime,
@@ -409,6 +420,7 @@ class HomeActivity : ComponentActivity() {
                                 prefs.bedtimeEnd,
                                 prefs.bedtimeDays,
                             )
+                            bedtimeApps = prefs.bedtimeApps
                             screen = Screen.Bedtime
                         },
                         onFlowState = {
@@ -429,10 +441,17 @@ class HomeActivity : ComponentActivity() {
                         onBack = ::goHome,
                     )
                     Screen.ChooseApps -> ChooseAppsScreen(
-                        apps = permittable,
-                        chosen = prefs.allowed,
-                        onDone = ::saveChosen,
+                        apps = blockable,
+                        // Por paquete, como se bloquea: un ícono que cambió con
+                        // una actualización no deja la app bloqueada sin poder sacarla.
+                        chosen = blockable.filter { it.packageName in prefs.blockedPackages }.mapTo(mutableSetOf()) { it.key },
+                        onDone = ::saveBlocked,
                         onBack = { screen = Screen.Admin },
+                        title = "Apps bloqueadas",
+                        hint = "Con Slowtown activo, las que marques no se abren. Lo que instales después se " +
+                            "abre hasta que lo bloquees. Las llamadas, los SMS y las alarmas no se bloquean, " +
+                            "y lo que Slowtown bloquea siempre no aparece. Cuáles se ven en Inicio se elige " +
+                            "aparte, deslizando para arriba en Inicio.",
                     )
                     Screen.Notifications -> NotificationsScreen(
                         apps = permittable,
@@ -440,8 +459,22 @@ class HomeActivity : ComponentActivity() {
                     )
                     Screen.Bedtime -> BedtimeScreen(
                         settings = bedtimeSettings,
+                        appNames = blockable.filter { it.packageName in bedtimeApps }.map { it.label }.distinct(),
                         onChange = ::saveBedtime,
+                        onChooseApps = { screen = Screen.BedtimeApps },
                         onBack = { screen = Screen.Admin },
+                    )
+                    Screen.BedtimeApps -> ChooseAppsScreen(
+                        apps = blockable.filter { it.packageName !in prefs.blockedPackages },
+                        chosen = blockable.filter { it.packageName in bedtimeApps }.mapTo(mutableSetOf()) { it.key },
+                        onDone = { keys ->
+                            saveBedtimeApps(packagesOf(keys))
+                            screen = Screen.Bedtime
+                        },
+                        onBack = { screen = Screen.Bedtime },
+                        title = "Apps de Bedtime",
+                        hint = "De noche se abren sólo las que marques, además de las llamadas, los SMS, " +
+                            "el reloj y las alarmas.",
                     )
                     Screen.FlowState -> FlowStateScreen(
                         settings = flowSettings,
@@ -767,7 +800,7 @@ class HomeActivity : ComponentActivity() {
     /** Arma la política fuera del hilo principal y después sigue con [then]. */
     private fun applyPolicy(then: () -> Unit = {}) {
         lifecycleScope.launch {
-            withContext(Dispatchers.Default) { Policies.apply(this@HomeActivity, prefs.allowedPackages) }
+            withContext(Dispatchers.Default) { Policies.apply(this@HomeActivity) }
             then()
         }
     }
@@ -820,7 +853,7 @@ class HomeActivity : ComponentActivity() {
         lifecycleScope.launch {
             // Con Slowtown activo, con cable o sin él: la sesión es lo que deja pasar.
             if (Rules.active(this@HomeActivity)) {
-                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages, infoOnly) }
+                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, infoOnly) }
             }
             runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 .onFailure { Log.w(TAG, "No pude abrir $target", it) }
@@ -933,7 +966,7 @@ class HomeActivity : ComponentActivity() {
      */
     private fun startFreeSession() {
         lifecycleScope.launch {
-            withContext(Dispatchers.Default) { FreeSession.start(this@HomeActivity, prefs.allowedPackages) }
+            withContext(Dispatchers.Default) { FreeSession.start(this@HomeActivity) }
             screen = Screen.Home
             refreshStatus()
             refreshApps()
@@ -978,7 +1011,7 @@ class HomeActivity : ComponentActivity() {
     private fun pickWidget(choice: WidgetChoice) {
         lifecycleScope.launch {
             if (Rules.active(this@HomeActivity)) {
-                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity, prefs.allowedPackages) }
+                withContext(Dispatchers.Default) { AdminSession.start(this@HomeActivity) }
             }
             discardPendingWidget()
             val id = widgetHost.allocateAppWidgetId()
@@ -1091,12 +1124,22 @@ class HomeActivity : ComponentActivity() {
         widget = info?.let { id to it }
     }
 
-    private fun saveChosen(keys: Set<String>) {
-        prefs.allowed = keys
+    private fun saveBlocked(keys: Set<String>) {
+        prefs.blocked = keys
         // Con Slowtown activo, la lista nueva rige desde ya.
         if (shouldBeClosed()) applyPolicy()
         screen = Screen.Admin
         refreshApps()
+    }
+
+    /** Las apps de Bedtime: si es de noche, rigen desde ya. */
+    private fun saveBedtimeApps(packages: Set<String>) {
+        prefs.bedtimeApps = packages
+        bedtimeApps = packages
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { Bedtime.refresh(this@HomeActivity) }
+            refreshApps()
+        }
     }
 
     private fun leaveSafeMode() {
@@ -1171,7 +1214,7 @@ class HomeActivity : ComponentActivity() {
     private fun holdText(packageName: String, hold: Rules.Hold): String {
         val label = appLabel(packageName)
         return when (hold) {
-            Rules.Hold.NotAllowed -> "$label no está entre las apps permitidas."
+            Rules.Hold.Blocked -> "$label está bloqueada."
             Rules.Hold.Night -> "Es Bedtime: $label vuelve a las ${minutesText(prefs.bedtimeEnd)}."
             is Rules.Hold.Flow -> hold.until?.let { "Es Flow State: $label vuelve a las ${it.format(HHMM)}." }
                 ?: "Es Flow State: $label vuelve cuando termine."
@@ -1213,30 +1256,36 @@ class HomeActivity : ComponentActivity() {
             val all = withContext(Dispatchers.Default) { AppCatalog.all(this@HomeActivity) }
                 .filterNot { it.packageName in vetoed }
             val active = Rules.active(this@HomeActivity)
-            val allowed = prefs.allowed
+            // Lo que no puede faltar no se bloquea, y lo que no se abre nunca
+            // no se elige: ninguno de los dos va en la lista de bloqueadas.
+            val (blocked, always, never) = withContext(Dispatchers.Default) {
+                Triple(Rules.blocked(this@HomeActivity), Rules.always(this@HomeActivity), Rules.alwaysBlocked(this@HomeActivity))
+            }
             // Con «Habilitar todo» en curso se ven todas, como sin Slowtown. De
-            // noche, sólo el reloj y las alarmas.
+            // noche, lo que no puede faltar (llamadas, SMS, el reloj y las
+            // alarmas) y las apps de Bedtime.
             val nightNow = active && Bedtime.restricts(this@HomeActivity)
             val nightApps = if (nightNow) withContext(Dispatchers.Default) { Bedtime.apps(this@HomeActivity) } else emptySet()
+            val chosenForNight = prefs.bedtimeApps
             val visible = when {
                 !active || FreeSession.isActive(this@HomeActivity) -> all
-                nightNow -> all.filter { it.packageName in nightApps }
-                else -> all.filter { it.key in allowed }
+                nightNow -> all.filter {
+                    it.packageName in always || (it.packageName in chosenForNight && it.packageName !in blocked)
+                }
+                else -> all.filter { it.packageName !in blocked }
             }
             val chosen = prefs.favorites
             permittable = AppCatalog.permittable(all)
+            blockable = permittable.filter { it.packageName !in always && it.packageName !in never }
             openable = visible
             favorites = chosen
             // Ocultar es sólo de la lista de todas: Inicio las muestra igual.
             hidden = prefs.hiddenApps
             folders = prefs.folders
-            homeApps = if (nightNow) visible else visible.filter { it.key in chosen }
-            held = if (active && !nightNow) withContext(Dispatchers.Default) { heldOf(visible) } else emptyMap()
-            homeHint = if (active && visible.isEmpty()) {
-                "Mantené apretada ${if (prefs.showClock) "la hora" else "la fecha"} para elegir las apps permitidas."
-            } else {
-                "Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá."
-            }
+            // De noche, el reloj y las alarmas siempre, y de las de Bedtime, las de Inicio.
+            homeApps = visible.filter { it.key in chosen || (nightNow && it.packageName in nightApps) }
+            held = if (active) withContext(Dispatchers.Default) { heldOf(visible) } else emptyMap()
+            homeHint = "Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá."
         }
     }
 

@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import com.slowtown.launcher.Prefs
 import com.slowtown.launcher.notif.WavesListener
 import kotlin.concurrent.thread
 
@@ -25,7 +24,7 @@ import kotlin.concurrent.thread
  * lector ([WavesListener]), porque mientras suena una de WhatsApp el audio
  * todavía no cambió.
  *
- * Sólo cuentan las apps permitidas de día: una que Marcos nunca permitió no
+ * No cuentan las apps bloqueadas ([Rules.blocked]): una que Marcos bloqueó no
  * entra por una llamada. Corre adentro del lector y del Inicio: nada de acá
  * tira una excepción.
  */
@@ -103,15 +102,15 @@ object CallGuard {
     /** Si hay una llamada en curso o sonando: telefónica o de una app (WhatsApp). */
     fun inCall(context: Context): Boolean = audioInCall(context) || packages(context).isNotEmpty()
 
-    /** Las apps permitidas que tienen una llamada en curso o sonando, para sumarlas a la lista de lock task. */
+    /** Las apps no bloqueadas que tienen una llamada en curso o sonando, para sumarlas a la lista de lock task. */
     fun packages(context: Context): Set<String> = runCatching {
         val calls = load(context)
         // Sin el lector no llega el aviso de que una llamada terminó: lo anotado ya no vale.
         if (calls.isEmpty() || !listening(context)) {
             emptySet<String>()
         } else {
-            val allowed = Prefs(context).allowedPackages
-            packagesOf(calls).filterTo(mutableSetOf()) { it in allowed }
+            val blocked = Rules.blocked(context)
+            packagesOf(calls).filterTo(mutableSetOf()) { it !in blocked }
         }
     }.onFailure { Log.w(TAG, "No pude leer las llamadas", it) }.getOrDefault(emptySet<String>())
 

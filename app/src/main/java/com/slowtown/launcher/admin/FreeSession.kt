@@ -48,14 +48,14 @@ object FreeSession {
      * Arranca, si quedan: anota la vez, habilita todo y agenda el final.
      * Hace consultas al sistema: fuera del hilo principal.
      */
-    fun start(context: Context, allowed: Collection<String>): Boolean {
+    fun start(context: Context): Boolean {
         val prefs = Prefs(context)
         val now = System.currentTimeMillis()
         val uses = recentUses(context)
         if (uses.size >= USES) return false
         prefs.freeSessionUses = (uses + now).joinToString(",")
         prefs.freeSessionUntil = now + LENGTH_MS
-        Policies.openForAdmin(context, allowed)
+        Policies.openForAdmin(context)
         val app = context.applicationContext
         context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
@@ -82,7 +82,7 @@ object FreeSession {
         prefs.freeSessionUntil = 0L
         context.getSystemService(AlarmManager::class.java).cancel(endIntent(context))
         if (prefs.closed && !CrashGuard.inSafeMode(context) && Policies.isDeviceOwner(context)) {
-            Policies.apply(context, prefs.allowedPackages)
+            Policies.apply(context)
         }
     }
 

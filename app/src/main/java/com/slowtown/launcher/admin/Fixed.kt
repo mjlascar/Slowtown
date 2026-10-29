@@ -15,7 +15,7 @@ import com.slowtown.launcher.R
  * Vale con Slowtown en pausa, durante «Habilitar todo» y la sesión de
  * administración, y en modo seguro, porque lo guarda Android y no depende de
  * que Slowtown esté corriendo. El nivel 1 es el de la configuración: las apps
- * permitidas y las páginas que se suman ([com.slowtown.launcher.Prefs.blockedSites]).
+ * bloqueadas y las páginas que se suman ([com.slowtown.launcher.Prefs.blockedSites]).
  */
 object Fixed {
 

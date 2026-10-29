@@ -7,6 +7,11 @@
          navegador de prueba del emulador (src/debug/res/values/strings.xml). -->
     <string name="page_guard_browsers" translatable="false">com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary</string>
 
+    <!-- Las apps que ofrecen «sólo los grupos» en las notificaciones por
+         oleadas: WhatsApp y WhatsApp Business. La variante de prueba suma
+         «Avisos de prueba» (src/debug/res/values/strings.xml). -->
+    <string name="waves_group_apps" translatable="false">com.whatsapp,com.whatsapp.w4b</string>
+
     <!-- El bloqueo de páginas sin cable, como lo muestra Android en Ajustes > Accesibilidad. -->
     <string name="page_guard_label">Slowtown: páginas bloqueadas</string>
     <string name="page_guard_description">Slowtown mira la dirección de la página abierta en Chrome y, si es una de las bloqueadas, vuelve atrás. No mira otras apps ni el resto de la pantalla, no guarda lo que visitás y no manda nada a ningún lado. Se apaga acá mismo.</string>

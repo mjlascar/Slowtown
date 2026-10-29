@@ -282,7 +282,9 @@ desinstalar.
   (2022) les exige accesibilidad digital, lo que hace improbable un bloqueo
   general; uno contra apps desconocidas con accesibilidad sigue siendo
   posible. Los bancos y billeteras tienen excepción para `QUERY_ALL_PACKAGES`
-  «por seguridad»: pueden ver qué hay instalado.
+  «por seguridad»: pueden ver qué hay instalado. **En el S10e, con el bloqueo
+  de páginas prendido (accesibilidad de una app instalada desde GitHub), sus
+  bancos y Mercado Pago andan igual** (lo contó Marcos el 29/10).
 - **La alternativa que Google les recomienda** (diciembre de 2025) es marcar
   las pantallas sensibles con `accessibilityDataSensitive`: desde Android 16,
   un servicio que no es herramienta de accesibilidad no las puede leer ni

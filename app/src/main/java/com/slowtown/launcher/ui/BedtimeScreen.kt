@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,21 +29,26 @@ data class BedtimeSettings(val enabled: Boolean, val start: Int, val end: Int, v
 
 /**
  * Bedtime, en la administración: con contraseña, porque cambiar la hora,
- * sacar una noche o apagarla afloja.
+ * sacar una noche, sumar una app o apagarla afloja.
+ *
+ * @param appNames las apps que se abren de noche, además del reloj y las
+ *   alarmas (las eligió Marcos el 29/10).
  */
 @Composable
 fun BedtimeScreen(
     settings: BedtimeSettings,
+    appNames: List<String>,
     onChange: (BedtimeSettings) -> Unit,
+    onChooseApps: () -> Unit,
     onBack: () -> Unit,
 ) {
     val (enabled, start, end, days) = settings
     FormScaffold(title = "Bedtime", onBack = onBack) {
         HintText(
-            "De noche sólo se abren el reloj y las alarmas, además de llamadas, SMS y " +
-                "emergencias. Para usar el teléfono, ráfagas de 5 minutos desde Inicio, sin " +
-                "contraseña. Rige con Slowtown activo. Las llamadas no se cortan, tampoco " +
-                "las de WhatsApp si está entre las permitidas.",
+            "De noche sólo se abren el reloj, las alarmas y las apps que elijas abajo, además " +
+                "de llamadas, SMS y emergencias. Para usar el teléfono, ráfagas de 5 minutos " +
+                "desde Inicio, sin contraseña. Rige con Slowtown activo. Las llamadas no se " +
+                "cortan, tampoco las de WhatsApp si no está bloqueada.",
         )
         Row(
             Modifier
@@ -66,6 +72,13 @@ fun BedtimeScreen(
             }
         }
         if (days.isEmpty()) ErrorText("Sin ninguna noche elegida, no rige nunca.")
+
+        Text("Qué se abre de noche", style = MaterialTheme.typography.titleMedium)
+        Text(
+            (listOf("El reloj y las alarmas") + appNames).joinToString(", "),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        OutlinedButton(onClick = onChooseApps, modifier = Modifier.fillMaxWidth()) { Text("Elegir las apps") }
     }
 }
 

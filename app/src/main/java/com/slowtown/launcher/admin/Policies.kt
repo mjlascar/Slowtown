@@ -25,9 +25,9 @@ object Policies {
      * de notificaciones sin los ajustes rápidos (sin engranaje no hay camino a
      * Ajustes), la barra de estado, la pantalla de bloqueo (sin KEYGUARD no hay
      * bloqueo aunque haya PIN) y el menú de apagado. Recientes queda afuera.
-     * BLOCK_ACTIVITY_START_IN_TASK cierra la otra puerta: sin él, una app
-     * permitida puede abrir dentro de su tarea pantallas de paquetes que no
-     * están en la lista, Ajustes incluido.
+     * BLOCK_ACTIVITY_START_IN_TASK cierra la otra puerta: sin él, una app de la
+     * lista puede abrir dentro de su tarea pantallas de paquetes que no están,
+     * Ajustes incluido.
      */
     private const val FEATURES =
         DevicePolicyManager.LOCK_TASK_FEATURE_HOME or
@@ -94,7 +94,7 @@ object Policies {
      * cada llamada sumaba una regla más en disco (en el emulador llegó a 30).
      */
     @Synchronized
-    fun apply(context: Context, packages: Collection<String>) {
+    fun apply(context: Context) {
         if (!isDeviceOwner(context)) return
         val dpm = dpm(context)
         val admin = admin(context)
@@ -103,7 +103,7 @@ object Policies {
         // task sin pantalla de bloqueo y sacar el PIN (le pasó a otro proyecto
         // con este mismo diseño).
         if (dpm.getLockTaskFeatures(admin) != FEATURES) dpm.setLockTaskFeatures(admin, FEATURES)
-        setPackages(context, effectivePackages(context, packages))
+        setPackages(context, effectivePackages(context))
         dpm.clearPackagePersistentPreferredActivities(admin, context.packageName)
         dpm.addPersistentPreferredActivity(
             admin,
@@ -121,19 +121,19 @@ object Policies {
      * vuelta a Inicio.
      */
     @Synchronized
-    fun refreshPackages(context: Context, packages: Collection<String>) {
+    fun refreshPackages(context: Context) {
         if (!isDeviceOwner(context)) return
-        setPackages(context, effectivePackages(context, packages))
+        setPackages(context, effectivePackages(context))
     }
 
     /**
      * La lista que corresponde ahora, según [Rules]: lo que no puede faltar,
-     * las permitidas que no frenan la noche, Flow State o los límites, y la
-     * app de una llamada. Con una sesión en curso (administración o «Habilitar
+     * lo que no está bloqueado ni lo frenan la noche, Flow State o los
+     * límites, y la app de una llamada. Con una sesión en curso (administración o «Habilitar
      * todo»), todo lo instalado: rearmar la política no la puede cortar antes.
      */
-    private fun effectivePackages(context: Context, packages: Collection<String>): Set<String> {
-        val allowed = Rules.allowed(context, packages)
+    private fun effectivePackages(context: Context): Set<String> {
+        val allowed = Rules.allowed(context)
         val admin = AdminSession.isActive(context)
         return when {
             FreeSession.isActive(context) -> allowed + installed(context)
@@ -151,9 +151,9 @@ object Policies {
      * vuelve a la lista de siempre y el sistema cierra lo que quedó afuera.
      */
     @Synchronized
-    fun openForAdmin(context: Context, packages: Collection<String>) {
+    fun openForAdmin(context: Context) {
         if (!isDeviceOwner(context)) return
-        setPackages(context, effectivePackages(context, packages))
+        setPackages(context, effectivePackages(context))
     }
 
     // La variante con PackageInfoFlags recién existe en API 33.

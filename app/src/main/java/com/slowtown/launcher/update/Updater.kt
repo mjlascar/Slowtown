@@ -174,7 +174,7 @@ object Updater {
             // Sin cable, la guardia deja pasar esa pantalla de Ajustes en una
             // sesión chica, como la información de una app.
             if (Rules.mode(context) == Rules.Mode.GUARD) {
-                AdminSession.start(context, Prefs(context).allowedPackages, infoOnly = true)
+                AdminSession.start(context, infoOnly = true)
             }
             show(
                 context,

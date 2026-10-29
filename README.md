@@ -16,18 +16,20 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   elegiste y tus hábitos, cada parte del tamaño y en el lugar que quieras.
   Deslizando para arriba, todas las apps, con carpetas, buscador y apps
   ocultas que sólo aparecen al buscarlas; para abajo, las notificaciones.
-- **Slowtown activo:** sólo se abren las apps permitidas. Con Device Owner
+- **Slowtown activo:** no se abren las apps que bloqueaste (ni Ajustes, el
+  instalador y los otros navegadores). Con Device Owner
   (por cable) es lock task: no hay Recientes ni ajustes rápidos, e Inicio es
   siempre Slowtown. Sin cable, una guardia vuelve a Inicio si se abre algo que
   no corresponde, como las apps de bloqueo de la Play Store. La configuración
   pide una contraseña larga.
 - **Dos niveles:** el primero es lo que se cambia con la contraseña (las apps
-  permitidas y las páginas que se suman). El segundo sólo cambia con una
+  bloqueadas y las páginas que se suman). El segundo sólo cambia con una
   versión nueva de Slowtown: las políticas de Chrome, con la lista de
   bloqueo por defecto de la Universidad Toulouse Capitole, y las apps que no se
   abren nunca.
-- **Bedtime:** de noche sólo se abren el reloj y las alarmas (y las
-  llamadas, SMS y emergencias). Para usar el teléfono, ráfagas de 5 minutos.
+- **Bedtime:** de noche sólo se abren el reloj, las alarmas y las apps que
+  elijas (y las llamadas, SMS y emergencias). Para usar el teléfono, ráfagas
+  de 5 minutos.
   Nunca corta una llamada, tampoco las de WhatsApp.
 - **Flow State:** en los horarios que elijas, cada uno con sus días, no se
   abren las apps que distraen. También con ráfagas de 5 minutos.
@@ -73,8 +75,8 @@ Android da desde Ajustes: «Acceso a datos de uso» y «Acceso a
 notificaciones».
 
 Con el acceso a datos de uso y Slowtown como Inicio, se activa sin cable
-(mantené apretada la hora → «Activar Slowtown»): sólo las apps permitidas,
-Bedtime, Flow State y los límites por app, con una guardia que vuelve a Inicio
+(mantené apretada la hora → «Activar Slowtown»): las apps bloqueadas,
+Bedtime (con las apps que elijas para la noche), Flow State y los límites por app, con una guardia que vuelve a Inicio
 si se abre algo que no corresponde. Se esquiva más fácil que el cierre por
 cable (con el modo seguro, por ejemplo). Las páginas bloqueadas, sin cable,
 las hace cumplir Slowtown mirando la dirección de Chrome, con el permiso de

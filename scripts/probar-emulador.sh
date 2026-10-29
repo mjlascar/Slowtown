@@ -4,8 +4,8 @@
 # script: al teléfono sólo llega lo que ya anduvo acá, con llamadas y SMS
 # probados con Slowtown activo.
 #
-# En orden: instala y provisiona, activa Slowtown con cuatro apps, intenta
-# escaparse, abre una app permitida, mira el tiempo de pantalla de Inicio
+# En orden: instala y provisiona, activa Slowtown con el Calendario bloqueado
+# y cuatro apps en Inicio, intenta escaparse, abre una app que no está bloqueada, mira el tiempo de pantalla de Inicio
 # (sube con un rato en el Reloj, y sin el acceso al uso no está), cambia cómo
 # se ve Inicio (al 80 % se achica, sin la hora grande encabeza la fecha, y con
 # ella la hora de la barra de arriba se esconde mientras Inicio está al
@@ -106,8 +106,6 @@ TXT_HORA_RE='^[0-9]{1,2}:[0-9]{2}$'          # la hora grande de Inicio: viene p
 TXT_FECHA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+( · [0-9]{1,3} %)?$'   # «Lunes 19 de octubre», con la batería si la barra está escondida
 TXT_FECHA_BATERIA_RE='^[^ ]+ [0-9]{1,2} de [^ ]+ · [0-9]{1,3} %$'   # sin el permiso de adb: «Lunes 19 de octubre · 54 %»
 TXT_INICIO_SIN_APPS='Deslizá para arriba para ver todas las apps, y mantené apretada una para ponerla acá.'
-# Activo y sin permitidas. Nombra lo que se ve arriba: la hora grande o, sin ella, la fecha.
-TXT_INICIO_SIN_PERMITIDAS_RE='^Mantené apretada la (hora|fecha) para elegir las apps permitidas\.$'
 TXT_INICIO_FALLOS='se colgó varias veces seguidas y se pausó solo'   # un pedazo del aviso en Inicio
 TXT_REVISAR_HORA='Mantené apretada la hora para revisarlo.'     # el final de ese aviso, con la hora grande...
 TXT_REVISAR_FECHA='Mantené apretada la fecha para revisarlo.'   # ...y sin ella
@@ -121,13 +119,13 @@ TXT_CLAVE_ESPERA='Demasiados intentos'
 TXT_ADMIN='Administración'
 TXT_ADMIN_FALLOS='Modo a prueba de fallos'
 TXT_SALIR_FALLOS='Ya lo revisé: salir del modo a prueba de fallos'
-TXT_ELEGIR_APPS='Elegir las apps permitidas'
+TXT_ELEGIR_APPS='Elegir las apps bloqueadas'
 TXT_ELEGIR_WIDGET='Elegir el widget de Inicio'
 TXT_ACTIVAR='Activar Slowtown'
 TXT_PAUSAR='Pausar Slowtown'
 TXT_IR_AJUSTES='Ir a Ajustes'
-TXT_APPS_TITULO='Apps permitidas'
-TXT_APPS_PISTA='Con Slowtown activo, las que no marques no se abren. Las llamadas y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, deslizando para arriba en Inicio.'
+TXT_APPS_TITULO='Apps bloqueadas'
+TXT_APPS_PISTA='Con Slowtown activo, las que marques no se abren. Lo que instales después se abre hasta que lo bloquees. Las llamadas, los SMS y las alarmas no se bloquean, y lo que Slowtown bloquea siempre no aparece. Cuáles se ven en Inicio se elige aparte, deslizando para arriba en Inicio.'
 # La flecha de arriba de cada pantalla de la administración: no tiene texto,
 # y «Volver» es su descripción (ui la compara igual que un texto).
 TXT_VOLVER='Volver'
@@ -189,6 +187,7 @@ TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
 TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 2 semanas»
 TXT_DORMIR='Bedtime'                         # el botón de la administración y el título de su pantalla
 TXT_DORMIR_PRENDIDA=Prendida                 # su interruptor
+TXT_BEDTIME_APPS='Apps de Bedtime'           # el título del selector de las que se abren de noche («Elegir las apps», al pie de Bedtime)
 TXT_EMPIEZA=Empieza                          # sus dos filas de hora, cada una con dos ruedas: horas y minutos
 TXT_TERMINA=Termina
 TXT_ES_DE_NOCHE='Es Bedtime, andá a dormir'  # el aviso de Inicio de noche: tocarlo muestra (o esconde) la ráfaga
@@ -210,17 +209,17 @@ TXT_NINGUNA='Ninguna todavía.'               # los límites, sin ninguno
 TXT_MAS_TIEMPO='Más tiempo: '                # el «+» de cada app con límite, por su descripción: «Más tiempo: Camera»
 TXT_SACAR=Sacar                              # sacarle el límite a una app
 TXT_LIMITE_FRENADA_RE='^(.+) llegó a su límite de hoy \((.+)\)\. Vuelve mañana\.$'   # lo que dice Inicio al cerrarla
-TXT_NO_PERMITIDA_RE='^(.+) no está entre las apps permitidas\.$'   # lo que dice Inicio cuando la guardia frena una app
+TXT_BLOQUEADA_RE='^(.+) está bloqueada\.$'   # lo que dice Inicio cuando la guardia frena una app bloqueada
 TXT_SIN_CABLE='activo, sin cable'            # el estado de Slowtown en la administración, sin Device Owner
 TXT_SIN_LISTA='Sin cable, Chrome no recibe esta lista: por ahora no bloquea ninguna.'   # «Páginas bloqueadas» sin Device Owner ni el permiso
 TXT_BLOQUEARLAS='Bloquearlas en Chrome'      # su botón: explica qué mira el permiso y manda a Ajustes
 TXT_BLOQUEARLAS_TITULO='Bloquearlas sin cable'   # el título de esa explicación
 TXT_IR_A_AJUSTES='Ir a Ajustes'              # su botón
 TXT_APAGARLO='Apagarlo en Ajustes'           # «Páginas bloqueadas» con el permiso prendido
-APP_FLOW=Camera                              # la permitida que frenan Flow State y su límite (el Reloj no: es de las alarmas)
+APP_FLOW=Camera                              # la que frenan Flow State y su límite (el Reloj no: es de las alarmas)
 TXT_NOTIFICACIONES=Notificaciones            # el botón de la administración y el título de su pantalla
 TXT_OLEADAS='Llegan por oleadas'             # su interruptor
-TXT_OLEADAS_PISTA='en silencio, a las horas de abajo'   # un pedazo de su explicación: las entregas no suenan
+TXT_OLEADAS_PISTA='todas juntas, en silencio'   # un pedazo de su explicación: las entregas no suenan
 TXT_ENTREGA='Nueva entrega'                  # las ruedas del horario que se suma: «Nueva entrega, hora: 09»
 TXT_AGREGAR_LAS='Agregar las '               # su botón: «Agregar las 09:00»
 TXT_SOLO_GRUPOS='Sólo los grupos: '          # debajo de cada app que espera, por su descripción: «Sólo los grupos: WhatsApp»
@@ -243,11 +242,11 @@ TXT_FORZADA_VUELVE='ya se puede abrir:'           # con --forzar: una línea por
 
 # ── Textos del emulador ─────────────────────────────────────────────────────
 # La imagen AOSP de Android 12 está en inglés.
-APPS_INICIO=(Phone Messaging Camera Clock)   # las que se permiten (y, sin tocar nada, las de Inicio)
-APP_RELOJ=Clock                              # la app permitida que se abre
+APPS_INICIO=(Phone Messaging Camera Clock)   # las de Inicio (se ponen desde la lista de todas)
+APP_RELOJ=Clock                              # la app que se abre (las alarmas no se bloquean)
 APP_QUITAR=Camera                            # la que se saca de Inicio y se vuelve a poner
 APP_AJUSTES=Settings                         # ni en el selector de apps ni, activo, en la lista de todas
-APP_CALENDARIO=Calendar                      # instalada y no permitida: con Slowtown activo, no se lista
+APP_CALENDARIO=Calendar                      # la bloqueada: con Slowtown activo, no se lista ni se abre
 BUSQUEDA=clo                                 # lo que se escribe en el buscador: deja sólo APP_RELOJ
 WIDGET_RELOJ='Analog clock'                  # widget del Reloj de AOSP, sin pantalla de configuración
 PAQUETE_RELOJ=com.android.deskclock          # el que dibuja ese widget (y el reloj que queda de noche)
@@ -304,7 +303,7 @@ PANEL_PROHIBIDO_RE='settings_button|quick_qs_panel|quick_settings_panel|Open set
 # ── Ventanas (lo que muestra mCurrentFocus en dumpsys window) ───────────────
 FOCO_INICIO="$PAQUETE/$PAQUETE.HomeActivity"
 FOCO_PANEL=NotificationShade
-FOCO_BLOQUEO=BlockedAppActivity       # «App is not available»: así frena lock task a una app no permitida
+FOCO_BLOQUEO=BlockedAppActivity       # «App is not available»: así frena lock task a una app bloqueada
 FOCO_SELECTOR=ResolverActivity        # el selector de Inicio de Android
 FOCO_ERROR='Application Error'        # el diálogo de crash
 FOCO_RELOJ=com.android.deskclock/
@@ -1012,10 +1011,10 @@ etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una po
   while IFS=$'\t' read -r x y arriba abajo t; do
     [[ -n $pie ]] && (( arriba >= pie )) && continue
     [[ $t =~ $TXT_HORA_RE || $t =~ $TXT_FECHA_RE || $t =~ $TXT_PANTALLA_RE || $t =~ $TXT_PANTALLA_CORTO_RE ]] && continue
-    [[ $t == "$TXT_INICIO_SIN_APPS" || $t =~ $TXT_INICIO_SIN_PERMITIDAS_RE || $t == "$TXT_TODAS" ]] && continue
+    [[ $t == "$TXT_INICIO_SIN_APPS" || $t == "$TXT_TODAS" ]] && continue
     [[ $t == "$TXT_ES_DE_NOCHE" || $t == "$TXT_USAR_5" || $t =~ $TXT_ES_FLOW_RE ]] && continue
     # Por qué se frenó una app: aviso, no app.
-    [[ $t =~ $TXT_NO_PERMITIDA_RE || $t =~ $TXT_FLOW_FRENADA_RE || $t =~ $TXT_LIMITE_FRENADA_RE ]] && continue
+    [[ $t =~ $TXT_BLOQUEADA_RE || $t =~ $TXT_FLOW_FRENADA_RE || $t =~ $TXT_LIMITE_FRENADA_RE ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
     printf '%s\n' "$t"
   done < <(ui textos)
@@ -1026,8 +1025,7 @@ esperar_lista_inicio() {   # hasta que Inicio muestre sus apps o el cartel de ay
   # sin que falte nada.
   local fin=$((SECONDS + 15))
   while (( SECONDS < fin )); do
-    if volcar_ui && { [ -n "$(etiquetas_inicio)" ] || ui texto "$TXT_INICIO_SIN_APPS" >/dev/null ||
-      ui regex "$TXT_INICIO_SIN_PERMITIDAS_RE" >/dev/null; }; then
+    if volcar_ui && { [ -n "$(etiquetas_inicio)" ] || ui texto "$TXT_INICIO_SIN_APPS" >/dev/null; }; then
       return 0
     fi
     sleep 0.5
@@ -1250,6 +1248,18 @@ abrir_cajon() {   # desde Inicio, deslizando para arriba, hasta la lista de toda
 }
 
 etiquetas_cajon() { ui filas | cut -f1; }   # las apps de la lista en el último volcado
+esperar_en_cajon() {   # esperar_en_cajon SEGUNDOS APP si|no: hasta que la lista de todas tenga (o no) a APP; deja lo visto en LISTA
+  local fin=$((SECONDS + $1)) vistas
+  while :; do
+    if volcar_ui; then
+      vistas=$(etiquetas_cajon)
+      LISTA=$(en_una_linea <<<"$vistas")
+      if grep -qxF "$2" <<<"$vistas"; then [ "$3" = si ] && return 0; else [ "$3" = no ] && return 0; fi
+    fi
+    (( SECONDS < fin )) || return 1
+    sleep 0.5
+  done
+}
 
 favoritas_en_cajon() {   # las que la lista marca «en Inicio» en el último volcado
   # Buscando, la nota lleva antes la carpeta, y en las ocultas «oculta», pero
@@ -1523,7 +1533,7 @@ minutos_de() {   # minutos_de TIEMPO: «1 h 5 min» → 65, «2 h» → 120, «4
   [[ -n $h || -n $m ]] || return 1
   echo $(( ${h:-0} * 60 + ${m:-0} ))
 }
-volver_desde_el_reloj() {   # abre el Reloj (permitido) y vuelve a Inicio: así Inicio se reanuda
+volver_desde_el_reloj() {   # abre el Reloj (no se bloquea) y vuelve a Inicio: así Inicio se reanuda
   disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
   esperar 10 "$(c_foco "$FOCO_RELOJ")"
   ir_a_inicio
@@ -1629,27 +1639,30 @@ paso_1() {
 
 # ── 2. Activar Slowtown ─────────────────────────────────────────────────────
 paso_2() {
-  titulo 2 "Activar Slowtown con ${APPS_INICIO[*]}"
-  local out l n mostradas esperadas faltan=()
+  titulo 2 "Activar Slowtown con $APP_CALENDARIO bloqueada y ${APPS_INICIO[*]} en Inicio"
+  local out l n mostradas esperadas faltan=() bloqueadas otras
   local -A en_inicio=()
   out=$(disp cmd package set-home-activity "$INICIO_COMPONENTE")
   if grep -q Success <<<"$out"; then ok "Slowtown queda como Inicio"; else mal "set-home-activity: $out"; fi
   ir_a_inicio || abortar "Inicio no lleva a Slowtown ($(foco))"
   esperar_lista_inicio || abortar "Inicio de Slowtown no termina de cargar"
-  # Lo que ya está en Inicio (de una corrida anterior) dice qué tocar en el
-  # selector para que queden marcadas justo las cuatro: Inicio muestra las
-  # permitidas mientras nadie elija otras, y el paso 8 deja todo como estaba.
+  # Las de Inicio se ponen desde la lista de todas, sin contraseña. Lo que ya
+  # está (de una corrida anterior) dice qué poner y qué sacar.
   while IFS= read -r l; do
     [ -n "$l" ] && en_inicio[$l]=1
   done < <(etiquetas_inicio)
   (( ${#en_inicio[@]} )) && nota "Inicio ya mostraba: ${!en_inicio[*]}"
-  CAMBIAR=()
   for l in "${APPS_INICIO[@]}"; do
-    [[ -n ${en_inicio[$l]+x} ]] || CAMBIAR[$l]=1
+    [[ -n ${en_inicio[$l]+x} ]] && continue
+    { abrir_cajon && accion_en_cajon "$l" "$TXT_PONER_EN_INICIO"; } || faltan+=("$l")
+    ir_a_inicio
   done
   for l in "${!en_inicio[@]}"; do
-    es_de_inicio "$l" || CAMBIAR[$l]=1
+    es_de_inicio "$l" && continue
+    { abrir_cajon && accion_en_cajon "$l" "$TXT_SACAR_DE_INICIO"; } || faltan+=("$l")
+    ir_a_inicio
   done
+  (( ${#faltan[@]} )) && mal "no pude poner o sacar de Inicio: ${faltan[*]}"
 
   entrar_admin || abortar "no pude entrar a la administración"
   ok "mantener apretada la fecha y la contraseña llevan a la administración"
@@ -1658,24 +1671,36 @@ paso_2() {
     tocar_desplazando texto "$TXT_SALIR_FALLOS"
   fi
 
+  # Bloqueada, justo $APP_CALENDARIO. Las casillas no se leen con uiautomator:
+  # lo que ya estaba bloqueado se lee de lo que guardó Slowtown.
+  CAMBIAR=()
+  bloqueadas=$(conjunto blocked)
+  grep -q "^${FOCO_CALENDARIO}" <<<"$bloqueadas" || CAMBIAR[$APP_CALENDARIO]=1
+  otras=$(grep -v "^${FOCO_CALENDARIO}" <<<"$bloqueadas" | en_una_linea)
+  [ -n "$otras" ] && abortar "quedaron bloqueadas de una corrida anterior: $otras (probá con --limpio)"
   { tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; } ||
     abortar "«$TXT_ELEGIR_APPS» no abre el selector"
   recorrer_selector || abortar "no pude recorrer el selector de apps"
   for l in "${!CAMBIAR[@]}"; do
     [ "${CAMBIAR[$l]}" = hecho ] || faltan+=("$l")
   done
-  (( ${#faltan[@]} )) && mal "no pude marcar o desmarcar en el selector: ${faltan[*]}"
-  if [[ -n ${VISTAS[$APP_AJUSTES]+x} ]]; then
-    mal "«$APP_AJUSTES» aparece en el selector de apps"
+  (( ${#faltan[@]} )) && mal "no pude marcar en el selector: ${faltan[*]}"
+  # Ajustes no se elige (no se abre nunca), y lo que no puede faltar no se bloquea.
+  faltan=()
+  for l in "$APP_AJUSTES" Phone Messaging "$APP_RELOJ"; do
+    [[ -n ${VISTAS[$l]+x} ]] && faltan+=("$l")
+  done
+  if (( ${#faltan[@]} )); then
+    mal "el selector de bloqueadas ofrece ${faltan[*]}"
   else
-    ok "«$APP_AJUSTES» no aparece en el selector (que lista ${#VISTAS[@]} apps)"
+    ok "ni $APP_AJUSTES ni las llamadas, los SMS y el reloj aparecen en el selector (que lista ${#VISTAS[@]} apps)"
   fi
   volcar_ui
   n=$(contar_listo)
-  if [ "$n" = "${#APPS_INICIO[@]}" ]; then
-    ok "quedan marcadas ${#APPS_INICIO[@]}"
+  if [ "$n" = 1 ]; then
+    ok "queda marcada $APP_CALENDARIO"
   else
-    abortar "el selector dice «Listo (${n:-?})» y tendrían que ser ${#APPS_INICIO[@]} (si quedó otro Inicio de una corrida que falló, probá con --limpio)"
+    abortar "el selector dice «Listo (${n:-?})» y tendría que ser 1 (si quedó otra de una corrida que falló, probá con --limpio)"
   fi
   { tocar regex "$TXT_LISTO_RE" && esperar_ui 10 texto "$TXT_ADMIN"; } ||
     abortar "«Listo» no vuelve a la administración"
@@ -1701,7 +1726,7 @@ paso_2() {
 # ── 3. Intentos de escape ───────────────────────────────────────────────────
 paso_3() {
   titulo 3 "Intentos de escape"
-  local hallado xy x y fin
+  local hallado xy x y fin vuelta
   ir_a_inicio
 
   # Ajustes rápidos: con lock task, el panel tiene que abrir sin ellos (sin
@@ -1735,12 +1760,21 @@ paso_3() {
   adb_t 20 shell cmd statusbar expand-notifications >/dev/null 2>&1
   esperar 5 "$(c_foco "$FOCO_PANEL")"
   # El foco llega antes de que el panel termine de abrirse, y el pie aparece
-  # al final (con muchas notificaciones, un volcado al toque no lo vio): se espera.
+  # al final (con muchas notificaciones, un volcado al toque no lo vio): se
+  # espera. Con las que se juntan de corridas anteriores, el pie queda abajo,
+  # fuera de la vista (pasó el 29/10): después de dos intentos se corre la lista.
   xy=''
-  fin=$((SECONDS + 8))
+  vuelta=0
+  fin=$((SECONDS + 12))
   until [ -n "$xy" ] || (( SECONDS >= fin )); do
     volcar_ui --windows && { xy=$(ui id "$ID_GESTIONAR") || xy=$(ui texto "$TXT_GESTIONAR"); }
-    [ -n "$xy" ] || sleep 0.5
+    if [ -z "$xy" ]; then
+      if (( ++vuelta > 2 && vuelta < 7 )); then
+        arrastrar 75 35
+        [[ $(foco) == *"$FOCO_PANEL"* ]] || adb_t 20 shell cmd statusbar expand-notifications >/dev/null 2>&1
+      fi
+      sleep 0.5
+    fi
   done
   if [ -n "$xy" ]; then
     captura panel-manage
@@ -1756,9 +1790,9 @@ paso_3() {
   fi
 }
 
-# ── 4. Una app permitida ────────────────────────────────────────────────────
+# ── 4. Una app que no está bloqueada ───────────────────────────────────────
 paso_4() {
-  titulo 4 "App permitida: $APP_RELOJ"
+  titulo 4 "Una app que no está bloqueada: $APP_RELOJ"
   ir_a_inicio
   if ! tocar_en_inicio texto "$APP_RELOJ"; then
     mal "no encuentro «$APP_RELOJ» en Inicio"
@@ -1809,7 +1843,7 @@ paso_4b() {
     mal "«$t1» no se lee a la derecha de $arriba, en su renglón y en una línea"
   fi
 
-  # Un rato en una app permitida (la pantalla no se apaga: svc power stayon, del paso 0).
+  # Un rato en una app que se abre (la pantalla no se apaga: svc power stayon, del paso 0).
   disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
   if esperar 10 "$(c_foco "$FOCO_RELOJ")"; then
     nota "70 segundos en el Reloj"
@@ -2155,7 +2189,7 @@ paso_6() {
 # ── 7. Todas las apps ───────────────────────────────────────────────────────
 paso_7() {
   titulo 7 "Todas las apps, con Slowtown activo"
-  local esperadas
+  local esperadas vistas faltan a fin
   esperadas=$(printf '%s\n' "${APPS_INICIO[@]}" | sort -u)
   ir_a_inicio
   # Deslizando para arriba, sin inercia: «↑ todas las apps» viene escondido.
@@ -2165,12 +2199,21 @@ paso_7() {
     return
   fi
   ok "deslizar para arriba abre la lista de todas las apps"
-  if esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
-    ok "lista justo las permitidas, ${APPS_INICIO[*]}: ni $APP_CALENDARIO ni $APP_AJUSTES"
+  # Todas menos las bloqueadas: las de Inicio entre ellas, y ni el Calendario
+  # ni Ajustes. La lista carga en segundo plano.
+  fin=$((SECONDS + 10))
+  while :; do
+    volcar_ui && vistas=$(etiquetas_cajon)
+    faltan=()
+    for a in "${APPS_INICIO[@]}"; do grep -qxF "$a" <<<"$vistas" || faltan+=("$a"); done
+    (( ${#faltan[@]} == 0 || SECONDS >= fin )) && break
+    sleep 0.5
+  done
+  if (( ${#faltan[@]} == 0 )) && ! grep -qxF -e "$APP_CALENDARIO" -e "$APP_AJUSTES" <<<"$vistas"; then
+    ok "lista ${APPS_INICIO[*]} y las demás, sin $APP_CALENDARIO (bloqueada) ni $APP_AJUSTES"
   else
-    mal "lista «$LISTA» y tendrían que ser justo ${APPS_INICIO[*]}"
+    mal "lista «$(en_una_linea <<<"$vistas")»: faltan «${faltan[*]}», o están $APP_CALENDARIO o $APP_AJUSTES"
   fi
-  # Mientras nadie elija, las de Inicio son las permitidas.
   if [ "$(favoritas_en_cajon | sort -u)" = "$esperadas" ]; then
     ok "las ${#APPS_INICIO[@]} llevan la nota «$TXT_EN_INICIO»"
   else
@@ -2607,8 +2650,7 @@ paso_9() {
 # ── 9b. Carpetas ────────────────────────────────────────────────────────────
 paso_9b() {
   titulo 9b "Carpetas: se crean en la configuración y una app se mueve manteniéndola apretada"
-  local mayus="${CARPETA^^}" sueltas=() a
-  for a in "${APPS_INICIO[@]}"; do [ "$a" = "$APP_CARPETA" ] || sueltas+=("$a"); done
+  local mayus="${CARPETA^^}"
   ir_a_inicio
 
   # Crearla: en la configuración, no en la lista (en el uso diario, menos botones).
@@ -2643,8 +2685,8 @@ paso_9b() {
   fi
   if ! mover_a_carpeta "$APP_CARPETA" "$CARPETA"; then
     mal "mantener apretada $APP_CARPETA no ofrece «$TXT_MOVER_A_CARPETA» o, en el segundo diálogo, «$CARPETA»"
-  elif esperar_apps 10 etiquetas_cajon "${sueltas[@]}"; then
-    ok "«$TXT_MOVER_A_CARPETA» y, en el segundo diálogo, «$CARPETA» sacan $APP_CARPETA de la lista suelta: quedan ${sueltas[*]}"
+  elif esperar_en_cajon 10 "$APP_CARPETA" no; then
+    ok "«$TXT_MOVER_A_CARPETA» y, en el segundo diálogo, «$CARPETA» sacan $APP_CARPETA de la lista suelta"
   else
     mal "después de moverla, la lista suelta muestra «$LISTA»"
   fi
@@ -2672,7 +2714,7 @@ paso_9b() {
   # Borrarla: sus apps vuelven a la lista. Deja todo como estaba.
   if entrar_admin && tocar_desplazando texto "$TXT_CARPETAS" && esperar_ui 10 texto "$mayus" && tocar texto "$TXT_BORRAR"; then
     ir_a_inicio
-    if abrir_cajon && esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
+    if abrir_cajon && esperar_en_cajon 10 "$APP_CARPETA" si; then
       ok "borrar $mayus devuelve $APP_CARPETA a la lista"
     else
       mal "después de borrar la carpeta, la lista muestra «$LISTA»"
@@ -2877,9 +2919,9 @@ paso_9d() {
 
 nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se ve desde la administración
   local root=$1 vistos='' vuelta busqueda
-  # La lista de apps permitidas: ni se puede permitir. Se recorre sin tocar
-  # nada y se sale con «Volver», la flecha de arriba, que no se corre con la
-  # lista.
+  # La lista de bloqueadas: lo del nivel 2 no aparece, porque está bloqueado
+  # siempre. Se recorre sin tocar nada y se sale con «Volver», la flecha de
+  # arriba, que no se corre con la lista.
   if tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; then
     CAMBIAR=()
     if ! recorrer_selector; then
@@ -2992,7 +3034,7 @@ nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se 
     ir_a_inicio
   else
     if esperar_ui 10 texto "$APP_CALENDARIO"; then
-      ok "en pausa, la lista de todas tiene también las no permitidas, como $APP_CALENDARIO"
+      ok "en pausa, la lista de todas tiene también las bloqueadas, como $APP_CALENDARIO"
     else
       mal "en pausa, la lista de todas no muestra $APP_CALENDARIO: así no prueba nada"
     fi
@@ -3158,6 +3200,8 @@ falta_de_noche() {   # en el último volcado de Inicio, lo que no está como de 
   ui texto "$TXT_ES_DE_NOCHE" >/dev/null || falta+=" sin «$TXT_ES_DE_NOCHE»"
   ui texto "$TXT_USAR_5" >/dev/null && falta+=" con «$TXT_USAR_5» a la vista"
   ui texto "$APP_RELOJ" >/dev/null || falta+=" sin $APP_RELOJ"
+  # Las llamadas no se esconden de noche: el Teléfono, si está en Inicio, sigue.
+  ui texto Phone >/dev/null || falta+=" sin Phone"
   ui texto "$APP_QUITAR" >/dev/null && falta+=" con $APP_QUITAR"
   echo "$falta"
 }
@@ -3288,7 +3332,7 @@ paso_9e() {
 
   ir_a_inicio
   if esperar_sin_faltas 15 falta_de_noche; then
-    ok "Inicio de noche: «$TXT_ES_DE_NOCHE» y $APP_RELOJ, sin $APP_QUITAR ni «$TXT_USAR_5» a la vista"
+    ok "Inicio de noche: «$TXT_ES_DE_NOCHE», $APP_RELOJ y Phone, sin $APP_QUITAR ni «$TXT_USAR_5» a la vista"
   else
     mal "Inicio de noche no está como tendría que estar:$FALTA"
   fi
@@ -3314,7 +3358,7 @@ paso_9e() {
   ir_a_inicio
   dormir_noches "$desde" "$hasta"
 
-  # La ráfaga: sin contraseña, vuelven las permitidas.
+  # La ráfaga: sin contraseña, vuelven las de siempre.
   if ! empezar_rafaga; then
     mal "no pude empezar la ráfaga: tocar «$TXT_ES_DE_NOCHE» y después «$TXT_USAR_5»"
   else
@@ -3452,9 +3496,10 @@ dormir_noches() {   # dormir_noches DESDE HASTA: con la noche ya rigiendo, en In
 # La noche no corta llamadas (admin/CallGuard.kt) y rige sólo con el teléfono
 # en uso (Bedtime.inUse): con la pantalla apagada o bloqueada la lista es la
 # de día, para que una llamada por internet pueda abrir su pantalla. Se mira
-# con la cámara (permitida, y de noche afuera) y con «Avisos de prueba», que
-# se permite para esto: su llamada es de pantalla completa, como la de
-# WhatsApp. Corre de noche, con Bedtime prendida.
+# con la cámara (de día se abre, y de noche queda afuera) y con «Avisos de
+# prueba»: su llamada es de pantalla completa, como la de WhatsApp. Con ella se
+# prueban también las apps de Bedtime, que de noche entran a la lista. Corre de
+# noche, con Bedtime prendida.
 c_despierta() { echo "dumpsys power | grep -q 'mWakefulness=Awake'"; }        # la pantalla prendida
 c_bloqueada() { echo "dumpsys window | grep -q 'isKeyguardShowing=true'"; }  # la pantalla de bloqueo, también tapada por otra
 apagar_pantalla() { adb_t 20 shell input keyevent KEYCODE_SLEEP >/dev/null 2>&1; esperar 10 "! $(c_despierta)"; }
@@ -3544,15 +3589,27 @@ paso_9e_llamadas() {
   # completa se abre y prende la pantalla. Al cortar y desbloquear, la noche.
   if ! instalar_avisos; then
     mal "no pude armar o instalar «$AVISOS_NOMBRE»"
-  elif ! permitir_avisos; then
-    mal "no pude permitir «$AVISOS_NOMBRE» en «$TXT_ELEGIR_APPS»"
+  elif avisos_bloqueada; then
+    mal "«$AVISOS_NOMBRE» quedó bloqueada (en «$TXT_ELEGIR_APPS»): así no prueba nada"
   else
-    ok "«$AVISOS_NOMBRE» se instala y queda permitida (en «$TXT_ELEGIR_APPS», con la contraseña)"
+    ok "«$AVISOS_NOMBRE» se instala y, como no está bloqueada, de día se abre"
     ir_a_inicio
     if esperar 15 "! $(c_en_lock_task "$AVISOS")"; then
-      ok "de noche, en uso, «$AVISOS_NOMBRE» queda afuera de la lista, como toda permitida"
+      ok "de noche, en uso, «$AVISOS_NOMBRE» queda afuera de la lista, como toda la que no es de Bedtime"
     else
       mal "de noche, en uso, «$AVISOS_NOMBRE» está en la lista de lock task"
+    fi
+    # Las apps de Bedtime, que elige el usuario: de noche entran a la lista.
+    if elegir_de_noche "$AVISOS_NOMBRE" && esperar 15 "$(c_en_lock_task "$AVISOS")"; then
+      ok "marcada en «$TXT_BEDTIME_APPS», de noche «$AVISOS_NOMBRE» entra a la lista"
+    else
+      mal "marcada en «$TXT_BEDTIME_APPS», «$AVISOS_NOMBRE» no entra a la lista de noche"
+    fi
+    captura bedtime-apps
+    if elegir_de_noche "$AVISOS_NOMBRE" && esperar 15 "! $(c_en_lock_task "$AVISOS")"; then
+      ok "y desmarcada, vuelve a quedar afuera"
+    else
+      mal "desmarcada de «$TXT_BEDTIME_APPS», «$AVISOS_NOMBRE» sigue en la lista de noche"
     fi
     if ! { apagar_pantalla && esperar 15 "$(c_en_lock_task "$AVISOS")"; }; then
       mal "con la pantalla apagada, «$AVISOS_NOMBRE» no vuelve a la lista de lock task"
@@ -3622,19 +3679,16 @@ desinstalar_avisos() {
   avisos "--es que borrar" >/dev/null
   grep -q Success <<<"$(adb_t 60 uninstall "$AVISOS" 2>&1)"
 }
-avisos_permitida() {   # si «Avisos de prueba» está entre las permitidas que guardó Slowtown
-  grep -q "^$AVISOS/" <<<"$(conjunto allowed)"
+avisos_bloqueada() {   # si «Avisos de prueba» está entre las bloqueadas que guardó Slowtown
+  grep -q "^$AVISOS/" <<<"$(conjunto blocked)"
 }
-permitir_avisos() {   # la suma a las permitidas, desde la administración (si ya estaba, de una corrida anterior, no toca nada)
-  local n
-  avisos_permitida && return 0
+elegir_de_noche() {   # elegir_de_noche APP: en Bedtime, «Elegir las apps», la marca (o la desmarca) y «Listo»
   entrar_admin || return 1
-  { tocar_desplazando texto "$TXT_ELEGIR_APPS" && esperar_ui 10 texto "$TXT_APPS_TITULO"; } || return 1
-  CAMBIAR=(["$AVISOS_NOMBRE"]=1)
-  recorrer_selector && [ "${CAMBIAR[$AVISOS_NOMBRE]}" = hecho ] || return 1
-  { tocar regex "$TXT_LISTO_RE" && esperar_ui 10 texto "$TXT_ADMIN"; } || return 1
+  { tocar_desplazando texto "$TXT_DORMIR" && esperar_ui 10 texto "$TXT_DORMIR_PRENDIDA"; } || return 1
+  { tocar_desplazando texto "$TXT_ELEGIR_LAS_APPS" && esperar_ui 10 texto "$TXT_BEDTIME_APPS"; } || return 1
+  tocar_desplazando texto "$1" || return 1
+  { tocar regex "$TXT_LISTO_RE" && esperar_ui 10 texto "$TXT_DORMIR_PRENDIDA"; } || return 1
   ir_a_inicio
-  esperar 10 "run-as $PAQUETE cat shared_prefs/slowtown.xml | grep -q '<string>$AVISOS/'" && avisos_permitida
 }
 
 # ── 9f. Notificaciones por oleadas ──────────────────────────────────────────
@@ -3924,7 +3978,7 @@ salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Noti
 }
 
 # ── 9g. El menú de una app en la lista de todas ─────────────────────────────
-# Con «Avisos de prueba», que quedó instalada y permitida de 9e y 9f.
+# Con «Avisos de prueba», que quedó instalada de 9e y 9f (no está bloqueada).
 # «Ocultar de la lista» la saca de la lista, pero buscándola aparece igual,
 # con la nota «oculta»; «Mostrar en la lista» la devuelve. «Información de la
 # app» es una pantalla de Ajustes: con Slowtown activo pide la contraseña y la
@@ -3944,10 +3998,10 @@ esperar_oculta() {   # esperar_oculta si|no: hasta que «Avisos de prueba» est�
 
 paso_9g() {
   titulo 9g "El menú de una app en la lista de todas: ocultarla, su información y desinstalarla"
-  local con=("${APPS_INICIO[@]}" "$AVISOS_NOMBRE") nota_vista=''
+  local nota_vista=''
   ir_a_inicio
-  if ! instalar_avisos || ! permitir_avisos; then
-    mal "no pude instalar o permitir «$AVISOS_NOMBRE»: sin ella no hay qué ocultar ni desinstalar"
+  if ! instalar_avisos || avisos_bloqueada; then
+    mal "no pude instalar «$AVISOS_NOMBRE», o quedó bloqueada: sin ella no hay qué ocultar ni desinstalar"
     desinstalar_avisos
     ir_a_inicio
     return
@@ -3960,16 +4014,16 @@ paso_9g() {
     mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
   else
-    if ! esperar_apps 10 etiquetas_cajon "${con[@]}"; then
+    if ! esperar_en_cajon 10 "$AVISOS_NOMBRE" si; then
       if grep -q "^$AVISOS/" <<<"$(conjunto hidden_apps)"; then
         # Una corrida cortada en el medio: lo que sigue la vuelve a mostrar.
         nota "«$AVISOS_NOMBRE» quedó oculta de una corrida anterior"
       else
-        mal "antes de ocultarla, la lista tendría que tener ${con[*]}, y tiene «$LISTA»"
+        mal "antes de ocultarla, la lista tendría que tener «$AVISOS_NOMBRE», y tiene «$LISTA»"
       fi
-    elif accion_en_cajon "$AVISOS_NOMBRE" "$TXT_OCULTAR" && esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}" &&
+    elif accion_en_cajon "$AVISOS_NOMBRE" "$TXT_OCULTAR" && esperar_en_cajon 10 "$AVISOS_NOMBRE" no &&
       esperar_oculta si; then
-      ok "«$TXT_OCULTAR» saca a «$AVISOS_NOMBRE» de la lista (quedan ${APPS_INICIO[*]}), y Slowtown la guarda entre las ocultas"
+      ok "«$TXT_OCULTAR» saca a «$AVISOS_NOMBRE» de la lista, y Slowtown la guarda entre las ocultas"
     else
       mal "«$TXT_OCULTAR» no sacó a «$AVISOS_NOMBRE» de la lista: «$LISTA» (ocultas: $(conjunto hidden_apps | en_una_linea))"
     fi
@@ -3992,7 +4046,7 @@ paso_9g() {
     else
       # Irse de la lista borra la búsqueda.
       volver_del_cajon || ir_a_inicio
-      if abrir_cajon && esperar_apps 10 etiquetas_cajon "${con[@]}" && esperar_oculta no; then
+      if abrir_cajon && esperar_en_cajon 10 "$AVISOS_NOMBRE" si && esperar_oculta no; then
         ok "«$TXT_MOSTRAR» la devuelve a la lista"
       else
         mal "después de «$TXT_MOSTRAR», la lista dice «$LISTA» (ocultas: $(conjunto hidden_apps | en_una_linea))"
@@ -4002,8 +4056,8 @@ paso_9g() {
   fi
 
   # Su información, que es de Ajustes: sin contraseña (lo decidió Marcos el
-  # 22/10), en una sesión chica que suma sólo Ajustes. El Calendario, que no
-  # está permitido, tiene que seguir afuera.
+  # 22/10), en una sesión chica que suma sólo Ajustes. El Calendario, que está
+  # bloqueado, tiene que seguir afuera.
   if ! abrir_cajon; then
     mal "deslizar para arriba no abre la lista de todas las apps"
     ir_a_inicio
@@ -4012,7 +4066,7 @@ paso_9g() {
       [ "$(estado)" = LOCKED ]; then
       ok "«$TXT_INFO_APP» abre la de Ajustes sin contraseña, con Slowtown activo ($(resumida))"
       if esperar 5 "$(c_sesion)" && ! esperar 2 "$(c_en_lock_task com.android.calendar)"; then
-        ok "la sesión suma sólo Ajustes: el Calendario, que no está permitido, sigue afuera"
+        ok "la sesión suma sólo Ajustes: el Calendario, que está bloqueado, sigue afuera"
       else
         mal "la sesión de la información de la app no es la chica: tendría que sumar Ajustes y nada más"
       fi
@@ -4040,8 +4094,8 @@ paso_9g() {
     fi
     captura desinstalar
     if tocar texto "$TXT_DESINSTALAR" && esperar 30 "! pm path $AVISOS 2>/dev/null | grep -q '^package:'" &&
-      esperar_apps 10 etiquetas_cajon "${APPS_INICIO[@]}"; then
-      ok "confirmado, la desinstala sin el diálogo de Android: $AVISOS ya no está, y la lista vuelve a ser ${APPS_INICIO[*]}"
+      esperar_en_cajon 10 "$AVISOS_NOMBRE" no; then
+      ok "confirmado, la desinstala sin el diálogo de Android: $AVISOS ya no está, ni en la lista"
     else
       mal "confirmado «$TXT_DESINSTALAR», $AVISOS $(hay_paquete "$AVISOS" && echo 'sigue instalada' || echo 'ya no está'), y la lista dice «$LISTA»"
     fi
@@ -4741,7 +4795,7 @@ paso_9h() {
 # baja de una tienda), Slowtown cierra con la guardia: con el acceso a los
 # datos de uso y siendo el Inicio, vuelve a Inicio si adelante queda una app
 # que no corresponde. Se libera por cable, se activa desde la administración y
-# se prueba con una app no permitida, con Ajustes, con una permitida, con una
+# se prueba con una app bloqueada, con Ajustes, con una que no lo está, con una
 # sesión de administración y en pausa.
 actividad_de() {   # actividad_de PAQUETE: su pantalla de inicio, como paquete/clase
   disp cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$1" | tail -n 1
@@ -4795,9 +4849,9 @@ paso_15() {
   ir_a_inicio
   afirmar_en_inicio "sin cable no hay lock task" NONE
   calendario=$(actividad_de com.android.calendar)
-  if frenada_por_la_guardia "$APP_CALENDARIO, que no está permitida" "$FOCO_CALENDARIO" -n "$calendario"; then
-    if esperar_ui 10 regex "$TXT_NO_PERMITIDA_RE"; then
-      ok "e Inicio dice «$(ui textos | cut -f5 | grep -Em1 "$TXT_NO_PERMITIDA_RE")»"
+  if frenada_por_la_guardia "$APP_CALENDARIO, que está bloqueada" "$FOCO_CALENDARIO" -n "$calendario"; then
+    if esperar_ui 10 regex "$TXT_BLOQUEADA_RE"; then
+      ok "e Inicio dice «$(ui textos | cut -f5 | grep -Em1 "$TXT_BLOQUEADA_RE")»"
     else
       mal "Inicio no dice por qué volvió"
     fi
@@ -4806,9 +4860,9 @@ paso_15() {
   frenada_por_la_guardia "$APP_AJUSTES" "$FOCO_AJUSTES" -a android.settings.SETTINGS
   disp am start -n "$RELOJ_ACTIVIDAD" >/dev/null
   if esperar 8 "$(c_foco "$FOCO_RELOJ")" && sostener 4 "$(c_foco "$FOCO_RELOJ")"; then
-    ok "$APP_RELOJ, que está permitida, se abre y se queda"
+    ok "$APP_RELOJ, que no está bloqueada, se abre y se queda"
   else
-    mal "$APP_RELOJ, que está permitida, no se queda abierta ($(foco))"
+    mal "$APP_RELOJ, que no está bloqueada, no se queda abierta ($(foco))"
   fi
   ir_a_inicio
 

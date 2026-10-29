@@ -50,6 +50,7 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
     var groupsOnly by remember { mutableStateOf(initial.groupsOnly) }
     var words by remember { mutableStateOf(initial.alwaysPass) }
     val access = remember { WavesListener.hasAccess(context) }
+    val groupApps = remember { Waves.groupApps(context) }
 
     var hour by remember { mutableIntStateOf(9) }
     var minute by remember { mutableIntStateOf(0) }
@@ -119,9 +120,9 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
 
     FormScaffold(title = "Notificaciones", onBack = onBack) {
         HintText(
-            "Las notificaciones de las apps que marques abajo no llegan en el momento: " +
-                "esperan y llegan todas juntas, en silencio, a las horas que elijas. " +
-                "Después se tocan y se responden como siempre.",
+            "Las notificaciones de las apps que marques abajo no te interrumpen: se guardan " +
+                "y llegan todas juntas, en silencio, a las horas que elijas. Después se abren " +
+                "y se responden como siempre.",
         )
         if (!access) {
             ErrorText(
@@ -198,14 +199,15 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
             }
         }
 
-        Text("Qué apps esperan", style = MaterialTheme.typography.titleMedium)
+        // «Qué apps esperan» no se entendía (lo dijo Marcos el 29/10).
+        Text("Apps que avisan a horario", style = MaterialTheme.typography.titleMedium)
         HintText(
-            "Marcá las apps cuyas notificaciones querés que esperen. Las llamadas, las " +
-                "alarmas, la música y lo que está en curso (un viaje, una descarga) " +
-                "llegan siempre en el momento. A veces una suena al llegar, antes de " +
-                "quedar esperando.",
+            "Marcá las que no querés que te interrumpan: sus notificaciones se guardan y te " +
+                "llegan a las horas de arriba. Las llamadas, las alarmas, la música y lo que " +
+                "está en curso (un viaje, una descarga) llegan igual en el momento. A veces " +
+                "una suena un instante antes de guardarse.",
         )
-        if (enabled && packages.isEmpty()) HintText("Todavía no elegiste ninguna: no espera nada.")
+        if (enabled && packages.isEmpty()) HintText("Todavía no marcaste ninguna: llegan todas en el momento.")
         choices.forEach { app ->
             val checked = app.packageName in packages
             // En una columna, para que «sólo los grupos» quede pegado a su app.
@@ -223,7 +225,9 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
                     Spacer(Modifier.width(12.dp))
                     Text(app.label, style = MaterialTheme.typography.titleMedium)
                 }
-                if (checked) {
+                // Sólo en WhatsApp, la única en la que se reconoce bien un grupo
+                // (y en otra que ya lo tenía, para poder sacarlo).
+                if (checked && (app.packageName in groupApps || app.packageName in groupsOnly)) {
                     val onlyGroups = app.packageName in groupsOnly
                     Row(
                         Modifier

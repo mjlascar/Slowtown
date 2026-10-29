@@ -21,11 +21,12 @@ import kotlin.concurrent.thread
 
 /**
  * La hora de dormir: entre [Prefs.bedtimeStart] y [Prefs.bedtimeEnd], con
- * Slowtown activo, sólo se abren el reloj y las alarmas, además de lo de
- * siempre ([Essentials]: llamadas, SMS, emergencias). Para usar el teléfono,
- * ráfagas de [BURST_MS] sin contraseña desde Inicio: vuelven las apps
- * permitidas, y al terminar el sistema cierra lo que quedó afuera. Lo pidió
- * Marcos para dejar de usar el teléfono tan tarde.
+ * Slowtown activo, sólo se abren el reloj, las alarmas y las apps que eligió
+ * el usuario ([Prefs.bedtimeApps], desde el 29/10), además de lo de siempre
+ * ([Essentials]: llamadas, SMS, emergencias). Para usar el teléfono, ráfagas
+ * de [BURST_MS] sin contraseña desde Inicio: vuelven las apps de siempre, y al
+ * terminar el sistema cierra lo que quedó afuera. Lo pidió Marcos para dejar
+ * de usar el teléfono tan tarde.
  *
  * El principio y el final de la noche los agenda el sistema, así que llegan
  * aunque haya otra app abierta: la lista de lock task se achica y Android
@@ -175,7 +176,7 @@ object Bedtime {
         val prefs = Prefs(app)
         if (prefs.appLimits.isNotEmpty()) Limits.check(app)
         if (mode == Rules.Mode.LOCK_TASK) {
-            Policies.refreshPackages(app, prefs.allowedPackages)
+            Policies.refreshPackages(app)
             val am = app.getSystemService(AlarmManager::class.java)
             if (restricts(app) && CallGuard.inCall(app)) {
                 am.setAndAllowWhileIdle(

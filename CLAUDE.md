@@ -18,8 +18,10 @@ cable: la guardia»): se esquiva más fácil, pero no pide adb ni sacar las
 cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
 `scripts/provisionar.sh`. Con él, «Activar Slowtown» es lock task:
 
-- sólo se abren las apps de Inicio y las esenciales (`Essentials`: llamadas,
-  SMS, emergencias, alertas y las pantallas de sistema que abren las apps);
+- se abre todo lo instalado menos las bloqueadas y lo que no se abre nunca
+  (`Rules.alwaysBlocked`); las esenciales (`Essentials`: llamadas, SMS,
+  emergencias, alertas y las pantallas de sistema que abren las apps) no se
+  bloquean;
 - el panel de notificaciones queda, pero sin ajustes rápidos ni engranaje;
 - no hay Recientes, e Inicio es siempre Slowtown;
 - Ajustes y todo lo demás se alcanza sólo desde la administración, que pide
@@ -28,23 +30,33 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
 
 ## Inicio
 
-- **Permitidas** (`Prefs.allowed`): las que se pueden abrir con Slowtown
-  activo. Se eligen en la administración, con contraseña, porque aflojan las
-  reglas. Ajustes y la Galaxy Store no se pueden elegir; la Play Store sí,
-  desde el 22/10 (Marcos la quiere a mano para bajar una app fuera de casa):
-  lo que se instala no abre hasta permitirlo, y lo del nivel 2 se pausa
-  apenas se instala. La contraseña es larga, Marcos no la memoriza y la deja anotada
+- **Bloqueadas** (`Prefs.blocked`): las que no se abren con Slowtown activo.
+  Hasta el 29/10 se elegían las permitidas y lo demás quedaba cerrado; Marcos
+  prefirió elegir las bloqueadas, y lo que se instala después queda abierto
+  hasta bloquearlo (la lista vieja pasa sola a bloqueadas, una vez, en
+  `SlowtownApp`). Se eligen en la administración, con contraseña: sacar una
+  afloja. No se eligen lo que no puede faltar (`Rules.always`: llamadas, SMS,
+  alarmas, Bienestar digital), que no se bloquea, ni lo que no se abre nunca
+  (`Rules.alwaysBlocked`): Ajustes, la Galaxy Store, la accesibilidad y el
+  mantenimiento de Samsung, el instalador de Android (salvo cuando lo abre
+  Slowtown), el nivel 2 (`Vetoed`: `Fixed.APPS` y los navegadores que no son
+  Chrome) y, de terceros, lo que no tiene ícono (una app que se esconde no se
+  podría bloquear) y los otros Inicios (desde Olauncher se pide ser el Inicio,
+  y sin serlo Slowtown la guardia se apaga), con cable o sin él. Con la lista de permitidas esto quedaba
+  cerrado solo; con la de bloqueadas hay que nombrarlo. La Play Store se abre
+  (Marcos la quiere a mano para bajar una app fuera de casa, 22/10), salvo que
+  se bloquee. La contraseña es larga, Marcos no la memoriza y la deja anotada
   en papel en su casa (decisión suya): aflojar algo exige estar ahí.
-- **En Inicio** (`Prefs.favorites`): cuáles de las permitidas se ven en
-  Inicio. Sin contraseña, porque no aflojan nada; se ponen y se sacan
-  manteniendo apretada una app en la lista de todas.
+- **En Inicio** (`Prefs.favorites`): cuáles se ven en Inicio (con Slowtown
+  activo, las bloqueadas no). Sin contraseña, porque no aflojan nada; se ponen
+  y se sacan manteniendo apretada una app en la lista de todas.
 - **Todas las apps**: deslizando para arriba. «↑ todas las apps», el renglón
   que lo abre con un toque, viene escondido desde el 27/10 (Marcos no lo
   quiere a la vista) y se muestra en «Cómo se ve Inicio». Arriba
   las carpetas, en dos columnas; debajo, las apps que no están en ninguna.
   El buscador ignora tildes, busca también adentro de las carpetas y Enter
   abre la primera; el teclado se abre recién al tocarlo (lo pidió Marcos).
-  Con Slowtown activo lista sólo las permitidas.
+  Con Slowtown activo no lista las bloqueadas.
 - **Carpetas** (`Prefs.folders`, JSON): se crean, renombran y borran en la
   configuración, no en la lista: Marcos quiere menos botones en el uso
   diario. Una app se mueve a una carpeta manteniéndola apretada en la lista
@@ -104,7 +116,7 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   administración y se arma en una sesión de administración, porque la
   configuración del widget es de su app. `provisionar.sh` corre `appwidget
   grantbind` para que Android no muestre su diálogo de permiso, que es de
-  Ajustes. Para que tocarlo abra su app, esa app tiene que estar permitida.
+  Ajustes. Con Slowtown activo, tocarlo no abre su app si está bloqueada.
 
 ## Hábitos y tiempo de pantalla
 
@@ -148,6 +160,13 @@ Alarmy, `droom.sleepIfUCan`, con la que Marcos se despierta, y los relojes de
 fábrica). Las alarmas están en la lista siempre, de día también: si no, con
 Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
 
+- **Qué se abre de noche** (`Prefs.bedtimeApps`, lo pidió Marcos el 29/10):
+  además del reloj y las alarmas, las apps que se eligen al pie de Bedtime
+  («Elegir las apps», con su propio selector, «Apps de Bedtime»). Por paquete;
+  una bloqueada no se abre aunque esté elegida. De noche la lista de todas
+  muestra lo que no puede faltar (llamadas, SMS, el reloj y las alarmas) y las
+  elegidas, e Inicio, el reloj y las alarmas, y de las demás, las de Inicio.
+
 - **Qué noches** (`Prefs.bedtimeDays`, de entrada todas): un círculo por día
   en la pantalla de Bedtime, para dejar libres, por ejemplo, el viernes y el
   sábado (lo pidió Marcos). Cada noche es del día en que empieza
@@ -158,7 +177,7 @@ Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
 - **Ráfagas de 5 minutos** (sin contraseña y sin tope: la fricción es volver
   a pedirla): de noche Inicio dice «Es *Bedtime*, andá a dormir», y tocándolo
   aparece «Usar 5 minutos» (Marcos no lo quiere siempre a la vista). Vuelven
-  las apps permitidas, y al terminar el sistema cierra lo que quedó afuera.
+  las apps de siempre, y al terminar el sistema cierra lo que quedó afuera.
 - El principio y el final los agenda el sistema (`Bedtime.Tick`, alarma
   exacta: `provisionar.sh` da `SCHEDULE_EXACT_ALARM` por adb), así que llegan
   aunque haya otra app abierta. Al volver a Inicio, además,
@@ -171,7 +190,7 @@ Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
 - **No corta llamadas** (`admin/CallGuard.kt`, lo pidió Marcos). Las del
   teléfono pasan siempre (`Essentials`), pero las de WhatsApp son de una app.
   Mientras hay una llamada (el modo de audio, o una notificación de llamada
-  de una app permitida, que le pasa `WavesListener`), la noche espera y la app
+  de una app que no está bloqueada, que le pasa `WavesListener`), la noche espera y la app
   de la llamada está en la lista; al cortar, a los 5 segundos se achica (el
   margen es por las apps que cambian la notificación al atender). Mientras
   dura, se vuelve a mirar cada minuto.
@@ -189,7 +208,7 @@ Slowtown activo la alarma de la mañana no podría mostrar su pantalla.
 
 Los dos los pidió Marcos el 27/10, y los dos viven en la administración, con
 contraseña (achicarlos afloja). Rigen con Slowtown activo, con cable o sin
-él, y frenan una app de las permitidas: con Device Owner sale de la lista de
+él, y frenan una app que no está bloqueada: con Device Owner sale de la lista de
 lock task (Android la cierra si estaba abierta); sin cable, la guardia vuelve
 a Inicio. En Inicio quedan en gris, y tocarlas dice por qué y hasta cuándo.
 Nunca frenan lo que no puede faltar (`Rules.always`) ni la app de una llamada.
@@ -226,24 +245,25 @@ encima: los bancos los miran mal.
 
 - **Activar sin cable** (`Rules.Mode.GUARD`): la administración deja activar
   Slowtown si tiene las dos cosas, y si falta una, ofrece darla. Rige todo lo
-  mismo que con lock task: las permitidas, Bedtime, Flow State, los límites y
+  mismo que con lock task: las bloqueadas, Bedtime, Flow State, los límites y
   las dos sesiones (con una, la guardia deja pasar). El instalador de Android
   pasa sólo un par de minutos después de que Slowtown lo abre (para
   desinstalar una app de la lista o confirmar una actualización,
-  `Guard.allowInstaller`): si pasara siempre, una app permitida que ofrezca
+  `Guard.allowInstaller`): si pasara siempre, una app que ofrezca
   desinstalar podría sacar a Slowtown. La pantalla de Ajustes del permiso
   para instalar, que pide la actualización sin Device Owner, va en una sesión
   chica, como la información de una app. No frena la barra del sistema ni
-  los Inicios (el de fábrica asoma mientras Slowtown se actualiza, y desde él
-  o sus Recientes sólo se salta a otras apps), salvo Ajustes, que también se
-  anuncia como Inicio (su pantalla de respaldo del arranque, con prioridad
-  negativa): dejarlo pasar era dejar pasar Ajustes entero, y lo vio el paso 15
-  de la prueba.
-- **Se esquiva**: el modo seguro, desinstalar desde la Play Store si está
-  permitida, o una sesión de administración usada para sacar el acceso a los
-  datos de uso. La app frenada llega a verse menos de un segundo. El nivel 2
-  no existe sin Device Owner: lo de `Fixed.APPS` frena sólo por no estar
-  permitido, y alcanza (lo dijo Marcos el 27/10: «es casi lo mismo»).
+  los Inicios de fábrica (asoman mientras Slowtown se actualiza, y desde ellos
+  o sus Recientes sólo se salta a otras apps); uno de terceros, sí (ver
+  «Bloqueadas»). Ajustes también, aunque se anuncia como Inicio (su pantalla
+  de respaldo del arranque, con prioridad negativa): dejarlo pasar era dejar
+  pasar Ajustes entero, y lo vio el paso 15 de la prueba.
+- **Se esquiva**: el modo seguro, desinstalar desde la Play Store si no está
+  bloqueada, o una sesión de administración usada para sacar el acceso a los
+  datos de uso. La app frenada llega a verse menos de un segundo. Sin Device
+  Owner nada se pausa: lo del nivel 2 (`Fixed.APPS` y los navegadores que no
+  son Chrome) la guardia lo frena siempre (`Rules.alwaysBlocked`), y alcanza
+  (lo dijo Marcos el 27/10: «es casi lo mismo»).
 - **En el S10e** (27/10, con la 0.4.0, probado por adb y vuelto a pausar):
   frenó Ajustes, Maps y el engranaje del panel en menos de un segundo, y con
   el Reloj adelante 5 minutos Samsung no congeló la guardia (el proceso queda
@@ -280,8 +300,9 @@ Slowtown, sin otra app ni otro servicio.
   avisos son de la página que se va (en el emulador, eso abría Google sin
   hacer falta).
 - **En contra**, lo de `docs/sin-cable.md`: algunos bancos desconfían de las
-  apps con accesibilidad (por eso apagado de entrada, y el aviso lo dice),
-  forzar la detención lo apaga, y la Protección avanzada de Android 17 lo saca.
+  apps con accesibilidad (por eso apagado de entrada, y el aviso lo dice; los
+  de Marcos y Mercado Pago no se quejaron, 29/10), forzar la detención lo
+  apaga, y la Protección avanzada de Android 17 lo saca.
 - **Prueba**: «Direcciones de prueba» (`scripts/prueba-direcciones/`, con
   `armar.sh`) es un navegador de mentira con su barra `url_bar`; la variante
   de prueba de Slowtown la suma a `page_guard_browsers`
@@ -318,7 +339,8 @@ hacen llegar una notificación en el momento.
   allow_listener`); sin él, la pantalla lo avisa y no se retiene nada.
 - **Llegan en silencio**: Android 12 vuelve a publicar sin sonido todo lo que
   sale de una posposición, también las entregas de las 12 y las 19.
-- **«Sólo los grupos»**, por app (para WhatsApp, lo pidió Marcos): esperan los
+- **«Sólo los grupos»**, sólo en WhatsApp y WhatsApp Business (`waves_group_apps`;
+  Marcos la veía en todas las apps y no tenía sentido, 29/10): esperan los
   chats de grupo y los de a dos llegan en el momento. El grupo se reconoce por
   `EXTRA_IS_GROUP_CONVERSATION`, por el JID de WhatsApp (`…@g.us` es un grupo,
   `…@s.whatsapp.net` una persona) o por un título con mensajes de dos
@@ -361,7 +383,7 @@ la corta antes. En el emulador, el final se dispara a mano con root:
 Marcos los pidió para no acostumbrarse a aflojar: una contraseña que está en
 un cajón de su casa se termina sacando.
 
-- **Nivel 1, la configuración** (con contraseña): las apps permitidas, las
+- **Nivel 1, la configuración** (con contraseña): las apps bloqueadas, las
   páginas que se suman en «Páginas bloqueadas» (`Prefs.blockedSites`),
   pausar Slowtown y las dos sesiones.
 - **Nivel 2, el código** (`Fixed`): no se cambia desde el teléfono, ni con la
@@ -467,6 +489,11 @@ En CI corre en Temurin 21.
 La máquina tiene 6,7 GB de RAM. El emulador, aun con 1,5 GB asignados, ocupa
 unos 3 GB reales, y el build otros 2: el 19/10 el kernel lo mató por falta de
 memoria a mitad de un build. Compilar antes de levantarlo, o cerrar Firefox.
+
+El emulador guarda una foto al apagarse y arranca desde ella: apagado con
+Slowtown activo, vuelve en lock task con la lista vacía (`mLockTaskModeState=LOCKED`,
+`u0:[]`), Inicio da «App is not available» y la prueba corta en el paso 2.
+Se arregla con `adb -s emulator-5554 reboot` (pasó el 27 y el 29/10).
 
 `./scripts/probar-emulador.sh --limpio` corre todo el recorrido de punta a
 punta (con `--pasos=4c,9h,15`, sólo esos, además de instalar y activar) (instalar, activar, intentos de escape, llamada, SMS, Ajustes, nivel 2,

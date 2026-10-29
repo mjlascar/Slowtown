@@ -42,12 +42,12 @@ object AdminSession {
      * Agranda la lista y agenda el final: con [infoOnly], sólo con Ajustes.
      * Hace consultas al sistema: fuera del hilo principal.
      */
-    fun start(context: Context, allowed: Collection<String>, infoOnly: Boolean = false) {
+    fun start(context: Context, infoOnly: Boolean = false) {
         val prefs = Prefs(context)
         // Antes de rearmar la lista: es lo que mira Policies para saber qué sumar.
         prefs.adminSessionInfoOnly = infoOnly
         prefs.adminSessionUntil = System.currentTimeMillis() + LENGTH_MS
-        Policies.openForAdmin(context, allowed)
+        Policies.openForAdmin(context)
         context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
             SystemClock.elapsedRealtime() + LENGTH_MS,
@@ -66,7 +66,7 @@ object AdminSession {
         prefs.adminSessionInfoOnly = false
         context.getSystemService(AlarmManager::class.java).cancel(endIntent(context))
         if (prefs.closed && !CrashGuard.inSafeMode(context) && Policies.isDeviceOwner(context)) {
-            Policies.apply(context, prefs.allowedPackages)
+            Policies.apply(context)
         }
     }
 

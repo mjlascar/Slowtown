@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -13,6 +14,7 @@ import com.slowtown.launcher.admin.Bedtime
 import com.slowtown.launcher.admin.CallGuard
 import com.slowtown.launcher.admin.Fixed
 import com.slowtown.launcher.admin.Policies
+import com.slowtown.launcher.admin.Rules
 import com.slowtown.launcher.security.CrashGuard
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
@@ -29,11 +31,17 @@ class SlowtownApp : Application() {
     private val packages = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.data?.schemeSpecificPart == packageName) return
+            // Un navegador o una app del nivel 2 recién instalada no se abre nunca: hay que volver a mirar.
+            Rules.forget()
             val pending = goAsync()
             thread(name = "nivel-2") {
                 try {
                     runCatching { Fixed.enforce(this@SlowtownApp) }
                         .onFailure { Log.e(TAG, "No pude revisar las apps nuevas", it) }
+                    // Lo nuevo se abre desde ya (lo que no está bloqueado, sí): con
+                    // Device Owner hay que sumarlo a la lista de lock task.
+                    runCatching { Bedtime.refresh(this@SlowtownApp) }
+                        .onFailure { Log.e(TAG, "No pude poner al día lo que se puede abrir", it) }
                 } finally {
                     pending.finish()
                 }
@@ -57,7 +65,7 @@ class SlowtownApp : Application() {
                         Fixed.enforce(this@SlowtownApp)
                         val prefs = Prefs(this@SlowtownApp)
                         if (prefs.closed && !CrashGuard.inSafeMode(this@SlowtownApp)) {
-                            Policies.apply(this@SlowtownApp, prefs.allowedPackages)
+                            Policies.apply(this@SlowtownApp)
                         }
                     }.onFailure { Log.e(TAG, "No pude poner el nivel 2", it) }
                 } finally {
@@ -112,6 +120,9 @@ class SlowtownApp : Application() {
             .onFailure { Log.e(TAG, "La guardia de crashes falló", it) }
         runCatching { Policies.restoreDefaults(this) }
             .onFailure { Log.e(TAG, "No pude restaurar la copia de seguridad", it) }
+        // Antes que Inicio lea qué está bloqueado: es una sola vez, y rápida.
+        runCatching { migrateToBlocked() }
+            .onFailure { Log.e(TAG, "No pude pasar las apps permitidas a bloqueadas", it) }
         // Antes de la revisión del arranque, así una de las dos lo agarra: si ya
         // era Device Owner al registrarse, la revisión lo ve; si no, llega el aviso.
         registerReceiver(
@@ -147,6 +158,33 @@ class SlowtownApp : Application() {
             addDataScheme("package")
         }
         registerReceiver(packages, filter, RECEIVER_NOT_EXPORTED)
+    }
+
+    /**
+     * Hasta el 29/10 se elegían las apps permitidas; ahora, las bloqueadas
+     * ([Prefs.blocked]). Una sola vez: pasan a bloqueadas las que tenían ícono
+     * y no estaban permitidas, así lo que se abría y lo que no queda igual (lo
+     * que se instale después queda abierto). Sin permitidas elegidas no se
+     * bloquea nada: es lo que pidió Marcos, que no había elegido ninguna. Corre
+     * en el hilo principal, antes que Inicio: recorre las apps, pero una sola vez.
+     */
+    // La variante con ResolveInfoFlags recién existe en API 33.
+    @Suppress("DEPRECATION")
+    private fun migrateToBlocked() {
+        val prefs = Prefs(this)
+        val allowed = prefs.legacyAllowed ?: return
+        val allowedPackages = allowed.mapNotNull { ComponentName.unflattenFromString(it)?.packageName }.toSet()
+        val blocked = if (allowed.isEmpty()) {
+            emptySet()
+        } else {
+            val untouched = allowedPackages + Rules.always(this) + Rules.alwaysBlocked(this)
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            packageManager.queryIntentActivities(launcher, 0)
+                .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+                .filter { it.packageName !in untouched }
+                .mapTo(mutableSetOf()) { it.flattenToString() }
+        }
+        prefs.migrateToBlocked(blocked, allowed)
     }
 
     private companion object {

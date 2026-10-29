@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Handler
@@ -45,8 +46,9 @@ object Guard {
      * El instalador de Android, que pregunta antes de instalar o desinstalar:
      * estos y el que atienda «desinstalar» en el teléfono ([installers]).
      * Pasa sólo un rato después de que Slowtown lo abre ([allowInstaller]):
-     * si pasara siempre, cualquier app permitida que ofrezca desinstalar
-     * podría sacar a Slowtown sin cable.
+     * si pasara siempre, cualquier app que ofrezca desinstalar podría sacar a
+     * Slowtown sin cable. Fuera de ese rato está entre lo que no se abre nunca
+     * ([Rules.alwaysBlocked]).
      */
     private val INSTALLERS = setOf(
         "com.android.packageinstaller",
@@ -115,7 +117,7 @@ object Guard {
                 cursor = System.currentTimeMillis() - LOOK_BACK_MS
                 front = null
                 launchers = runCatching { launchers(appContext) }.getOrDefault(emptySet())
-                installers = INSTALLERS + runCatching { installers(appContext) }.getOrDefault(emptySet())
+                installers = runCatching { installers(appContext) }.getOrDefault(INSTALLERS)
             }
             tick()
         }
@@ -202,34 +204,37 @@ object Guard {
         }
         limitPackage = null
         // Con Device Owner, sacarla de la lista la cierra; sin cable, la vuelta a Inicio.
-        if (mode == Rules.Mode.LOCK_TASK) Policies.refreshPackages(context, Prefs(context).allowedPackages)
+        if (mode == Rules.Mode.LOCK_TASK) Policies.refreshPackages(context)
         kick(context, pkg, Rules.Hold.Limit(limits.getValue(pkg)))
     }
 
     /**
-     * Los Inicios del teléfono, que la guardia tampoco frena: mientras Slowtown
+     * Los Inicios de fábrica, que la guardia tampoco frena: mientras Slowtown
      * se actualiza, Android muestra un instante el de fábrica, y frenarlo
-     * dejaba en Inicio «One UI Home no está entre las apps permitidas». Desde
-     * él, o desde sus Recientes, sólo se salta a otras apps, que la guardia
-     * mira igual. Ajustes no: también se anuncia como Inicio (la pantalla de
-     * respaldo del arranque, con prioridad negativa), y dejarlo pasar era
-     * dejar pasar Ajustes entero (lo vio la prueba del emulador).
+     * dejaba en Inicio «One UI Home no está entre las apps permitidas» (con la
+     * lista de permitidas de antes del 29/10). Desde él, o desde sus Recientes,
+     * sólo se salta a otras apps, que la guardia mira igual. Ajustes no:
+     * también se anuncia como Inicio (la pantalla de respaldo del arranque,
+     * con prioridad negativa), y dejarlo pasar era dejar pasar Ajustes entero
+     * (lo vio la prueba del emulador). Uno de terceros (Olauncher) tampoco:
+     * desde él se pide ser el Inicio, y sin serlo Slowtown la guardia se apaga
+     * ([Rules.alwaysBlocked] lo frena siempre; lo encontró una revisión, 29/10).
      */
     // La variante con ResolveInfoFlags recién existe en API 33.
     @Suppress("DEPRECATION")
     private fun launchers(context: Context): Set<String> =
         context.packageManager
             .queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_ALL)
-            .filter { it.priority >= 0 }
+            .filter { it.priority >= 0 && it.activityInfo.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 }
             .mapTo(mutableSetOf()) { it.activityInfo.packageName } - Rules.SETTINGS
 
-    /** Quien atiende «desinstalar» en este teléfono: cada marca puede tener el suyo. */
+    /** El instalador de Android: los de siempre y quien atienda «desinstalar» en este teléfono (cada marca puede tener el suyo). */
     // La variante con ResolveInfoFlags recién existe en API 33.
     @Suppress("DEPRECATION")
-    private fun installers(context: Context): Set<String> {
+    fun installers(context: Context): Set<String> {
         val delete = Intent(Intent.ACTION_DELETE, Uri.fromParts("package", context.packageName, null))
-        return context.packageManager.queryIntentActivities(delete, PackageManager.MATCH_SYSTEM_ONLY)
-            .mapTo(mutableSetOf()) { it.activityInfo.packageName }
+        return INSTALLERS + context.packageManager.queryIntentActivities(delete, PackageManager.MATCH_SYSTEM_ONLY)
+            .map { it.activityInfo.packageName }
     }
 
     /** Vuelve a Inicio, que dice por qué ([lastHeld]). */

@@ -89,7 +89,7 @@ fun AdminScreen(
             }
         }
 
-        Button(onClick = onChooseApps, modifier = wide) { Text("Elegir las apps permitidas") }
+        Button(onClick = onChooseApps, modifier = wide) { Text("Elegir las apps bloqueadas") }
         OutlinedButton(onClick = onSites, modifier = wide) { Text("Páginas bloqueadas") }
         OutlinedButton(onClick = onChooseWidget, modifier = wide) { Text("Elegir el widget de Inicio") }
         OutlinedButton(onClick = onHomeLook, modifier = wide) { Text("Cómo se ve Inicio") }

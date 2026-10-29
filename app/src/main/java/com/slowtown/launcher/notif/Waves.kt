@@ -2,6 +2,7 @@ package com.slowtown.launcher.notif
 
 import android.app.Notification
 import android.content.Context
+import com.slowtown.launcher.R
 import com.slowtown.launcher.apps.normalize
 import java.time.Duration
 import java.time.LocalDateTime
@@ -188,6 +189,21 @@ object Waves {
             groupsOnly = prefs.getStringSet(KEY_GROUPS_ONLY, null)?.toSet().orEmpty(),
         )
     }
+
+    /**
+     * Las apps que ofrecen «sólo los grupos»: WhatsApp y WhatsApp Business
+     * (`waves_group_apps`), las únicas en las que se reconoce bien un grupo
+     * (por el JID de cada chat). Marcos lo veía en todas y no tenía sentido.
+     * Una que ya lo tenía prendido lo sigue teniendo, y lo sigue mostrando: si
+     * no, sus chats de a dos se pondrían a esperar sin que se vea por qué. La
+     * variante de prueba suma «Avisos de prueba», que imita a WhatsApp.
+     */
+    fun groupApps(context: Context): Set<String> =
+        groupApps ?: context.getString(R.string.waves_group_apps).split(',').map(String::trim).toSet()
+            .also { groupApps = it }
+
+    @Volatile
+    private var groupApps: Set<String>? = null
 
     fun setEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, value).apply()

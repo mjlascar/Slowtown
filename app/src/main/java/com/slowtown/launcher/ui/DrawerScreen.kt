@@ -63,8 +63,8 @@ class AppActions(
 )
 
 /**
- * Todas las apps que se pueden abrir (con Slowtown activo, sólo las
- * permitidas). Arriba las carpetas, debajo las apps que no están en ninguna,
+ * Todas las apps que se pueden abrir (con Slowtown activo, sin las
+ * bloqueadas). Arriba las carpetas, debajo las apps que no están en ninguna,
  * sin las ocultas. Buscando, no van las carpetas y aparecen todas las que
  * coinciden, estén donde estén, también las ocultas. Se llega deslizando para
  * arriba en Inicio.
@@ -131,7 +131,7 @@ fun DrawerScreen(
             HintText(
                 when {
                     searching -> "No hay ninguna app con ese nombre."
-                    apps.isEmpty() -> "Todavía no hay apps permitidas."
+                    apps.isEmpty() -> "Ahora no se puede abrir ninguna."
                     apps.none { it.key in actions.hidden } -> "Todas las apps están en carpetas."
                     else -> "Todas las apps están en carpetas u ocultas."
                 },

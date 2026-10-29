@@ -27,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.slowtown.launcher.apps.LaunchableApp
 
 /**
- * Elegir apps de una lista, con casillas: las permitidas y, con otro título y
- * otra explicación, las de Flow State y las de los límites por app.
+ * Elegir apps de una lista, con casillas: las bloqueadas, las de Bedtime, las
+ * de Flow State y las de los límites por app, cada una con su título y su
+ * explicación.
  */
 @Composable
 fun ChooseAppsScreen(
@@ -36,10 +37,8 @@ fun ChooseAppsScreen(
     chosen: Set<String>,
     onDone: (Set<String>) -> Unit,
     onBack: () -> Unit,
-    title: String = "Apps permitidas",
-    hint: String = "Con Slowtown activo, las que no marques no se abren. Las llamadas " +
-        "y los SMS entran igual. Cuáles se ven en Inicio se elige aparte, " +
-        "deslizando para arriba en Inicio.",
+    title: String,
+    hint: String,
 ) {
     var selection by remember(chosen) { mutableStateOf(chosen) }
 
