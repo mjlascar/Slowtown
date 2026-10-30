@@ -38,8 +38,9 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
 - **Notificaciones por oleadas:** las de las apps que elijas esperan y llegan
   todas juntas, en silencio, a ciertas horas, salvo las que traen una palabra
   de «pasan siempre». Con «sólo los grupos», de WhatsApp esperan los grupos y
-  los chats de a dos llegan en el momento.
-- **«Habilitar todo por 5 minutos»:** sin contraseña, hasta 2 veces cada 12
+  los chats de a dos llegan en el momento. Y las fijas que molestan (como la
+  de «No molestar») se pueden esconder del panel.
+- **«Habilitar todo por 5 minutos»:** sin contraseña, hasta 2 veces cada 5
   horas, para actualizar apps.
 - **Hábitos como los cuadraditos de GitHub:** hasta 4 de un catálogo de 14,
   cada uno con su dibujo y sus veces por semana. Se marcan desde Inicio, y un

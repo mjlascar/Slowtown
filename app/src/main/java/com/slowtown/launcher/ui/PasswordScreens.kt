@@ -79,9 +79,9 @@ fun UnlockScreen(
             ) { Text("Habilitar todo por 5 minutos") }
             HintText(
                 if (freeSession.remaining > 0) {
-                    "Sin contraseña. Te quedan ${freeSession.remaining} de 2 en 12 horas."
+                    "Sin contraseña. Te quedan ${freeSession.remaining} de 2 en 5 horas."
                 } else {
-                    "Ya usaste las 2 de estas 12 horas. Vuelve a haber ${freeSession.nextAt}."
+                    "Ya usaste las 2 de estas 5 horas. Vuelve a haber ${freeSession.nextAt}."
                 },
             )
         }
@@ -120,7 +120,8 @@ fun CreatePasswordScreen(onCreated: () -> Unit, onBack: () -> Unit) {
             "Es la que va a pedir Slowtown para cambiar cualquier cosa. Conviene " +
                 "una larga, que no te sepas de memoria, anotada en un papel que " +
                 "quede en tu casa: una contraseña que sabés no frena. Si se " +
-                "pierde, la única salida es por cable.",
+                "pierde, la salida es desinstalar Slowtown desde el modo seguro, y se " +
+                "pierde lo configurado.",
         )
         PasswordField(
             value = first,

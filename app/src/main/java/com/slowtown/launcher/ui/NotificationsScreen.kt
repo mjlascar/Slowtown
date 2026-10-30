@@ -51,6 +51,8 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
     var words by remember { mutableStateOf(initial.alwaysPass) }
     val access = remember { WavesListener.hasAccess(context) }
     val groupApps = remember { Waves.groupApps(context) }
+    var hiddenFixed by remember { mutableStateOf(Waves.hidden(context)) }
+    val fixedNow = remember { WavesListener.fixedNow(context) }
 
     var hour by remember { mutableIntStateOf(9) }
     var minute by remember { mutableIntStateOf(0) }
@@ -99,6 +101,15 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
         WavesListener.reapply()
     }
 
+    /** Las fijas que se esconden: las nuevas se van ya, y las desmarcadas vuelven ya. */
+    fun saveHiddenFixed(value: Map<String, String>) {
+        val revealed = hiddenFixed.keys - value.keys
+        hiddenFixed = value
+        Waves.setHidden(context, value)
+        WavesListener.reveal(revealed)
+        WavesListener.reapply()
+    }
+
     fun saveWords(value: List<String>) {
         words = value
         Waves.setAlwaysPass(context, value)
@@ -127,7 +138,7 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
         if (!access) {
             ErrorText(
                 "Slowtown todavía no puede leer las notificaciones. Dale el permiso en " +
-                    "Ajustes, en «Acceso a notificaciones», o por cable con provisionar.sh.",
+                    "Ajustes, en «Acceso a notificaciones».",
             )
         }
         Row(
@@ -196,6 +207,32 @@ fun NotificationsScreen(apps: List<LaunchableApp>, onBack: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(saved, modifier = Modifier.weight(1f))
                 TextButton(onClick = { saveWords(words - saved) }) { Text("Sacar") }
+            }
+        }
+
+        // Lo pidió Marcos el 30/10, por «Do not disturb turned on». Va aparte de
+        // las oleadas: se esconden con las oleadas prendidas o apagadas.
+        Text("Las fijas que se esconden", style = MaterialTheme.typography.titleMedium)
+        HintText(
+            "Las que no se pueden deslizar y quedan todo el tiempo en el panel, como la de " +
+                "«No molestar». Las que marques no se ven más, y vuelven si las desmarcás.",
+        )
+        val fixed = (fixedNow.associate { it.identity to it.label } + hiddenFixed).toList().sortedBy { it.second.lowercase() }
+        if (fixed.isEmpty()) HintText("Ahora no hay ninguna fija en el panel.")
+        fixed.forEach { (identity, label) ->
+            val checked = identity in hiddenFixed
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = checked, role = Role.Checkbox) {
+                        saveHiddenFixed(if (it) hiddenFixed + (identity to label) else hiddenFixed - identity)
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = checked, onCheckedChange = null)
+                Spacer(Modifier.width(12.dp))
+                Text(label, style = MaterialTheme.typography.bodyLarge)
             }
         }
 

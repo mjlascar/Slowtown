@@ -30,14 +30,16 @@ import kotlin.concurrent.thread
 object FreeSession {
     const val LENGTH_MS = 5 * 60_000L
     const val USES = 2
-    const val WINDOW_MS = 12 * 60 * 60_000L
+
+    /** Cada cuánto vuelven las [USES]: 5 horas desde el 30/10 (lo pidió Marcos; antes, 12). */
+    const val WINDOW_MS = 5 * 60 * 60_000L
 
     fun isActive(context: Context): Boolean = Prefs(context).freeSessionUntil > System.currentTimeMillis()
 
     /** Cuándo termina la que está en curso; 0 si no hay. */
     fun until(context: Context): Long = Prefs(context).freeSessionUntil.takeIf { it > System.currentTimeMillis() } ?: 0L
 
-    /** Cuántas quedan en las últimas 12 horas. */
+    /** Cuántas quedan en las últimas 5 horas ([WINDOW_MS]). */
     fun remaining(context: Context): Int = (USES - recentUses(context).size).coerceAtLeast(0)
 
     /** Si no quedan, cuándo vuelve a haber una. */

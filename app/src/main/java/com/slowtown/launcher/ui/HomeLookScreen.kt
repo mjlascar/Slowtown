@@ -249,8 +249,9 @@ fun HomeLookScreen(
                         Column(Modifier.weight(1f)) {
                             Text("La hora grande", style = MaterialTheme.typography.titleMedium)
                             HintText(
-                                "Con la hora grande, la de la barra de arriba se esconde en Inicio. Sin " +
-                                    "cable se esconde la barra entera, y la batería pasa junto a la fecha.",
+                                "Con la hora grande, la de la barra de arriba se esconde en Inicio (o la " +
+                                    "barra entera, si el teléfono no deja esconder sólo la hora: entonces la " +
+                                    "batería pasa junto a la fecha).",
                             )
                         }
                         Spacer(Modifier.width(16.dp))

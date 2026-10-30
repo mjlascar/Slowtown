@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.Context
 import com.slowtown.launcher.R
 import com.slowtown.launcher.apps.normalize
+import org.json.JSONObject
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
@@ -167,6 +168,7 @@ object Waves {
     private const val KEY_ALWAYS_PASS = "always_pass"
     private const val KEY_GROUPS_ONLY = "groups_only"
     private const val KEY_HELD = "held"
+    private const val KEY_HIDDEN = "hidden_fixed"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -238,5 +240,30 @@ object Waves {
     fun setHeld(context: Context, value: Map<String, Held>) {
         val entries = value.map { (key, held) -> "${held.until}|${if (held.delivered) "d" else "h"}|$key" }.toSet()
         prefs(context).edit().putStringSet(KEY_HELD, entries).apply()
+    }
+
+    /**
+     * Cuál es una notificación, sin el usuario ni el uid de la clave de
+     * Android: la app, el tag y el id. Una fija (la de «No molestar activado»)
+     * vuelve siempre con los mismos, aunque Android le dé otra clave.
+     */
+    fun identity(packageName: String, tag: String?, id: Int): String = "$packageName|${tag.orEmpty()}|$id"
+
+    /** Una notificación fija del panel, para elegir si se esconde: cuál ([identity]) y lo que dice. */
+    data class Fixed(val identity: String, val label: String)
+
+    /**
+     * Las notificaciones fijas que se esconden siempre (lo pidió Marcos el
+     * 30/10, por «Do not disturb turned on»), por identidad ([identity]), con
+     * lo que decían, para mostrarlas aunque ya no estén a la vista. Van aparte
+     * de las oleadas: se esconden con las oleadas prendidas o apagadas.
+     */
+    fun hidden(context: Context): Map<String, String> = runCatching {
+        val json = JSONObject(prefs(context).getString(KEY_HIDDEN, null) ?: return emptyMap())
+        json.keys().asSequence().associateWith { json.optString(it) }
+    }.getOrDefault(emptyMap())
+
+    fun setHidden(context: Context, value: Map<String, String>) {
+        prefs(context).edit().putString(KEY_HIDDEN, JSONObject(value).toString()).apply()
     }
 }

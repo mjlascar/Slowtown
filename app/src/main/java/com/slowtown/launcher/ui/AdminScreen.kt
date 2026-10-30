@@ -56,29 +56,20 @@ fun AdminScreen(
 ) {
     val wide = Modifier.fillMaxWidth()
 
+    // Sin Device Owner ni «sin cable» a la vista: Marcos no lo usa (30/10). Lo
+    // que pasa con Device Owner sigue andando, sin nombrarlo.
     FormScaffold(title = "Administración", onBack = onBack) {
-        StatusLine("Device Owner", if (status.deviceOwner) "sí" else "no")
         StatusLine(
             "Slowtown",
-            when {
-                status.locked -> "activo"
-                status.closed && status.deviceOwner -> "se activa al volver a Inicio"
-                status.closed && status.canClose && !status.safeMode -> "activo, sin cable"
-                else -> "en pausa"
-            },
+            if (status.locked || (status.closed && status.canClose && !status.safeMode)) "activo" else "en pausa",
         )
         if (!status.deviceOwner) {
-            HintText(
-                "Sin Device Owner, Slowtown cierra sin cable: si se abre algo que no corresponde, " +
-                    "vuelve a Inicio. Se esquiva más fácil (con el modo seguro, por ejemplo); el " +
-                    "cierre completo se activa por cable, con scripts/provisionar.sh.",
-            )
             if (!status.usageAccess) {
-                ErrorText("Para cerrar sin cable falta el acceso a los datos de uso.")
+                ErrorText("Para activarlo falta el acceso a los datos de uso.")
                 OutlinedButton(onClick = onUsageAccess, modifier = wide) { Text("Dar el acceso a los datos de uso") }
             }
             if (!status.home) {
-                ErrorText("Para cerrar sin cable, Slowtown tiene que ser el Inicio.")
+                ErrorText("Para activarlo, Slowtown tiene que ser el Inicio.")
                 OutlinedButton(onClick = onChooseHome, modifier = wide) { Text("Elegir Slowtown como Inicio") }
             }
         }
@@ -101,10 +92,6 @@ fun AdminScreen(
         Button(onClick = onToggleClosed, enabled = status.closed || status.canClose, modifier = wide) {
             Text(if (status.closed) "Pausar Slowtown" else "Activar Slowtown")
         }
-        // Sin Device Owner no hay lock task que cierre nada al salir, ni nivel 2.
-        if (status.closed && status.deviceOwner) {
-            HintText("Pausarlo cierra las apps que estén abiertas. Lo que está bloqueado siempre sigue bloqueado.")
-        }
         OutlinedButton(onClick = onOpenSettings, modifier = wide) { Text("Ir a Ajustes") }
         OutlinedButton(onClick = onOpenPlayStore, modifier = wide) { Text("Ir a Play Store") }
         HintText(
@@ -113,12 +100,6 @@ fun AdminScreen(
                 "o pasen 10 minutos.",
         )
         OutlinedButton(onClick = onChangePassword, modifier = wide) { Text("Cambiar la contraseña") }
-
-        if (status.deviceOwner) {
-            // Desde la administración ya no: la contraseña está en un cajón de
-            // la casa, y soltarlo apagaba también lo que se bloquea siempre.
-            HintText("Slowtown deja de ser Device Owner sólo por cable, desde la compu (scripts/liberar.sh).")
-        }
 
         StatusLine("Versión", version)
         if (updates) {
@@ -130,7 +111,7 @@ fun AdminScreen(
             // Lo que dijeron Android o la red: sin cable, es la única forma de saber qué pasó.
             (update as? UpdateState.Failed)?.detail?.let { HintText(it.take(300)) }
         } else {
-            HintText("Versión de cable: se actualiza por cable.")
+            HintText("Versión de prueba: no busca actualizaciones.")
         }
     }
 }

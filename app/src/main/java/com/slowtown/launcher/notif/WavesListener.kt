@@ -18,6 +18,11 @@ import java.time.ZonedDateTime
  * Pospone las notificaciones de las apps elegidas hasta la próxima entrega
  * ([Waves]). A esa hora Android vuelve a publicar las originales, solo.
  *
+ * Esconde además las fijas que se eligieron ([Waves.hidden]): las que no se
+ * pueden deslizar, como «No molestar activado». Android 12 no deja que un
+ * lector las borre, pero sí que las posponga: se posponen una semana, y si
+ * vuelven (vence, o un reinicio), otra vez.
+ *
  * Es también el único lector de notificaciones de Slowtown, así que le pasa
  * a [CallGuard] lo que entra y sale del panel, con las oleadas prendidas o
  * no. Cada parte va envuelta aparte: si una falla, la otra sigue.
@@ -170,6 +175,9 @@ class WavesListener : NotificationListenerService() {
             .filterValues { it.until > nowMillis - FORGET_AFTER }
             .toMutableMap()
 
+        /** Las fijas que se esconden siempre, por identidad. */
+        private val hidden = Waves.hidden(this@WavesListener).keys
+
         val active: List<StatusBarNotification> by lazy { activeNotifications?.filterNotNull().orEmpty() }
 
         /** Lo pospuesto, leído una sola vez y sólo si hace falta. */
@@ -185,6 +193,10 @@ class WavesListener : NotificationListenerService() {
             // Los grupos de apps de «sólo los grupos» a los que se les retuvo algo en esta pasada.
             val heldGroupsOnly = mutableSetOf<String>()
             for (sbn in posted) {
+                if (identityOf(sbn) in hidden) {
+                    snoozeNotification(sbn.key, HIDE_MS)
+                    continue
+                }
                 if (sbn.isGroup) groups += sbn.groupKey
                 if (isSummary(sbn)) continue
                 if (shouldHoldNow(sbn, visible = 0)) {
@@ -241,6 +253,8 @@ class WavesListener : NotificationListenerService() {
             // Leído de nuevo y no [snoozed]: en la misma pasada, [run] puede haber pospuesto o soltado algo.
             val snoozed = snoozedNotifications?.filterNotNull().orEmpty().sortedByDescending { isSummary(it) }
             for (sbn in snoozed) {
+                // Las fijas escondidas no son de las oleadas: se sueltan sólo al desmarcarlas ([reveal]).
+                if (identityOf(sbn) in hidden) continue
                 val entry = held[sbn.key]
                 if (entry == null || entry.delivered) {
                     if (stuck(sbn)) release(sbn)
@@ -358,6 +372,9 @@ class WavesListener : NotificationListenerService() {
         /** Lo que tarda en volver lo que Android trae junto con un resumen soltado, con mucho margen. */
         private const val BROUGHT_BACK = 10_000L
 
+        /** Cuánto se esconde una fija: al volver, se esconde de nuevo. */
+        private const val HIDE_MS = 7 * 24 * 60 * 60_000L
+
         /**
          * WhatsApp (y WhatsApp Business) nombra cada chat por su JID, y lo usa
          * de id del atajo del chat y de tag de la notificación: «…@g.us» es un
@@ -386,6 +403,47 @@ class WavesListener : NotificationListenerService() {
         fun reapply() {
             val listener = connected ?: return
             safely { listener.reapplyNow() }
+        }
+
+        /**
+         * Las fijas que están ahora en el panel (las que no se pueden
+         * deslizar), para elegir cuáles esconder: sin las de Slowtown ni las
+         * llamadas. Vacío sin el permiso.
+         */
+        fun fixedNow(context: Context): List<Waves.Fixed> {
+            val listener = connected ?: return emptyList()
+            return runCatching {
+                listener.activeNotifications.orEmpty().filterNotNull()
+                    .filter { !it.isClearable && it.packageName != context.packageName }
+                    .filter { it.notification.category != Notification.CATEGORY_CALL }
+                    .map { Waves.Fixed(identityOf(it), label(context, it)) }
+                    .distinctBy { it.identity }
+            }.getOrDefault(emptyList())
+        }
+
+        /** Vuelven las que se dejaron de esconder: Android no tiene «soltar», se pospone por 1 ms. */
+        fun reveal(identities: Set<String>) {
+            val listener = connected ?: return
+            safely {
+                listener.snoozedNotifications.orEmpty().filterNotNull()
+                    .filter { identityOf(it) in identities }
+                    .forEach { listener.snoozeNotification(it.key, 1) }
+            }
+        }
+
+        private fun identityOf(sbn: StatusBarNotification): String = Waves.identity(sbn.packageName, sbn.tag, sbn.id)
+
+        /** «Android System: Do not disturb turned on»: la app y el título, como en el panel. */
+        // La variante con ApplicationInfoFlags recién existe en API 33.
+        @Suppress("DEPRECATION")
+        private fun label(context: Context, sbn: StatusBarNotification): String {
+            val pm = context.packageManager
+            val app = runCatching { pm.getApplicationInfo(sbn.packageName, 0).loadLabel(pm).toString() }
+                .getOrDefault(sbn.packageName)
+            val extras = sbn.notification.extras
+            val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() }
+                ?: extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+            return if (title == null) app else "$app: $title"
         }
 
         /** Si Android le da a Slowtown las notificaciones. Lo da provisionar.sh por adb. */

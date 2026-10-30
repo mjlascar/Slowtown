@@ -150,7 +150,7 @@ TXT_BORRAR='Borrar'
 # con el nombre como se escribió («Utilitario»).
 TXT_MOVER_A_CARPETA='Mover a una carpeta'
 TXT_HABILITAR='Habilitar todo por 5 minutos' # en la pantalla de la contraseña, sin contraseña
-TXT_YA_USASTE='Ya usaste las 2 de estas 12 horas'
+TXT_YA_USASTE='Ya usaste las 2 de estas 5 horas'
 TXT_HABILITADO='Todo habilitado hasta las'   # el aviso de Inicio mientras dura
 TXT_PAGINAS='Páginas bloqueadas'             # en Administración, y el título de su pantalla
 TXT_LAS_TUYAS='Las tuyas'                    # las páginas del nivel 1 van entre este título...
@@ -160,7 +160,7 @@ TXT_AGREGAR=Agregar
 TXT_SACAR=Sacar
 TXT_YA_FIJA='Ésa ya está bloqueada siempre.'
 TXT_SOLTAR='Dejar de ser Device Owner'       # el botón que ya no está en la administración
-TXT_SOLO_CABLE='sólo por cable'              # un pedazo de lo que dice ahora, al pie de la administración
+TXT_PIE_ADMIN='Versión de prueba: no busca actualizaciones.'   # lo último de la administración, en la variante de prueba
 TXT_SIN_COINCIDENCIAS='No hay ninguna app con ese nombre.'   # el buscador de la lista de todas
 # El tiempo de pantalla, con acceso al uso: arriba a la derecha, en el renglón
 # de la hora grande (o, sin ella, en el de la fecha), dice sólo «1 h 5 min» (o
@@ -210,10 +210,10 @@ TXT_MAS_TIEMPO='Más tiempo: '                # el «+» de cada app con límite
 TXT_SACAR=Sacar                              # sacarle el límite a una app
 TXT_LIMITE_FRENADA_RE='^(.+) llegó a su límite de hoy \((.+)\)\. Vuelve mañana\.$'   # lo que dice Inicio al cerrarla
 TXT_BLOQUEADA_RE='^(.+) está bloqueada\.$'   # lo que dice Inicio cuando la guardia frena una app bloqueada
-TXT_SIN_CABLE='activo, sin cable'            # el estado de Slowtown en la administración, sin Device Owner
-TXT_SIN_LISTA='Sin cable, Chrome no recibe esta lista: por ahora no bloquea ninguna.'   # «Páginas bloqueadas» sin Device Owner ni el permiso
+TXT_SIN_CABLE=activo                         # el estado de Slowtown en la administración, también sin Device Owner
+TXT_SIN_LISTA='Para que Chrome no las abra, Slowtown necesita un permiso: por ahora no bloquea ninguna.'   # «Páginas bloqueadas» sin Device Owner ni el permiso
 TXT_BLOQUEARLAS='Bloquearlas en Chrome'      # su botón: explica qué mira el permiso y manda a Ajustes
-TXT_BLOQUEARLAS_TITULO='Bloquearlas sin cable'   # el título de esa explicación
+TXT_BLOQUEARLAS_TITULO='Antes de prenderlo'   # el título de esa explicación
 TXT_IR_A_AJUSTES='Ir a Ajustes'              # su botón
 TXT_APAGARLO='Apagarlo en Ajustes'           # «Páginas bloqueadas» con el permiso prendido
 APP_FLOW=Camera                              # la que frenan Flow State y su límite (el Reloj no: es de las alarmas)
@@ -223,6 +223,8 @@ TXT_OLEADAS_PISTA='todas juntas, en silencio'   # un pedazo de su explicación: 
 TXT_ENTREGA='Nueva entrega'                  # las ruedas del horario que se suma: «Nueva entrega, hora: 09»
 TXT_AGREGAR_LAS='Agregar las '               # su botón: «Agregar las 09:00»
 TXT_SOLO_GRUPOS='Sólo los grupos: '          # debajo de cada app que espera, por su descripción: «Sólo los grupos: WhatsApp»
+TXT_FIJAS='Las fijas que se esconden'        # «Notificaciones»: las que no se pueden deslizar, para esconderlas
+FIJA_EMULADOR='Android System: Serial console enabled'   # una fija que el emulador tiene siempre
 OLEADAS_DE_FABRICA='12:00 19:00'             # las entregas de entrada
 INICIALES=LMXJVSD                            # los días del widget de hábitos, de lunes a domingo
 DIAS_ES=(lunes martes miércoles jueves viernes sábado domingo)   # las celdas del resumen:
@@ -430,6 +432,15 @@ def criterio(tipo, consulta):
 def main(modo, archivo, *args):
     raiz = ET.parse(archivo).getroot()
     if modo == 'valido':
+        return 0
+    if modo == 'todos':
+        # También los que uiautomator da sin caja: recorta al alto que Android
+        # deja a las apps (en el emulador, hasta y=2072), y lo de más abajo,
+        # aunque se vea, sale con [0,0][0,0]. Lo que el deslizamiento dejó
+        # fuera de la vista Compose no lo informa: sigue siendo lo que se ve.
+        for n in raiz.iter('node'):
+            for t in textos(n):
+                print(t)
         return 0
     lista = list(nodos(raiz, sin_widgets=(modo == 'textos')))
     if modo == 'textos':
@@ -1016,6 +1027,8 @@ etiquetas_inicio() {   # las apps que lista Inicio en el último volcado, una po
     # Por qué se frenó una app: aviso, no app.
     [[ $t =~ $TXT_BLOQUEADA_RE || $t =~ $TXT_FLOW_FRENADA_RE || $t =~ $TXT_LIMITE_FRENADA_RE ]] && continue
     [[ $t == *"$TXT_INICIO_FALLOS"* ]] && continue
+    # Los avisos de una sesión: «Todo habilitado hasta las…», «Ráfaga de 5 minutos: hasta las…».
+    [[ $t == "$TXT_HABILITADO"* || $t == "$TXT_RAFAGA"* ]] && continue
     printf '%s\n' "$t"
   done < <(ui textos)
 }
@@ -2728,15 +2741,15 @@ paso_9b() {
 }
 
 # ── 9c. «Habilitar todo por 5 minutos» ──────────────────────────────────────
-# Sin contraseña, 2 veces cada 12 horas. Para no esperar los 5 minutos, el
+# Sin contraseña, 2 veces cada 5 horas. Para no esperar los 5 minutos, el
 # final se dispara como lo hace la alarma, con root (el receptor no se exporta).
 paso_9c() {
-  titulo 9c "«$TXT_HABILITAR»: sin contraseña, 2 veces cada 12 horas"
+  titulo 9c "«$TXT_HABILITAR»: sin contraseña, 2 veces cada 5 horas"
   local vez quedan
   ir_a_inicio
   tocar_en_inicio regex "$TXT_FECHA_RE" 1500 || { mal "no encuentro la fecha en Inicio"; return; }
   if esperar_ui 4 contiene "$TXT_YA_USASTE"; then
-    aviso "ya se usaron las 2 de estas 12 horas (corré con --limpio): salteo este paso"
+    aviso "ya se usaron las 2 de estas 5 horas (corré con --limpio): salteo este paso"
     ir_a_inicio
     return
   fi
@@ -3002,19 +3015,22 @@ nivel2_administracion() {   # nivel2_administracion ROOT: lo del nivel 2 que se 
     return
   fi
 
-  # Soltar Device Owner ya no está: sólo por cable. Se baja hasta el pie.
-  for vuelta in 1 2 3 4; do
-    volcar_ui || break
-    vistos+=$(ui textos | cut -f5)$'\n'
-    ui contiene "$TXT_SOLO_CABLE" >/dev/null && break
+  # Soltar Device Owner ya no está (sólo por cable), y la administración no
+  # nombra Device Owner ni el cable (lo pidió Marcos el 30/10). Se baja hasta
+  # el pie, que cae justo debajo de lo que uiautomator da con caja: se leen
+  # todos los textos del volcado.
+  for vuelta in 1 2 3 4 5 6 7 8; do
+    volcar_ui || { sleep 1; continue; }
+    vistos+=$(ui todos)$'\n'
+    grep -qF "$TXT_PIE_ADMIN" <<<"$vistos" && break
     arrastrar 70 30
   done
-  if grep -qiF "$TXT_SOLTAR" <<<"$vistos"; then
-    mal "la administración todavía ofrece «$TXT_SOLTAR»"
-  elif ! grep -qF "$TXT_SOLO_CABLE" <<<"$vistos"; then
-    mal "no llegué al pie de la administración, donde dice que es «$TXT_SOLO_CABLE»"
+  if grep -qiF -e "$TXT_SOLTAR" -e 'Device Owner' -e 'cable' <<<"$vistos"; then
+    mal "la administración todavía nombra Device Owner o el cable: $(grep -iF -e 'Device Owner' -e 'cable' <<<"$vistos" | en_una_linea)"
+  elif ! grep -qF "$TXT_PIE_ADMIN" <<<"$vistos"; then
+    mal "no llegué al pie de la administración, donde dice «$TXT_PIE_ADMIN»"
   else
-    ok "la administración ya no ofrece «$TXT_SOLTAR»: al pie dice que es $TXT_SOLO_CABLE"
+    ok "la administración no ofrece «$TXT_SOLTAR» ni nombra Device Owner o el cable, hasta el pie"
   fi
   captura administracion-pie
 
@@ -3405,6 +3421,8 @@ paso_9e() {
     cerrar_cartel_bloqueo
     ir_a_inicio
   fi
+  paso_9e_habilitar
+
   if alarma_de_dormir; then
     ok "Android tiene agendada una alarma RTC_WAKEUP de $PAQUETE/.admin.Bedtime\$Tick: el final de la noche"
   else
@@ -3644,6 +3662,60 @@ paso_9e_llamadas() {
   prender_pantalla
   desbloquear
   sacar_bloqueo
+  ir_a_inicio
+}
+
+# «Habilitar todo» de noche (lo vio Marcos el 30/10, con la 0.5.0): se abre
+# todo, pero Inicio sigue con sus apps, no con todas, y la lista de todas
+# respeta las ocultas. Las dos veces se gastaron en el 9c: se vuelven a dar.
+paso_9e_habilitar() {
+  local mostradas esperadas uid
+  # escribir_preferencia pasa adb a root: al final vuelve a como estaba.
+  uid=$(uid_adb)
+  if ! escribir_preferencia free_session_uses ""; then
+    mal "no pude volver a dar las veces de «$TXT_HABILITAR»"
+    return
+  fi
+  ir_a_inicio
+  if ! { tocar_en_inicio regex "$TXT_FECHA_RE" 1500 && esperar_ui 10 texto "$TXT_HABILITAR" &&
+    tocar texto "$TXT_HABILITAR" && esperar_ui 10 contiene "$TXT_HABILITADO"; }; then
+    mal "de noche, no pude empezar «$TXT_HABILITAR»"
+    ir_a_inicio
+    return
+  fi
+  esperar_lista_inicio
+  mostradas=$(etiquetas_inicio | sort -u)
+  esperadas=$(printf '%s\n' "${APPS_INICIO[@]}" | sort -u)
+  if [ "$mostradas" = "$esperadas" ]; then
+    ok "de noche, con «$TXT_HABILITAR», Inicio sigue con justo ${APPS_INICIO[*]}, no con todas"
+  else
+    mal "de noche, con «$TXT_HABILITAR», Inicio muestra «$(en_una_linea <<<"$mostradas")» en vez de ${APPS_INICIO[*]}"
+  fi
+  captura habilitar-de-noche
+  # Con todo habilitado se ve el Calendario, y ocultándolo deja de verse.
+  if abrir_cajon && esperar_en_cajon 10 "$APP_CALENDARIO" si && accion_en_cajon "$APP_CALENDARIO" "$TXT_OCULTAR" &&
+    esperar_en_cajon 10 "$APP_CALENDARIO" no; then
+    ok "y en la lista de todas, $APP_CALENDARIO oculto no se ve: las ocultas siguen ocultas"
+  else
+    mal "de noche, con «$TXT_HABILITAR», la lista de todas no respeta las ocultas: «$LISTA»"
+  fi
+  # Como estaba: se vuelve a mostrar (buscándolo, que aparece aunque esté oculto).
+  tocar campo 1
+  esperar 5 "$(c_teclado)"
+  sleep 1
+  adb_t 20 shell input text cal >/dev/null 2>&1
+  esperar_en_cajon 10 "$APP_CALENDARIO" si
+  cerrar_teclado
+  accion_en_cajon "$APP_CALENDARIO" "$TXT_MOSTRAR" || mal "no pude volver a mostrar $APP_CALENDARIO"
+  volver_del_cajon || ir_a_inicio
+  # El final, como lo dispara la alarma: con root.
+  if adb_como 0; then
+    disp "am broadcast -n '$PAQUETE/.admin.FreeSession\$End'" >/dev/null
+    sleep 3
+    if [ "$uid" != 0 ]; then adb_como 2000 || aviso "adb quedó como root (adb unroot lo vuelve atrás)"; fi
+  else
+    mal "sin root no puedo terminar «$TXT_HABILITAR»: quedan 5 minutos de todo habilitado"
+  fi
   ir_a_inicio
 }
 
@@ -3936,6 +4008,35 @@ paso_9f() {
 
   salir_de_oleadas "$prendidas" "$hm" "$kg1 $kg2"
   afirmar_en_inicio "las oleadas no tocan el cierre: Slowtown y LOCKED"
+  paso_9f_fijas
+}
+
+# Las fijas que se esconden (lo pidió Marcos el 30/10, por «Do not disturb
+# turned on»). La del emulador es la de la consola serie, que no se puede
+# deslizar: Android no deja que un lector la borre, pero sí que la posponga.
+c_fija_activa() { echo "dumpsys notification --noredact | sed -n '/Notification List:/,/Snoozed notifications:/p' | grep -q 'android.title=String (Serial console enabled)'"; }
+paso_9f_fijas() {
+  if ! esperar 3 "$(c_fija_activa)"; then
+    nota "el emulador no muestra la fija de la consola serie: salteo esconder fijas"
+    return
+  fi
+  if ! { abrir_notificaciones && marcar_casilla "$FIJA_EMULADOR" true; }; then
+    mal "«$TXT_FIJAS» no ofrece «$FIJA_EMULADOR», o no se pudo marcar"
+    ir_a_inicio
+    return
+  fi
+  captura fijas
+  if esperar 10 "! $(c_fija_activa)"; then
+    ok "marcada en «$TXT_FIJAS», «$FIJA_EMULADOR» sale del panel"
+  else
+    mal "marcada en «$TXT_FIJAS», «$FIJA_EMULADOR» sigue en el panel"
+  fi
+  if marcar_casilla "$FIJA_EMULADOR" false && esperar 10 "$(c_fija_activa)"; then
+    ok "y desmarcada, vuelve"
+  else
+    mal "desmarcada, «$FIJA_EMULADOR» no volvió al panel"
+  fi
+  ir_a_inicio
 }
 
 salir_de_oleadas() {   # salir_de_oleadas PRENDIDAS MINUTO [CLAVES]: deja «Notificaciones» como estaba (PRENDIDAS, sin la entrega MINUTO)

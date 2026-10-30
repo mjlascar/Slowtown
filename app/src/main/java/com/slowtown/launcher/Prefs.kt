@@ -151,7 +151,7 @@ class Prefs(context: Context) {
         get() = prefs.getLong(KEY_FREE_SESSION_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_FREE_SESSION_UNTIL, value).apply()
 
-    /** Cuándo se usó «Habilitar todo», separado por comas: tiene un tope cada 12 horas. */
+    /** Cuándo se usó «Habilitar todo», separado por comas: tiene un tope cada 5 horas. */
     var freeSessionUses: String
         get() = prefs.getString(KEY_FREE_SESSION_USES, "").orEmpty()
         // commit y no apply: es lo que hace cumplir el tope, no se puede perder.

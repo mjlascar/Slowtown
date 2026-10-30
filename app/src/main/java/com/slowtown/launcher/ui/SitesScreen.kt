@@ -70,11 +70,11 @@ fun SitesScreen(
             HintText("Chrome no las abre, ni a sus subdominios: bloquear 9gag.com bloquea también m.9gag.com.")
         }
         if (!deviceOwner && pageGuard) {
-            HintText("Sin cable, Slowtown mira la dirección de Chrome y, si es de una de éstas, vuelve atrás.")
+            HintText("Slowtown mira la dirección de Chrome y, si es de una de éstas, vuelve atrás.")
             OutlinedButton(onClick = onPageGuard, modifier = Modifier.fillMaxWidth()) { Text("Apagarlo en Ajustes") }
         }
         if (!deviceOwner && !pageGuard) {
-            HintText("Sin cable, Chrome no recibe esta lista: por ahora no bloquea ninguna.")
+            HintText("Para que Chrome no las abra, Slowtown necesita un permiso: por ahora no bloquea ninguna.")
             Button(onClick = { explaining = true }, modifier = Modifier.fillMaxWidth()) { Text("Bloquearlas en Chrome") }
         }
         OutlinedTextField(
@@ -111,7 +111,7 @@ fun SitesScreen(
 
     if (explaining) {
         ConfirmDialog(
-            title = "Bloquearlas sin cable",
+            title = "Antes de prenderlo",
             text = "Slowtown necesita el permiso de accesibilidad de Android. Con él mira la dirección " +
                 "de la página abierta en Chrome y, si es una de las bloqueadas, vuelve atrás. No mira " +
                 "otras apps ni el resto de la pantalla, no guarda lo que visitás y no manda nada a " +

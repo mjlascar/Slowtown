@@ -243,6 +243,10 @@ se da en Ajustes sin cable, y ser el Inicio (Android le deja al Inicio abrir
 pantallas desde segundo plano). Sin servicio de accesibilidad ni ventanas
 encima: los bancos los miran mal.
 
+- **La administración no nombra Device Owner ni el cable** (lo pidió Marcos el
+  30/10: no los usa): dice «activo» o «en pausa» y, si falta algo para
+  activarlo, ofrece el acceso a los datos de uso o ser el Inicio. El código de
+  Device Owner sigue, sin nombrarse.
 - **Activar sin cable** (`Rules.Mode.GUARD`): la administración deja activar
   Slowtown si tiene las dos cosas, y si falta una, ofrece darla. Rige todo lo
   mismo que con lock task: las bloqueadas, Bedtime, Flow State, los límites y
@@ -353,6 +357,16 @@ hacen llegar una notificación en el momento.
   después espera sin pasar por Slowtown (ni «pasan siempre» lo saca). Con
   «sólo los grupos» el resumen se suelta enseguida, así los de a dos llegan,
   pero queda a la vista con las últimas líneas de los grupos que esperan.
+- **Las fijas que se esconden** (`Waves.hidden`, lo pidió Marcos el 30/10, por
+  «Do not disturb turned on»): en «Notificaciones», las que están fijas en el
+  panel (las que no se pueden deslizar), para marcar cuáles no se ven más. Las
+  marcadas se posponen una semana, y si vuelven (vence, o un reinicio), otra
+  vez; desmarcadas, se sueltan ya. Android 12 no deja que un lector borre una
+  fija (`cancelNotificationFromListener` las excluye), pero sí que la
+  posponga (`snoozeNotificationInt` no mira las banderas). Se reconocen por
+  app, tag e id (`Waves.identity`), no por la clave de Android. Van aparte de
+  las oleadas: se esconden con las oleadas prendidas o apagadas. El paso 9f
+  lo prueba con la de la consola serie del emulador.
 - **App de prueba**: `scripts/prueba-avisos/` (`armar.sh DIR`, sin Gradle)
   publica chats como los de WhatsApp, con su resumen, y llamadas con
   pantalla completa, para probar todo esto en el emulador.
@@ -364,10 +378,13 @@ hacen llegar una notificación en el momento.
   pantalla o a los 10 minutos.
 - **«Habilitar todo por 5 minutos»** (`FreeSession`, sin contraseña): está en
   la pantalla de la contraseña. Nació para actualizar Waltra, que baja su APK
-  de GitHub y necesita el instalador de Android. Hasta 2 veces cada 12 horas
-  (ventana móvil, contada con la hora del teléfono; por eso Slowtown activo
+  de GitHub y necesita el instalador de Android. Hasta 2 veces cada 5 horas
+  (eran 12 hasta el 30/10; lo pidió Marcos; ventana móvil, contada con la
+  hora del teléfono; por eso Slowtown activo
   bloquea cambiarla a mano con `DISALLOW_CONFIG_DATE_TIME`). No se corta al
-  volver a Inicio ni al apagar la pantalla: sólo a los 5 minutos.
+  volver a Inicio ni al apagar la pantalla: sólo a los 5 minutos. De noche,
+  Inicio sigue con sus apps (con la 0.5.0 mostraba todas, lo vio Marcos el
+  30/10) y la lista de todas, sin las ocultas: lo prueba el paso 9e.
 
 Las dos agrandan la lista de lock task a todo lo instalado, sin salir de lock
 task (salir cerraría las demás tareas). «Habilitar todo» incluye Ajustes a
@@ -511,7 +528,10 @@ En el emulador se simulan llamadas y SMS: `adb emu gsm call <número>`,
 `adb emu gsm cancel <número>`, `adb emu sms send <número> <texto>`, y un crash
 de Slowtown con `adb shell am crash com.slowtown.launcher`. `uiautomator dump`
 sólo ve la ventana de la app, no los avisos del sistema (para tocar «Atender»
-hacen falta coordenadas).
+hacen falta coordenadas), y recorta al alto que Android deja a las apps (en el
+emulador, hasta y=2072): lo que queda más abajo, aunque se vea, sale con
+`[0,0][0,0]`, y en la prueba lo lee sólo `ui todos` (el pie de la
+administración cae ahí).
 
 **Antes de cerrar un teléfono real, marcar «Permitir siempre desde esta
 computadora»** en el diálogo de adb: con lock task activo no se puede
