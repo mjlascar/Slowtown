@@ -47,7 +47,7 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   horas, para actualizar apps.
 - **Hábitos como los cuadraditos de GitHub:** hasta 4 de un catálogo de 14,
   cada uno con su dibujo y sus veces por semana. Se marcan desde Inicio, y un
-  fuego cuenta los días de racha: desde el día que empezás hasta el día que
+  fuego cuenta las semanas de racha, desde el día que empezás hasta el día que
   dejás de cumplir la meta.
 - **Siempre hay una salida por cable:** `scripts/liberar.sh`.
 

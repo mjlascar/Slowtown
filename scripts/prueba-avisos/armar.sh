@@ -17,8 +17,10 @@ fi
 SALIDA=$1
 AQUI=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
-# De Java 21 sólo está el runtime: javac es el del JDK 26 (CLAUDE.md).
-JDK="${JAVA_HOME_AVISOS:-/usr/lib/jvm/java-26-openjdk}"
+# De Java 21 sólo está el runtime: javac es el del JDK del sistema que lo
+# tenga, el más nuevo (era el 26, y en noviembre pasó al 27; CLAUDE.md).
+JDK="${JAVA_HOME_AVISOS:-$(ls -d /usr/lib/jvm/java-*-openjdk 2>/dev/null | sort -V |
+  while read -r j; do [ -x "$j/bin/javac" ] && echo "$j"; done | tail -n 1)}"
 LLAVE="$HOME/.android/debug.keystore"   # clave «android», alias androiddebugkey
 
 falta() {

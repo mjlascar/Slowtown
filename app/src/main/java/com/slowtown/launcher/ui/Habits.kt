@@ -82,8 +82,8 @@ private val FLAME_STOPS = listOf(
 )
 
 /**
- * Los hábitos en Inicio: una fila por hábito con la racha (un fuego con los
- * días que lleva cumpliendo la meta), los últimos 7 días (hoy a la
+ * Los hábitos en Inicio: una fila por hábito con la racha (un fuego con las
+ * semanas que lleva cumpliendo la meta), los últimos 7 días (hoy a la
  * derecha, como en GitHub), cuánto lleva contra la meta, y a la derecha de
  * todo el botón que marca hoy, pegado al cuadradito que prende. Tocar los
  * cuadraditos abre el resumen.
@@ -176,30 +176,34 @@ private fun HabitRows(
 }
 
 /**
- * La racha: los días que lleva cumpliendo la meta ([Habits.streak]),
- * escrita adentro de un fuego que se pone más fuerte con las semanas. Sin
- * racha, la silueta gris y sin número.
+ * La racha: las semanas enteras que lleva cumpliendo la meta ([Habits.streak]
+ * la cuenta por días), escritas adentro de un fuego que se pone más fuerte
+ * con las semanas. Se prende desde el primer día; sin racha, la silueta gris
+ * y sin número.
  */
 @Composable
 private fun StreakFlame(kind: HabitKind, days: Int) {
     val color = flameColor(days)
+    // Semanas enteras (lo pidió Marcos el 24/11): la racha se cuenta por
+    // días, pero el número es de semanas, y aparece al cumplir la primera.
+    val weeks = days / 7
     Box(
         Modifier
             .size(FLAME)
             .clearAndSetSemantics {
-                contentDescription = "Racha de ${kind.label}: $days ${if (days == 1) "día" else "días"}"
+                contentDescription = "Racha de ${kind.label}: $weeks ${if (weeks == 1) "semana" else "semanas"}"
             },
         contentAlignment = Alignment.Center,
     ) {
         Flame(color, Modifier.matchParentSize())
-        if (days > 0) {
+        if (weeks > 0) {
             Text(
-                "$days",
+                "$weeks",
                 // En la panza del fuego, que está más abajo que el centro.
                 modifier = Modifier.offset(y = FLAME * 0.18f),
                 // Negro sobre los colores claros, blanco sobre la brasa: el que más contrasta.
                 color = if (color.luminance() >= 0.18f) Color.Black else Color.White,
-                style = if (days < 100) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                style = if (weeks < 100) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -279,12 +283,16 @@ fun HabitsScreen(
             }
             val week = Habits.weekCount(done, Habits.weekStart(today))
             val streak = Habits.streak(perWeek, done, today)
+            val weeks = streak.days / 7
+            // «Racha: 2 semanas (16 días, desde el 9 de noviembre)»: el fuego
+            // dice las semanas, y acá también los días y desde cuándo.
             val since = streak.since?.let {
-                " (desde el ${it.dayOfMonth} de ${it.month.getDisplayName(TextStyle.FULL, SPANISH)})"
+                " (${streak.days} ${if (streak.days == 1) "día" else "días"}, desde el ${it.dayOfMonth} de " +
+                    "${it.month.getDisplayName(TextStyle.FULL, SPANISH)})"
             }.orEmpty()
             HintText(
-                "Esta semana: $week de $perWeek · Racha: ${streak.days} " +
-                    "${if (streak.days == 1) "día" else "días"}$since · Días en total: ${done.count { !it.isAfter(today) }}",
+                "Esta semana: $week de $perWeek · Racha: $weeks ${if (weeks == 1) "semana" else "semanas"}$since · " +
+                    "Días en total: ${done.count { !it.isAfter(today) }}",
             )
             Graph(kind, done, today, onToggle)
             Spacer(Modifier.width(8.dp))

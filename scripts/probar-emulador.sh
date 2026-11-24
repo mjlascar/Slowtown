@@ -155,6 +155,7 @@ TXT_HABILITADO='Todo habilitado hasta las'   # el aviso de Inicio mientras dura
 TXT_PAGINAS='Páginas bloqueadas'             # en Administración, y el título de su pantalla
 TXT_LAS_TUYAS='Las tuyas'                    # las páginas del nivel 1 van entre este título...
 TXT_SIEMPRE_BLOQUEADAS='Siempre bloqueadas'  # ...y éste, el de las del nivel 2
+TXT_CON_TIEMPO='Con tiempo por día'          # «Páginas bloqueadas»: las que tienen tiempo por día, debajo de las tuyas
 TXT_SIN_PAGINAS='Todavía no sumaste ninguna.'
 TXT_AGREGAR=Agregar
 TXT_SACAR=Sacar
@@ -184,7 +185,7 @@ TXT_HABITOS_TOPE='Ya hay 4 en Inicio: sacá uno para sumar otro.'
 TXT_HABITOS_UNO='Tiene que quedar al menos uno.'
 TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
 TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
-TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 12 días»
+TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 2 semanas»
 TXT_DORMIR='Bedtime'                         # el botón de la administración y el título de su pantalla
 TXT_DORMIR_PRENDIDA=Prendida                 # su interruptor
 TXT_BEDTIME_APPS='Apps de Bedtime'           # el título del selector de las que se abren de noche («Elegir las apps», al pie de Bedtime)
@@ -1364,7 +1365,8 @@ paginas_tuyas() {   # las páginas sumadas en el último volcado, una por línea
   local x y arriba abajo t lo='' hi=''
   while IFS=$'\t' read -r x y arriba abajo t; do
     [ "$t" = "$TXT_LAS_TUYAS" ] && lo=$abajo
-    [ "$t" = "$TXT_SIEMPRE_BLOQUEADAS" ] && hi=$arriba
+    # Abajo vienen las de tiempo por día (24/11), y después las fijas.
+    [[ -z $hi && ( $t == "$TXT_CON_TIEMPO" || $t == "$TXT_SIEMPRE_BLOQUEADAS" ) ]] && hi=$arriba
   done < <(ui textos)
   [[ -n $lo && -n $hi ]] || return 1
   while IFS=$'\t' read -r x y arriba abajo t; do
@@ -1430,6 +1432,18 @@ desde = [d for d in dias if d >= perdida - timedelta(5)]
 print((hoy - min(desde)).days + 1 if desde else 0)
 ' "$1" "$2"
 }
+MESES=(enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre)
+racha_texto() {   # racha_texto META HOY: como el resumen, «2 semanas (16 días, desde el 9 de noviembre)» (fechas en stdin)
+  local fechas d s desde
+  fechas=$(cat)
+  d=$(racha_de "$1" "$2" <<<"$fechas")
+  if (( d / 7 == 1 )); then s='1 semana'; else s="$((d / 7)) semanas"; fi
+  if (( d > 0 )); then
+    desde=$(dia_mas "$2" $((1 - d)))
+    s+=" ($d $( ((d == 1)) && echo día || echo días), desde el $((10#$(date -u -d "$desde" +%d))) de ${MESES[$((10#$(date -u -d "$desde" +%m) - 1))]})"
+  fi
+  echo "$s"
+}
 iniciales_de() {   # iniciales_de HOY: las de los últimos 7 días, hoy a la derecha («MXJVSDL» un lunes)
   local i u s=''
   for i in 6 5 4 3 2 1 0; do
@@ -1493,7 +1507,7 @@ esperar_lejos_de_medianoche() {   # si falta poco para la medianoche del emulado
 }
 afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos como están guardados
   # Por hábito: «N/meta» con N de los últimos 7 días, la fila con la misma
-  # cuenta, el fuego con los días de racha, y el
+  # cuenta, el fuego con las semanas enteras de racha, y el
   # botón de hoy marcado si hoy está guardado. Más las iniciales.
   local que=$1 hoy h dias n esperado e marcado racha semanas fuego mal_=() dice=()
   hoy=$(hoy_en_el_emulador)
@@ -1509,7 +1523,8 @@ afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos co
     ui texto "${HABITO_NOMBRE[$h]}$TXT_FILA_HABITO$n de ${HABITO_META[$h]}$TXT_VER_RESUMEN" >/dev/null ||
       mal_+=("la fila de $h no dice «$n de ${HABITO_META[$h]}»")
     racha=$(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")
-    if (( racha == 1 )); then semanas='1 día'; else semanas="$racha días"; fi
+    racha=$((racha / 7))   # el fuego dice semanas enteras; la racha se cuenta por días
+    if (( racha == 1 )); then semanas='1 semana'; else semanas="$racha semanas"; fi
     fuego="$TXT_RACHA${HABITO_NOMBRE[$h]}: $semanas"
     ui texto "$fuego" >/dev/null ||
       mal_+=("el fuego de $h no dice «$fuego» (dice «$(ui textos | cut -f5 | grep -m1 "^$TXT_RACHA${HABITO_NOMBRE[$h]}:")»)")
@@ -2445,7 +2460,7 @@ paso_8b() {
   for h in "${HABITOS[@]}"; do
     dias=$(dias_de_habito "$h")
     esperado="Esta semana: $(contar_entre "$(lunes_de "$hoy")" "$(dia_mas "$(lunes_de "$hoy")" 6)" <<<"$dias") de ${HABITO_META[$h]}"
-    esperado+=" · Semanas cumplidas seguidas: $(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")"
+    esperado+=" · Racha: $(racha_texto "${HABITO_META[$h]}" "$hoy" <<<"$dias")"
     esperado+=" · Días en total: $(contar_entre 0000-00-00 "$hoy" <<<"$dias")"
     volcar_ui
     if ! ui texto "$esperado" >/dev/null; then
@@ -2512,8 +2527,8 @@ paso_8c() {
   # En Inicio: cuatro filas, con el botón de hoy de Leer y su meta de 6.
   if atras && esperar_ui 10 texto "$TXT_HABITOS_PISTA" && atras && esperar_ui 10 texto "Lectura de hoy" &&
     ui texto "Caminata de hoy" >/dev/null && ui contiene "Leer$TXT_FILA_HABITO" >/dev/null &&
-    ui texto "0/6" >/dev/null && ui texto "${TXT_RACHA}Leer: 0 días" >/dev/null; then
-    ok "Inicio suma Leer con su meta (0/6), el fuego apagado («${TXT_RACHA}Leer: 0 días») y los botones «Lectura de hoy» y «Caminata de hoy»"
+    ui texto "0/6" >/dev/null && ui texto "${TXT_RACHA}Leer: 0 semanas" >/dev/null; then
+    ok "Inicio suma Leer con su meta (0/6), el fuego apagado («${TXT_RACHA}Leer: 0 semanas») y los botones «Lectura de hoy» y «Caminata de hoy»"
   else
     mal "Inicio o el resumen no muestran los hábitos sumados ($(foco))"
   fi
@@ -5144,6 +5159,42 @@ paso_16() {
     mal "con el permiso prendido, «$TXT_PAGINAS» no ofrece «$TXT_APAGARLO»"
   fi
   ir_a_inicio
+
+  # Tiempo por página (24/11): example.org con 1 minuto por día. Se queda
+  # mientras hay tiempo; al terminarse, el bloqueo la saca y queda Inicio, y
+  # después ya no se abre. Mientras se espera, nada de uiautomator: apaga el
+  # bloqueo mientras mira.
+  if escribir_preferencia site_limits '{"example.org":1}' && escribir_preferencia site_usage '' &&
+    esperar 20 "dumpsys accessibility | grep -q 'Bound services:{Service\[label=Slowtown'"; then
+    abrir_direccion https://example.org/
+    if esperar 5 "$(c_foco "$FOCO_DIRECCIONES")" && sostener 20 "$(c_foco "$FOCO_DIRECCIONES")"; then
+      ok "example.org, con 1 minuto por día, se queda mientras le queda tiempo"
+      if esperar 75 "$(c_foco "$FOCO_INICIO")" && sostener 4 "! $(c_foco "$FOCO_DIRECCIONES")"; then
+        ok "al terminarse el minuto de hoy, el bloqueo la saca y queda Inicio"
+      else
+        mal "al terminarse el minuto de hoy, example.org sigue ($(foco))"
+      fi
+      ir_a_inicio
+      sacada_por_el_bloqueo "example.org, sin tiempo por hoy," https://example.org/
+    else
+      mal "example.org, con tiempo, no se queda ($(foco))"
+    fi
+    ir_a_inicio
+    escribir_preferencia site_limits '{}' >/dev/null
+  else
+    mal "no pude ponerle tiempo a example.org"
+  fi
+
+  # El botón de accesibilidad de la barra de abajo (24/11): Samsung se lo
+  # asigna al bloqueo y, si el servicio no pide el botón, tocarlo lo apaga
+  # (le pasó a Marcos). Pidiéndolo, Android le avisa el toque al servicio en
+  # vez de apagarlo. El botón cae debajo de lo que uiautomator ve con caja,
+  # así que no se toca: se mira que Android lo tenga pedido.
+  if esperar 10 "dumpsys accessibility | grep -q 'label=Slowtown.*requestA11yBtn=true'"; then
+    ok "el bloqueo de páginas pide el botón de accesibilidad: tocarlo no lo apaga"
+  else
+    mal "el bloqueo de páginas no pide el botón de accesibilidad, y tocarlo lo apagaría"
+  fi
 
   # Apagado, no frena nada.
   disp settings delete secure enabled_accessibility_services >/dev/null

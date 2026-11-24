@@ -124,8 +124,9 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   aparte. Van en el lugar del widget, y vienen puestos (`Prefs.habitsWidget`,
   salvo que ya haya un widget de otra app); en el selector de widget son
   «Hábitos de Slowtown». Una fila por hábito: a la izquierda, un fuego con la
-  racha en días (`Habits.streak`), que pasa de brasa a fuego fuerte con las
-  semanas. Desde el 24/11 no mira semanas de calendario (lo pidió Marcos:
+  racha en semanas enteras (`Habits.streak` la cuenta por días; el fuego se
+  prende desde el primer día y el número aparece con la primera semana), que
+  pasa de brasa a fuego fuerte con las semanas. Desde el 24/11 no mira semanas de calendario (lo pidió Marcos:
   que empiece el día que empezás y termine el día que la perdés): se pierde
   el día en que los 7 días que terminan ahí no llegan a la meta (hoy, sólo si
   ni marcándolo llega), y empieza el primer día marcado después; el resumen
