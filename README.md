@@ -33,6 +33,9 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   Nunca corta una llamada, tampoco las de WhatsApp.
 - **Flow State:** en los horarios que elijas, cada uno con sus días, no se
   abren las apps que distraen. También con ráfagas de 5 minutos.
+- **Tiempo por página:** «media hora de YouTube por día»: con el bloqueo de
+  páginas prendido, cuando se usa el tiempo de hoy, Chrome no la abre más
+  hasta mañana.
 - **Límites por app:** «máximo 1 hora de Instagram»: cuando una app llega a
   su límite del día, no se abre más hasta mañana.
 - **Notificaciones por oleadas:** las de las apps que elijas esperan y llegan
@@ -44,7 +47,8 @@ Está hecho para un Galaxy S10e con Android 12, en Kotlin y Jetpack Compose.
   horas, para actualizar apps.
 - **Hábitos como los cuadraditos de GitHub:** hasta 4 de un catálogo de 14,
   cada uno con su dibujo y sus veces por semana. Se marcan desde Inicio, y un
-  fuego cuenta las semanas seguidas con la meta cumplida.
+  fuego cuenta los días de racha: desde el día que empezás hasta el día que
+  dejás de cumplir la meta.
 - **Siempre hay una salida por cable:** `scripts/liberar.sh`.
 
 ## Descargar

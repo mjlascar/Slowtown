@@ -1,6 +1,9 @@
 package com.slowtown.launcher.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,10 +21,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.slowtown.launcher.admin.Chrome
 import com.slowtown.launcher.admin.Fixed
+import com.slowtown.launcher.admin.Limits
+import com.slowtown.launcher.admin.SiteTimers
+
+/** Una página con tiempo por día: cuál, cuántos minutos y cuánto se usó hoy, en milisegundos. */
+data class SiteTimer(val site: String, val minutes: Int, val usedToday: Long)
 
 /**
  * Las páginas que Chrome no abre. Las que se suman acá son el nivel 1 (con la
@@ -31,6 +45,9 @@ import com.slowtown.launcher.admin.Fixed
  * Sin Device Owner, Chrome no recibe la lista: la hace cumplir el bloqueo de
  * páginas sin cable (PageGuard), si se prende. Antes de mandar a Ajustes, la
  * pantalla dice qué mira y para qué (Play lo exige, y es lo justo).
+ *
+ * Abajo, las páginas con tiempo por día ([SiteTimers]): se abren hasta usar
+ * el de hoy, y después quedan bloqueadas hasta mañana.
  */
 @Composable
 fun SitesScreen(
@@ -39,10 +56,15 @@ fun SitesScreen(
     deviceOwner: Boolean,
     /** Si está prendido el bloqueo de páginas sin cable. */
     pageGuard: Boolean,
+    /** Si Android lo está corriendo: prendido y sin correr, no bloquea. */
+    pageGuardRunning: Boolean,
     /** Abre la pantalla de Ajustes donde se prende y se apaga. */
     onPageGuard: () -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
+    timers: List<SiteTimer>,
+    /** Otro tiempo para una página, en minutos, o null para sacárselo. */
+    onTimer: (site: String, minutes: Int?) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -51,16 +73,17 @@ fun SitesScreen(
     var explaining by remember { mutableStateOf(false) }
     val fixedCount = remember { (Fixed.CORE_SITES + Fixed.listedSites(context)).distinct().size }
 
-    fun add() {
+    fun add(withTime: Boolean) {
         val site = Chrome.normalizeSite(text)
         message = when {
             site == null -> "Eso no parece una página. Probá con algo como 9gag.com."
             Fixed.covers(context, site) -> "Ésa ya está bloqueada siempre."
             site in sites -> "Ésa ya está en tu lista."
+            timers.any { it.site == site } -> "Ésa ya tiene tiempo por día."
             else -> null
         }
         if (site != null && message == null) {
-            onAdd(site)
+            if (withTime) onTimer(site, SiteTimers.DEFAULT) else onAdd(site)
             text = ""
         }
     }
@@ -68,6 +91,12 @@ fun SitesScreen(
     FormScaffold(title = "Páginas bloqueadas", onBack = onBack) {
         if (deviceOwner || pageGuard) {
             HintText("Chrome no las abre, ni a sus subdominios: bloquear 9gag.com bloquea también m.9gag.com.")
+        }
+        if (!deviceOwner && pageGuard && !pageGuardRunning) {
+            ErrorText(
+                "Está prendido, pero Android no lo está corriendo, y no bloquea nada. Apagalo y " +
+                    "volvelo a prender en Ajustes.",
+            )
         }
         if (!deviceOwner && pageGuard) {
             HintText("Slowtown mira la dirección de Chrome y, si es de una de éstas, vuelve atrás.")
@@ -84,12 +113,15 @@ fun SitesScreen(
             placeholder = { Text("9gag.com") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { add() }),
+            keyboardActions = KeyboardActions(onDone = { add(withTime = false) }),
             modifier = Modifier.fillMaxWidth(),
         )
         message?.let { ErrorText(it) }
-        OutlinedButton(onClick = ::add, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { add(withTime = false) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text("Agregar")
+        }
+        OutlinedButton(onClick = { add(withTime = true) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Text("Agregar con tiempo por día")
         }
 
         Text("Las tuyas", style = MaterialTheme.typography.titleMedium)
@@ -100,6 +132,14 @@ fun SitesScreen(
                 TextButton(onClick = { onRemove(site) }) { Text("Sacar") }
             }
         }
+
+        Text("Con tiempo por día", style = MaterialTheme.typography.titleMedium)
+        HintText(
+            "Se abren hasta usar el tiempo de hoy, contando el rato que están adelante en " +
+                "Chrome, y después quedan bloqueadas hasta mañana.",
+        )
+        if (timers.isEmpty()) HintText("Ninguna todavía.")
+        timers.sortedBy { it.site }.forEach { timer -> TimerRow(timer) { onTimer(timer.site, it) } }
 
         Text("Siempre bloqueadas", style = MaterialTheme.typography.titleMedium)
         // Sin nombrar qué bloquea (lo pidió Marcos): quien navega se da cuenta solo.
@@ -126,5 +166,44 @@ fun SitesScreen(
             onConfirm = onPageGuard,
             onDismiss = { explaining = false },
         )
+    }
+}
+
+/** Una página con tiempo: su nombre y «Sacar», y abajo «−  30 min  +» y lo que se usó hoy. */
+@Composable
+private fun TimerRow(timer: SiteTimer, onChange: (Int?) -> Unit) {
+    val site = timer.site
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(site, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onChange(null) }) { Text("Sacar") }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            StepButton(plus = false, enabled = timer.minutes > Limits.STEP, description = "Menos tiempo: $site") {
+                onChange((timer.minutes - Limits.STEP).coerceAtLeast(Limits.STEP))
+            }
+            Text(
+                Limits.format(timer.minutes),
+                style = MaterialTheme.typography.labelLarge,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    .widthIn(min = 76.dp)
+                    .clearAndSetSemantics {
+                        contentDescription = "$site: ${Limits.format(timer.minutes)} por día"
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            )
+            StepButton(plus = true, enabled = timer.minutes < Limits.MAX, description = "Más tiempo: $site") {
+                onChange((timer.minutes + Limits.STEP).coerceAtMost(Limits.MAX))
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Hoy: ${Limits.format((timer.usedToday / 60_000L).toInt())}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }

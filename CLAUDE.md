@@ -124,8 +124,12 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   aparte. Van en el lugar del widget, y vienen puestos (`Prefs.habitsWidget`,
   salvo que ya haya un widget de otra app); en el selector de widget son
   «Hábitos de Slowtown». Una fila por hábito: a la izquierda, un fuego con la
-  racha (semanas seguidas, de lunes a domingo, con la meta cumplida,
-  `Habits.streak`), que pasa de brasa a fuego fuerte con las semanas; los
+  racha en días (`Habits.streak`), que pasa de brasa a fuego fuerte con las
+  semanas. Desde el 24/11 no mira semanas de calendario (lo pidió Marcos:
+  que empiece el día que empezás y termine el día que la perdés): se pierde
+  el día en que los 7 días que terminan ahí no llegan a la meta (hoy, sólo si
+  ni marcándolo llega), y empieza el primer día marcado después; el resumen
+  dice desde cuándo. Los
   últimos 7 días, como los cuadraditos de GitHub, hoy a la derecha; cuánto
   lleva contra la meta en esos 7 días; y a la derecha, pegado al día de hoy,
   el botón que lo marca. En una pantalla angosta (el S10e) los cuadraditos se
@@ -297,6 +301,11 @@ Slowtown, sin otra app ni otro servicio.
   las políticas (nivel 2, nivel 1 y las excepciones), sin el tope de 1.000.
   Vale con Slowtown activo o en pausa, como el nivel 2. Con Device Owner o en
   el modo a prueba de fallos no hace nada.
+- **Prendido no es corriendo**: Ajustes guarda que está prendido, pero si
+  Android lo dejó de lado (se forzó la detención, o se colgó) no bloquea
+  nada. `PageGuard.running` dice si Android lo está corriendo, y «Páginas
+  bloqueadas» avisa si está prendido y no corre (24/11, cuando Marcos vio
+  que a veces dejaba de bloquear).
 - **Si Atrás no alcanza** (la pestaña empezó en esa página, o Chrome se reabre
   en ella), abre Google en la pestaña de Slowtown (siempre la misma, con
   `Browser.EXTRA_APPLICATION_ID`), y si da vueltas, Inicio: Chrome nunca queda
@@ -424,6 +433,15 @@ un cajón de su casa se termina sacando.
   (lo pidió Marcos), música, podcasts y radio, ayuda para dejar el juego,
   dominios compartidos y lo técnico. Las listas completas, que son millones,
   son para el DNS.
+- **Páginas con tiempo por día** (`SiteTimers`, `Prefs.siteLimits`, lo pidió
+  Marcos el 24/11): en «Páginas bloqueadas», con contraseña, de a 15 minutos
+  como los límites por app. Las cuenta y las frena `PageGuard`: el rato que
+  la página (o un subdominio) está adelante en Chrome con la pantalla
+  prendida, mirando cada 15 segundos (de otras apps no le llegan avisos);
+  al terminarse el de hoy queda bloqueada hasta la medianoche, también si la
+  barra está escondida porque se está leyendo. Por eso rigen sólo con el
+  bloqueo de páginas prendido, y valen con Slowtown activo o en pausa, como
+  las bloqueadas. Lo usado se guarda con la fecha (`Prefs.siteUsage`).
 
 El nivel 2 se pone en cada arranque, cada vez que se instala o cambia una app
 y al quedar como Device Owner (`SlowtownApp`; esto último porque, si Slowtown
@@ -493,7 +511,8 @@ quiere mostrar su aviso de administrador, que es de Ajustes.
 
 El SDK está en `~/Android/Sdk` (sin sudo; `local.properties` lo apunta, y
 está ignorado por git). De Java 21 sólo está el runtime (`jre21-openjdk`), así
-que Gradle corre en el JDK 26 del sistema, y anda con AGP 9.4.1 + Gradle 9.8.1.
+que Gradle corre en el JDK del sistema (el 27 desde noviembre:
+`JAVA_HOME=/usr/lib/jvm/java-27-openjdk`), y anda con AGP 9.4.1 + Gradle 9.8.1.
 En CI corre en Temurin 21.
 
 ```bash

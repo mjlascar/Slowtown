@@ -71,8 +71,8 @@ private val FLAME_GAP = 6.dp
 private val BUTTON = 40.dp
 private val BUTTON_GAP = 14.dp
 
-// Las semanas en que el fuego llega a cada color: de una brasa (una semana)
-// a un fuego fuerte (doce o más).
+// Las semanas de racha en que el fuego llega a cada color: de una brasa (la
+// primera semana) a un fuego fuerte (doce o más).
 private val FLAME_STOPS = listOf(
     1 to Color(0xFF8A6420),
     3 to Color(0xFFD9921F),
@@ -82,8 +82,8 @@ private val FLAME_STOPS = listOf(
 )
 
 /**
- * Los hábitos en Inicio: una fila por hábito con la racha (un fuego con las
- * semanas seguidas con la meta cumplida), los últimos 7 días (hoy a la
+ * Los hábitos en Inicio: una fila por hábito con la racha (un fuego con los
+ * días que lleva cumpliendo la meta), los últimos 7 días (hoy a la
  * derecha, como en GitHub), cuánto lleva contra la meta, y a la derecha de
  * todo el botón que marca hoy, pegado al cuadradito que prende. Tocar los
  * cuadraditos abre el resumen.
@@ -150,7 +150,7 @@ private fun HabitRows(
             val done = marks[kind].orEmpty()
             val count = Habits.lastWeekCount(done, today)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StreakFlame(kind, Habits.streak(perWeek, done, today))
+                StreakFlame(kind, Habits.streak(perWeek, done, today).days)
                 Spacer(Modifier.width(FLAME_GAP))
                 Text(
                     "$count/$perWeek",
@@ -176,45 +176,46 @@ private fun HabitRows(
 }
 
 /**
- * La racha: las semanas seguidas con la meta cumplida ([Habits.streak]),
+ * La racha: los días que lleva cumpliendo la meta ([Habits.streak]),
  * escrita adentro de un fuego que se pone más fuerte con las semanas. Sin
  * racha, la silueta gris y sin número.
  */
 @Composable
-private fun StreakFlame(kind: HabitKind, weeks: Int) {
-    val color = flameColor(weeks)
+private fun StreakFlame(kind: HabitKind, days: Int) {
+    val color = flameColor(days)
     Box(
         Modifier
             .size(FLAME)
             .clearAndSetSemantics {
-                contentDescription = "Racha de ${kind.label}: $weeks ${if (weeks == 1) "semana" else "semanas"}"
+                contentDescription = "Racha de ${kind.label}: $days ${if (days == 1) "día" else "días"}"
             },
         contentAlignment = Alignment.Center,
     ) {
         Flame(color, Modifier.matchParentSize())
-        if (weeks > 0) {
+        if (days > 0) {
             Text(
-                "$weeks",
+                "$days",
                 // En la panza del fuego, que está más abajo que el centro.
                 modifier = Modifier.offset(y = FLAME * 0.18f),
                 // Negro sobre los colores claros, blanco sobre la brasa: el que más contrasta.
                 color = if (color.luminance() >= 0.18f) Color.Black else Color.White,
-                style = if (weeks < 100) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                style = if (days < 100) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
             )
         }
     }
 }
 
-/** Entre los colores de [FLAME_STOPS], según las semanas; sin racha, el gris de los bordes. */
-private fun flameColor(weeks: Int): Color {
-    if (weeks <= 0) return OUTLINE
+/** Entre los colores de [FLAME_STOPS], según las semanas de racha; sin racha, el gris de los bordes. */
+private fun flameColor(days: Int): Color {
+    if (days <= 0) return OUTLINE
+    val weeks = days / 7f
     val upper = FLAME_STOPS.indexOfFirst { it.first >= weeks }
     if (upper == -1) return FLAME_STOPS.last().second
     if (upper == 0) return FLAME_STOPS.first().second
     val (fromWeeks, from) = FLAME_STOPS[upper - 1]
     val (toWeeks, to) = FLAME_STOPS[upper]
-    return lerp(from, to, (weeks - fromWeeks).toFloat() / (toWeeks - fromWeeks))
+    return lerp(from, to, (weeks - fromWeeks) / (toWeeks - fromWeeks))
 }
 
 /** El botón de hoy: vacío con el dibujo, o verde cuando hoy ya está marcado. */
@@ -277,9 +278,13 @@ fun HabitsScreen(
                 )
             }
             val week = Habits.weekCount(done, Habits.weekStart(today))
+            val streak = Habits.streak(perWeek, done, today)
+            val since = streak.since?.let {
+                " (desde el ${it.dayOfMonth} de ${it.month.getDisplayName(TextStyle.FULL, SPANISH)})"
+            }.orEmpty()
             HintText(
-                "Esta semana: $week de $perWeek · Semanas cumplidas seguidas: " +
-                    "${Habits.streak(perWeek, done, today)} · Días en total: ${done.count { !it.isAfter(today) }}",
+                "Esta semana: $week de $perWeek · Racha: ${streak.days} " +
+                    "${if (streak.days == 1) "día" else "días"}$since · Días en total: ${done.count { !it.isAfter(today) }}",
             )
             Graph(kind, done, today, onToggle)
             Spacer(Modifier.width(8.dp))

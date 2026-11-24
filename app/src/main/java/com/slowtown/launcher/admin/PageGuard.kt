@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Browser
 import android.util.Log
@@ -34,6 +35,11 @@ import com.slowtown.launcher.security.CrashGuard
  * pestaña empezó ahí, o Chrome se reabre en ella), abre Google en la pestaña de
  * Slowtown, siempre la misma; y si vuelve una y otra vez, va a Inicio. Así
  * Chrome nunca queda trabado en una bloqueada.
+ *
+ * También cuenta el tiempo de las páginas con tiempo por día ([SiteTimers]):
+ * mientras una está adelante, cada tanto suma el rato y mira si Chrome sigue
+ * adelante con la pantalla prendida (de otras apps no le llegan avisos).
+ * Cuando se termina el de hoy, la página queda bloqueada como las de [Pages].
  *
  * Mirar la barra es preguntarle a Chrome, que puede tardar: se hace en un hilo
  * aparte, no en el de Inicio. Todo lo de abajo corre en ese hilo.
@@ -65,6 +71,12 @@ class PageGuard : AccessibilityService() {
     private var toldAt = 0L
     private var idleCheckedAt = 0L
     private var idle = false
+
+    /** La página con tiempo que está adelante ([SiteTimers]), en qué navegador y desde cuándo se cuenta. */
+    private var timedSite: String? = null
+    private var timedPkg: String? = null
+    private var timedSince = 0L
+    private val tick = Runnable { safely { tickTiming() } }
 
     private val thread = HandlerThread("paginas").apply { start() }
     private val worker = Handler(thread.looper)
@@ -110,10 +122,17 @@ class PageGuard : AccessibilityService() {
         }
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        running = true
+    }
+
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        running = false
         worker.removeCallbacksAndMessages(null)
+        safely { flush() }
         main.removeCallbacksAndMessages(null)
         thread.quitSafely()
         super.onDestroy()
@@ -133,8 +152,9 @@ class PageGuard : AccessibilityService() {
             return
         }
         if (root.packageName?.toString() != pkg) {
-            // Chrome ya no está adelante: lo pendiente no corre.
+            // Chrome ya no está adelante: lo pendiente no corre, y el tiempo no cuenta.
             if (rechecking) pendingSite = null
+            stopTiming()
             return
         }
         val bar = root.findAccessibilityNodeInfosByViewId("$pkg:id/url_bar").firstOrNull { it.isVisibleToUser }
@@ -147,7 +167,8 @@ class PageGuard : AccessibilityService() {
         // Mientras se escribe, lo que dice es lo que se está escribiendo, no la página.
         if (bar.isFocused) return
         val host = Chrome.normalizeSite(bar.text?.toString() ?: return) ?: return
-        val site = Pages.blocked(this, host)
+        val site = Pages.blocked(this, host) ?: SiteTimers.exhausted(this, host)
+        timing(pkg, if (site == null) SiteTimers.match(this, host) else null)
         if (site == null) {
             pendingSite = null
             if (opened) backedOut = null
@@ -217,7 +238,64 @@ class PageGuard : AccessibilityService() {
         if (site == toldSite && now - toldAt < TELL_AGAIN_MS) return
         toldSite = site
         toldAt = now
-        main.post { Toast.makeText(this, "$site está bloqueada.", Toast.LENGTH_SHORT).show() }
+        val text = if (Pages.blocked(this, site) != null) "$site está bloqueada." else "Se terminó el tiempo de hoy de $site."
+        main.post { Toast.makeText(this, text, Toast.LENGTH_SHORT).show() }
+    }
+
+    /** Empieza a contar [site] (o deja de contar, con null); si ya la contaba, sigue. */
+    private fun timing(pkg: String, site: String?) {
+        if (site == timedSite) return
+        stopTiming()
+        if (site == null) return
+        timedSite = site
+        timedPkg = pkg
+        timedSince = SystemClock.elapsedRealtime()
+        scheduleTick(site)
+    }
+
+    private fun stopTiming() {
+        flush()
+        timedSite = null
+        timedPkg = null
+        worker.removeCallbacks(tick)
+    }
+
+    /** Suma lo que va desde la última vez. */
+    private fun flush() {
+        val site = timedSite ?: return
+        val now = SystemClock.elapsedRealtime()
+        SiteTimers.add(this, site, now - timedSince)
+        timedSince = now
+    }
+
+    /** La próxima mirada: en [TICK_MS], o antes si el tiempo de hoy se termina antes. */
+    private fun scheduleTick(site: String) {
+        val left = SiteTimers.remaining(this, site) ?: TICK_MS
+        worker.removeCallbacks(tick)
+        worker.postDelayed(tick, left.coerceIn(1_000L, TICK_MS))
+    }
+
+    private fun tickTiming() {
+        val site = timedSite ?: return
+        val pkg = timedPkg ?: return
+        val root = rootInActiveWindow
+        val screenOn = getSystemService(PowerManager::class.java)?.isInteractive != false
+        // Entre una ventana y otra no hay nada que leer: se sigue contando.
+        if (!screenOn || (root != null && root.packageName?.toString() != pkg)) {
+            stopTiming()
+            return
+        }
+        flush()
+        if (SiteTimers.remaining(this, site) == 0L) {
+            // Se terminó: deja de contar, y la página se trata como bloqueada
+            // ya cargada (aunque la barra esté escondida porque se está leyendo).
+            stopTiming()
+            pendingSite = site
+            pendingTries = 0
+            check(pkg, opened = false, customTab = false, rechecking = true)
+            return
+        }
+        scheduleTick(site)
     }
 
     /** Con Device Owner o en el modo a prueba de fallos, nada; se mira cada tanto, no a cada cambio. */
@@ -230,16 +308,26 @@ class PageGuard : AccessibilityService() {
         return idle
     }
 
-    private companion object {
-        const val TAG = "Slowtown"
-        const val SAFE_PAGE = "https://www.google.com/"
-        const val ARRIVE_MS = 1_000L
-        const val QUIET_MS = 2_000L
-        const val RETRY_MS = 5_000L
-        const val MAX_TRIES = 5
-        const val LOOP_MS = 15_000L
-        const val MAX_ACTIONS = 5
-        const val TELL_AGAIN_MS = 4_000L
-        const val IDLE_TTL_MS = 30_000L
+    companion object {
+        /**
+         * Si Android lo está corriendo ahora. Corre en el proceso de Inicio:
+         * prendido en Ajustes y sin correr quiere decir que Android lo dejó de
+         * lado (se forzó la detención, o se colgó), y entonces no bloquea nada.
+         */
+        @Volatile
+        var running = false
+            private set
+
+        private const val TAG = "Slowtown"
+        private const val SAFE_PAGE = "https://www.google.com/"
+        private const val ARRIVE_MS = 1_000L
+        private const val QUIET_MS = 2_000L
+        private const val RETRY_MS = 5_000L
+        private const val MAX_TRIES = 5
+        private const val LOOP_MS = 15_000L
+        private const val MAX_ACTIONS = 5
+        private const val TELL_AGAIN_MS = 4_000L
+        private const val IDLE_TTL_MS = 30_000L
+        private const val TICK_MS = 15_000L
     }
 }

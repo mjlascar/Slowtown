@@ -184,7 +184,7 @@ TXT_HABITOS_TOPE='Ya hay 4 en Inicio: sacá uno para sumar otro.'
 TXT_HABITOS_UNO='Tiene que quedar al menos uno.'
 TXT_HABITOS_WIDGET='Hábitos de Slowtown'     # la primera opción de «Elegir el widget de Inicio»
 TXT_HABITOS_WIDGET_SUB='Meditar y ejercicio'
-TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 2 semanas»
+TXT_RACHA='Racha de '                        # el fuego de cada hábito, por su descripción: «Racha de Meditar: 12 días»
 TXT_DORMIR='Bedtime'                         # el botón de la administración y el título de su pantalla
 TXT_DORMIR_PRENDIDA=Prendida                 # su interruptor
 TXT_BEDTIME_APPS='Apps de Bedtime'           # el título del selector de las que se abren de noche («Elegir las apps», al pie de Bedtime)
@@ -1407,18 +1407,28 @@ lunes_de() { dia_mas "$1" $((1 - $(date -u -d "$1" +%u))); }   # el lunes de la 
 contar_entre() {   # contar_entre DESDE HASTA: cuántas de las fechas de stdin caen entre las dos
   awk -v a="$1" -v b="$2" '$0 != "" && $0 >= a && $0 <= b { n++ } END { print n + 0 }'
 }
-racha_de() {   # racha_de META HOY: semanas seguidas, de lunes a domingo, con la meta cumplida (fechas en stdin)
-  # Como Habits.streak: la semana de ahora cuenta si ya está cumplida; si no,
-  # todavía hay tiempo y se cuenta desde la anterior.
-  local meta=$1 fechas lunes n=0
-  fechas=$(cat)
-  lunes=$(lunes_de "$2")
-  (( $(contar_entre "$lunes" "$(dia_mas "$lunes" 6)" <<<"$fechas") < meta )) && lunes=$(dia_mas "$lunes" -7)
-  while (( $(contar_entre "$lunes" "$(dia_mas "$lunes" 6)" <<<"$fechas") >= meta )); do
-    n=$((n + 1))
-    lunes=$(dia_mas "$lunes" -7)
-  done
-  echo "$n"
+racha_de() {   # racha_de META HOY: los días de racha, hoy incluido (fechas en stdin)
+  # Como Habits.streak: se pierde el día en que los 7 días que terminan ahí no
+  # llegan a la meta (hoy, sólo si ni marcándolo llega), y empieza el primer
+  # día marcado después de la última vez que se perdió.
+  python3 -I -c '
+import sys
+from datetime import date, timedelta
+meta, hoy = int(sys.argv[1]), date.fromisoformat(sys.argv[2])
+dias = {date.fromisoformat(l.strip()) for l in sys.stdin if l.strip()}
+dias = {d for d in dias if d <= hoy}
+if not dias:
+    print(0); sys.exit()
+cuenta = lambda fin: sum(fin - timedelta(i) in dias for i in range(7))
+perdida = hoy
+while perdida >= min(dias):
+    falta = 1 if perdida == hoy and hoy not in dias else 0
+    if cuenta(perdida) + falta < meta:
+        break
+    perdida -= timedelta(1)
+desde = [d for d in dias if d >= perdida - timedelta(5)]
+print((hoy - min(desde)).days + 1 if desde else 0)
+' "$1" "$2"
 }
 iniciales_de() {   # iniciales_de HOY: las de los últimos 7 días, hoy a la derecha («MXJVSDL» un lunes)
   local i u s=''
@@ -1483,7 +1493,7 @@ esperar_lejos_de_medianoche() {   # si falta poco para la medianoche del emulado
 }
 afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos como están guardados
   # Por hábito: «N/meta» con N de los últimos 7 días, la fila con la misma
-  # cuenta, el fuego con las semanas seguidas con la meta cumplida, y el
+  # cuenta, el fuego con los días de racha, y el
   # botón de hoy marcado si hoy está guardado. Más las iniciales.
   local que=$1 hoy h dias n esperado e marcado racha semanas fuego mal_=() dice=()
   hoy=$(hoy_en_el_emulador)
@@ -1499,7 +1509,7 @@ afirmar_habitos() {   # afirmar_habitos QUÉ: que Inicio muestre los hábitos co
     ui texto "${HABITO_NOMBRE[$h]}$TXT_FILA_HABITO$n de ${HABITO_META[$h]}$TXT_VER_RESUMEN" >/dev/null ||
       mal_+=("la fila de $h no dice «$n de ${HABITO_META[$h]}»")
     racha=$(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")
-    if (( racha == 1 )); then semanas='1 semana'; else semanas="$racha semanas"; fi
+    if (( racha == 1 )); then semanas='1 día'; else semanas="$racha días"; fi
     fuego="$TXT_RACHA${HABITO_NOMBRE[$h]}: $semanas"
     ui texto "$fuego" >/dev/null ||
       mal_+=("el fuego de $h no dice «$fuego» (dice «$(ui textos | cut -f5 | grep -m1 "^$TXT_RACHA${HABITO_NOMBRE[$h]}:")»)")
@@ -2502,8 +2512,8 @@ paso_8c() {
   # En Inicio: cuatro filas, con el botón de hoy de Leer y su meta de 6.
   if atras && esperar_ui 10 texto "$TXT_HABITOS_PISTA" && atras && esperar_ui 10 texto "Lectura de hoy" &&
     ui texto "Caminata de hoy" >/dev/null && ui contiene "Leer$TXT_FILA_HABITO" >/dev/null &&
-    ui texto "0/6" >/dev/null && ui texto "${TXT_RACHA}Leer: 0 semanas" >/dev/null; then
-    ok "Inicio suma Leer con su meta (0/6), el fuego apagado («${TXT_RACHA}Leer: 0 semanas») y los botones «Lectura de hoy» y «Caminata de hoy»"
+    ui texto "0/6" >/dev/null && ui texto "${TXT_RACHA}Leer: 0 días" >/dev/null; then
+    ok "Inicio suma Leer con su meta (0/6), el fuego apagado («${TXT_RACHA}Leer: 0 días») y los botones «Lectura de hoy» y «Caminata de hoy»"
   else
     mal "Inicio o el resumen no muestran los hábitos sumados ($(foco))"
   fi

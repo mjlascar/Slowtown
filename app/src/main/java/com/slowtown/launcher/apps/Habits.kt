@@ -58,19 +58,34 @@ object Habits {
     fun weekCount(days: Set<LocalDate>, monday: LocalDate): Int = (0L..6L).count { monday.plusDays(it) in days }
 
     /**
-     * Semanas seguidas (de lunes a domingo) con la meta cumplida. La de ahora
-     * cuenta si ya está cumplida; si no, todavía hay tiempo, y la racha se
-     * cuenta desde la anterior.
+     * La racha de un hábito: desde qué día viene y cuántos días lleva, hoy
+     * incluido. Sin racha, [since] es null y [days] 0.
      */
-    fun streak(perWeek: Int, days: Set<LocalDate>, today: LocalDate): Int {
-        var monday = weekStart(today)
-        if (weekCount(days, monday) < perWeek) monday = monday.minusWeeks(1)
-        var weeks = 0
-        while (weekCount(days, monday) >= perWeek) {
-            weeks++
-            monday = monday.minusWeeks(1)
+    data class Streak(val since: LocalDate?, val days: Int)
+
+    /**
+     * La racha, sin semanas de calendario (lo pidió Marcos el 24/11: que
+     * empiece el día que empezás y termine el día que la perdés). Se pierde el
+     * día en que los 7 días que terminan ahí no llegan a la meta: los días ya
+     * pasados, mirando lo marcado; hoy, sólo si ni marcándolo llega. Empieza
+     * el primer día marcado después de la última vez que se perdió, y los 7
+     * días que empiezan ahí tienen tiempo de cumplir la meta: una racha de
+     * días nueva vale desde el primer día.
+     */
+    fun streak(perWeek: Int, days: Set<LocalDate>, today: LocalDate): Streak {
+        val first = days.filter { !it.isAfter(today) }.minOrNull() ?: return Streak(null, 0)
+        fun count(end: LocalDate) = (0L..6L).count { end.minusDays(it) in days }
+        // El último día en que se perdió. El de antes del primer marcado siempre
+        // lo es: sus 7 días no tienen nada.
+        var lost = today
+        while (lost >= first) {
+            val missing = if (lost == today && today !in days) 1 else 0
+            if (count(lost) + missing < perWeek) break
+            lost = lost.minusDays(1)
         }
-        return weeks
+        val since = days.filter { !it.isBefore(lost.minusDays(5)) && !it.isAfter(today) }.minOrNull()
+            ?: return Streak(null, 0)
+        return Streak(since, (today.toEpochDay() - since.toEpochDay()).toInt() + 1)
     }
 
     fun parse(stored: Set<String>): Set<LocalDate> =

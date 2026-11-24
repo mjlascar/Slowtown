@@ -44,8 +44,10 @@ import com.slowtown.launcher.admin.FreeSession
 import com.slowtown.launcher.admin.Guard
 import com.slowtown.launcher.admin.Limits
 import com.slowtown.launcher.admin.LockTaskEvents
+import com.slowtown.launcher.admin.PageGuard
 import com.slowtown.launcher.admin.Pages
 import com.slowtown.launcher.admin.Policies
+import com.slowtown.launcher.admin.SiteTimers
 import com.slowtown.launcher.admin.Rules
 import com.slowtown.launcher.apps.AppCatalog
 import com.slowtown.launcher.apps.Folder
@@ -80,6 +82,7 @@ import com.slowtown.launcher.ui.HomeLookScreen
 import com.slowtown.launcher.ui.HomeScreen
 import com.slowtown.launcher.ui.LimitsScreen
 import com.slowtown.launcher.ui.Pause
+import com.slowtown.launcher.ui.SiteTimer
 import com.slowtown.launcher.ui.SitesScreen
 import com.slowtown.launcher.ui.SlowtownTheme
 import com.slowtown.launcher.ui.UnlockScreen
@@ -136,6 +139,7 @@ class HomeActivity : ComponentActivity() {
     private var favorites by mutableStateOf<Set<String>>(emptySet())
     private var folders by mutableStateOf<List<Folder>>(emptyList())
     private var blockedSites by mutableStateOf<Set<String>>(emptySet())
+    private var siteTimers by mutableStateOf<List<SiteTimer>>(emptyList())
     private var openFolderId by mutableStateOf<String?>(null)
     private var homeApps by mutableStateOf<List<LaunchableApp>?>(null)
     private var homeHint by mutableStateOf("")
@@ -171,6 +175,7 @@ class HomeActivity : ComponentActivity() {
 
     /** Si está prendido el bloqueo de páginas sin cable ([Pages]), para «Páginas bloqueadas». */
     private var pageGuardOn by mutableStateOf(false)
+    private var pageGuardRunning by mutableStateOf(false)
 
     private lateinit var widgetHost: AppWidgetHost
     private val widgetManager by lazy { AppWidgetManager.getInstance(this) }
@@ -407,7 +412,9 @@ class HomeActivity : ComponentActivity() {
                         onChooseApps = { screen = Screen.ChooseApps },
                         onSites = {
                             blockedSites = prefs.blockedSites
+                            loadSiteTimers()
                             pageGuardOn = Pages.isOn(this@HomeActivity)
+                            pageGuardRunning = PageGuard.running
                             screen = Screen.Sites
                         },
                         onChooseWidget = ::openWidgetPicker,
@@ -525,9 +532,12 @@ class HomeActivity : ComponentActivity() {
                         sites = blockedSites,
                         deviceOwner = status.deviceOwner,
                         pageGuard = pageGuardOn,
+                        pageGuardRunning = pageGuardRunning,
                         onPageGuard = ::openPageGuardSettings,
                         onAdd = { site -> saveSites(blockedSites + site) },
                         onRemove = { site -> saveSites(blockedSites - site) },
+                        timers = siteTimers,
+                        onTimer = ::saveSiteTimer,
                         onBack = { screen = Screen.Admin },
                     )
                     Screen.Folders -> FoldersScreen(
@@ -604,6 +614,7 @@ class HomeActivity : ComponentActivity() {
         // Los dos se cambian afuera: el permiso por adb, la accesibilidad en Ajustes.
         clockOnly = StatusBarClock.canHideClockOnly(this)
         pageGuardOn = Pages.isOn(this)
+        pageGuardRunning = PageGuard.running
         // Si la guardia (o la lista de lock task) acaba de frenar una app, Inicio dice por qué.
         Guard.lastHeld?.let { last ->
             Guard.clearLastHeld()
@@ -1164,6 +1175,20 @@ class HomeActivity : ComponentActivity() {
                     .onFailure { Log.e(TAG, "No pude poner las páginas en Chrome", it) }
             }
         }
+    }
+
+    /** Las páginas con tiempo por día, con lo que se usó hoy. */
+    private fun loadSiteTimers() {
+        val used = SiteTimers.usedToday(this)
+        siteTimers = prefs.siteLimits.map { (site, minutes) -> SiteTimer(site, minutes, used[site] ?: 0L) }
+    }
+
+    /** Otro tiempo para una página, o null para sacárselo. Lo cuenta y lo hace cumplir PageGuard. */
+    private fun saveSiteTimer(site: String, minutes: Int?) {
+        val limits = prefs.siteLimits.toMutableMap()
+        if (minutes == null) limits.remove(site) else limits[site] = minutes
+        prefs.siteLimits = limits
+        loadSiteTimers()
     }
 
     private fun refreshStatus() {

@@ -251,6 +251,20 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_APP_LIMITS, Limits.serialize(value)).apply()
 
     /**
+     * El tiempo por día de cada página, en minutos, por dominio
+     * ([com.slowtown.launcher.admin.SiteTimers]). Con contraseña, como los
+     * límites por app.
+     */
+    var siteLimits: Map<String, Int>
+        get() = Limits.parse(prefs.getString(KEY_SITE_LIMITS, null))
+        set(value) = prefs.edit().putString(KEY_SITE_LIMITS, Limits.serialize(value)).apply()
+
+    /** Lo que se usó hoy de cada página con tiempo: `2026-11-24|sitio=ms,sitio=ms`. */
+    var siteUsage: String
+        get() = prefs.getString(KEY_SITE_USAGE, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SITE_USAGE, value).apply()
+
+    /**
      * Las apps que ya llegaron a su límite, y de qué día: `2026-10-27|paquete,paquete`.
      * Se guarda para que la lista de lock task no dependa de que Slowtown siga
      * vivo; al cambiar el día no vale más.
@@ -299,6 +313,8 @@ class Prefs(context: Context) {
         const val KEY_FLOW_APPS = "flow_apps"
         const val KEY_APP_LIMITS = "app_limits"
         const val KEY_LIMITS_REACHED = "limits_reached"
+        const val KEY_SITE_LIMITS = "site_limits"
+        const val KEY_SITE_USAGE = "site_usage"
         const val KEY_HABIT_PREFIX = "habit_"
         const val KEY_HABIT_PLAN = "habit_plan"
     }
