@@ -2,11 +2,16 @@
 <!-- Lo que mira PageGuard: sólo Chrome (y sus versiones de prueba,
      page_guard_browsers), cuando cambia de pantalla o de contenido, y sólo
      para leer su barra de direcciones (por eso los nombres de las vistas). No
-     es una herramienta de accesibilidad: Play lo pide declarado. -->
+     es una herramienta de accesibilidad: Play lo pide declarado.
+     flagRequestAccessibilityButton: Samsung le asigna el botón de
+     accesibilidad de la barra de abajo, y sin esto ese botón lo apaga y lo
+     prende de un toque (en el S10e se apagó así cuatro veces en dos días,
+     sin querer). Pidiendo el botón, Android le avisa el toque al servicio
+     en vez de apagarlo. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds"
+    android:accessibilityFlags="flagReportViewIds|flagRequestAccessibilityButton"
     android:canRetrieveWindowContent="true"
     android:description="@string/page_guard_description"
     android:isAccessibilityTool="false"

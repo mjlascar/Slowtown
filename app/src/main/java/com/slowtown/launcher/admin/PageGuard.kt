@@ -1,5 +1,6 @@
 package com.slowtown.launcher.admin
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.net.Uri
@@ -125,6 +126,19 @@ class PageGuard : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         running = true
+        // El botón de accesibilidad de la barra de abajo (res/xml/page_guard.xml):
+        // tocarlo ya no lo apaga, y dice por qué no pasa nada.
+        accessibilityButtonController.registerAccessibilityButtonCallback(
+            object : AccessibilityButtonController.AccessibilityButtonCallback() {
+                override fun onClicked(controller: AccessibilityButtonController) {
+                    Toast.makeText(
+                        this@PageGuard,
+                        "Slowtown bloquea las páginas: este botón no lo apaga.",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+        )
     }
 
     override fun onInterrupt() = Unit

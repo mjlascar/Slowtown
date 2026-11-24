@@ -306,6 +306,15 @@ Slowtown, sin otra app ni otro servicio.
   nada. `PageGuard.running` dice si Android lo está corriendo, y «Páginas
   bloqueadas» avisa si está prendido y no corre (24/11, cuando Marcos vio
   que a veces dejaba de bloquear).
+- **El botón de accesibilidad lo apagaba** (visto en el S10e el 24/11, con
+  `dumpsys settings`): Samsung le asigna a PageGuard el botón de
+  accesibilidad de la barra de abajo (`accessibility_button_targets`), y en
+  Android 11 o más nuevo ese botón prende y apaga de un toque un servicio
+  que no pide el botón. Se apagó así cuatro veces en dos días, siempre al
+  salir de Inicio, sin que Marcos lo supiera. Ahora pide el botón
+  (`flagRequestAccessibilityButton`): Android le avisa el toque en vez de
+  apagarlo, y PageGuard dice que el botón no lo apaga. El atajo de los
+  botones de volumen, con el pedido, sólo lo prende.
 - **Si Atrás no alcanza** (la pestaña empezó en esa página, o Chrome se reabre
   en ella), abre Google en la pestaña de Slowtown (siempre la misma, con
   `Browser.EXTRA_APPLICATION_ID`), y si da vueltas, Inicio: Chrome nunca queda
