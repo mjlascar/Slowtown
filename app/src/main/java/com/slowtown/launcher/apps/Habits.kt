@@ -88,6 +88,17 @@ object Habits {
         return Streak(since, (today.toEpochDay() - since.toEpochDay()).toInt() + 1)
     }
 
+    /**
+     * El primer día de la semana de ahora. Con racha, las semanas se cuentan
+     * desde el día que empezó (las mismas que dice el fuego), así que pueden
+     * arrancar cualquier día; sin racha, el lunes.
+     */
+    fun currentWeekStart(perWeek: Int, days: Set<LocalDate>, today: LocalDate): LocalDate {
+        val streak = streak(perWeek, days, today)
+        val since = streak.since ?: return weekStart(today)
+        return since.plusDays(((streak.days - 1) / 7 * 7).toLong())
+    }
+
     fun parse(stored: Set<String>): Set<LocalDate> =
         stored.mapNotNullTo(mutableSetOf()) { runCatching { LocalDate.parse(it) }.getOrNull() }
 

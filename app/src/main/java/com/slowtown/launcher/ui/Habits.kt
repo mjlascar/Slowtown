@@ -34,6 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -281,7 +287,8 @@ fun HabitsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            val week = Habits.weekCount(done, Habits.weekStart(today))
+            val weekStart = Habits.currentWeekStart(perWeek, done, today)
+            val week = done.count { !it.isBefore(weekStart) && !it.isAfter(today) }
             val streak = Habits.streak(perWeek, done, today)
             val weeks = streak.days / 7
             // «Racha: 2 semanas (16 días, desde el 9 de noviembre)»: el fuego
@@ -294,7 +301,7 @@ fun HabitsScreen(
                 "Esta semana: $week de $perWeek · Racha: $weeks ${if (weeks == 1) "semana" else "semanas"}$since · " +
                     "Días en total: ${done.count { !it.isAfter(today) }}",
             )
-            Graph(kind, done, today, onToggle)
+            Graph(kind, done, today, weekStart, onToggle)
             Spacer(Modifier.width(8.dp))
         }
     }
@@ -384,7 +391,14 @@ fun HabitsPickerScreen(
 }
 
 @Composable
-private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onToggle: (HabitKind, LocalDate) -> Unit) {
+private fun Graph(
+    kind: HabitKind,
+    done: Set<LocalDate>,
+    today: LocalDate,
+    /** Donde empieza la semana de ahora ([Habits.currentWeekStart]): esa celda lleva la marca. */
+    weekStart: LocalDate,
+    onToggle: (HabitKind, LocalDate) -> Unit,
+) {
     val cell = 15.dp
     val gap = 3.dp
     val labels = 16.dp
@@ -432,8 +446,7 @@ private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onTog
                         }
                     }
                 }
-                // Abajo, lugar para el reborde: el desplazamiento recorta lo que se sale.
-                Box(Modifier.padding(bottom = WEEK_PAD)) {
+                Box {
                 Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                 for (day in 0..6) {
                     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -448,6 +461,13 @@ private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onTog
                                     today = date == today,
                                     size = cell,
                                     modifier = Modifier
+                                        .then(
+                                            if (date == weekStart) {
+                                                Modifier.weekStartMark(gap, continues = day < 6 && date != today)
+                                            } else {
+                                                Modifier
+                                            },
+                                        )
                                         .semantics {
                                             contentDescription =
                                                 "${kind.label}, ${date.format(DAY)}: ${if (marked) "sí" else "no"}"
@@ -459,26 +479,53 @@ private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onTog
                     }
                 }
                 }
-                // La semana de ahora, de lunes a domingo, con un reborde (lo
-                // pidió Marcos el 26/11: no se veía dónde empezaba): arranca
-                // justo arriba del lunes.
-                Box(
-                    Modifier
-                        .offset(x = (cell + gap) * (weeks - 1) - WEEK_PAD, y = -WEEK_PAD)
-                        .size(width = cell + WEEK_PAD * 2, height = cell * 7 + gap * 6 + WEEK_PAD * 2)
-                        .border(1.5.dp, WEEK_OUTLINE, RoundedCornerShape(4.dp)),
-                )
                 }
             }
         }
     }
 }
 
-/** Lo que el reborde de la semana de ahora se separa de los cuadraditos. */
-private val WEEK_PAD = 2.dp
+/** La marca del primer día de la semana de ahora: el ámbar del logo. */
+private val WEEK_MARK = Color(0xFFFFA21A)
 
-/** El reborde de la semana de ahora: el ámbar del logo. */
-private val WEEK_OUTLINE = Color(0xFFFFA21A)
+/**
+ * La marca del primer día de la semana de ahora (lo pidió Marcos el 26/11,
+ * con un dibujo): un arco abierto abajo, arriba y a los costados de la celda,
+ * en medio del espacio entre celdas para no tocar ninguna. Si la semana sigue
+ * en la celda de abajo, los costados bajan hasta la mitad de esa y se
+ * desvanecen; si no, cierran con la celda. La dibuja la celda misma, así
+ * queda alineada.
+ */
+private fun Modifier.weekStartMark(gap: Dp, continues: Boolean): Modifier = drawWithContent {
+    drawContent()
+    val stroke = 1.5.dp.toPx()
+    val pad = gap.toPx() / 2
+    val left = -pad
+    val right = size.width + pad
+    val top = -pad
+    val bottom = if (continues) size.height + gap.toPx() + size.height / 2 else size.height
+    val radius = 3.dp.toPx()
+    val path = Path().apply {
+        moveTo(left, bottom)
+        lineTo(left, top + radius)
+        quadraticTo(left, top, left + radius, top)
+        lineTo(right - radius, top)
+        quadraticTo(right, top, right, top + radius)
+        lineTo(right, bottom)
+    }
+    val brush = if (continues) {
+        Brush.verticalGradient(
+            0f to WEEK_MARK,
+            (size.height / (bottom - top)) to WEEK_MARK,
+            1f to WEEK_MARK.copy(alpha = 0f),
+            startY = top,
+            endY = bottom,
+        )
+    } else {
+        SolidColor(WEEK_MARK)
+    }
+    drawPath(path, brush, style = Stroke(width = stroke, cap = StrokeCap.Round))
+}
 
 @Composable
 private fun Cell(done: Boolean, today: Boolean, size: Dp, modifier: Modifier = Modifier) {

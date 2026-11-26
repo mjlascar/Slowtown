@@ -2459,7 +2459,15 @@ paso_8b() {
   # La línea de cuentas de cada hábito, contra lo guardado.
   for h in "${HABITOS[@]}"; do
     dias=$(dias_de_habito "$h")
-    esperado="Esta semana: $(contar_entre "$(lunes_de "$hoy")" "$(dia_mas "$(lunes_de "$hoy")" 6)" <<<"$dias") de ${HABITO_META[$h]}"
+    # La semana de ahora: con racha, desde el día que empezó, de a 7 días; sin racha, desde el lunes.
+    local racha_d inicio
+    racha_d=$(racha_de "${HABITO_META[$h]}" "$hoy" <<<"$dias")
+    if (( racha_d > 0 )); then
+      inicio=$(dia_mas "$hoy" $(( -((racha_d - 1) % 7) )))
+    else
+      inicio=$(lunes_de "$hoy")
+    fi
+    esperado="Esta semana: $(contar_entre "$inicio" "$hoy" <<<"$dias") de ${HABITO_META[$h]}"
     esperado+=" · Racha: $(racha_texto "${HABITO_META[$h]}" "$hoy" <<<"$dias")"
     esperado+=" · Días en total: $(contar_entre 0000-00-00 "$hoy" <<<"$dias")"
     volcar_ui
