@@ -135,8 +135,9 @@ cuentas. Lo que cierra de verdad es Device Owner, que se activa por cable con
   lleva contra la meta en esos 7 días; y a la derecha, pegado al día de hoy,
   el botón que lo marca. En una pantalla angosta (el S10e) los cuadraditos se
   achican para que entre todo. Tocar
-  los cuadraditos abre «Hábitos», el resumen por semanas, donde se puede marcar
-  un día pasado, y de ahí «Elegir hábitos»: un catálogo de 14 (`HabitKind`,
+  los cuadraditos abre «Hábitos», el resumen por semanas (la de ahora, de
+  lunes a domingo, con un reborde ámbar que arranca arriba del lunes: lo pidió
+  Marcos el 26/11), donde se puede marcar un día pasado, y de ahí «Elegir hábitos»: un catálogo de 14 (`HabitKind`,
   cada uno con su dibujo hecho con Canvas, sin emojis), hasta 4 en Inicio, cada
   uno con sus veces por semana (de 1 a 7). De entrada, lo que Marcos se propuso:
   meditar 2 y ejercicio 3. Sin contraseña: no afloja nada. El plan se guarda en

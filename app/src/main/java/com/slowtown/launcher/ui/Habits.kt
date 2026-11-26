@@ -432,6 +432,9 @@ private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onTog
                         }
                     }
                 }
+                // Abajo, lugar para el reborde: el desplazamiento recorta lo que se sale.
+                Box(Modifier.padding(bottom = WEEK_PAD)) {
+                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                 for (day in 0..6) {
                     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                         for (w in 0 until weeks) {
@@ -455,10 +458,27 @@ private fun Graph(kind: HabitKind, done: Set<LocalDate>, today: LocalDate, onTog
                         }
                     }
                 }
+                }
+                // La semana de ahora, de lunes a domingo, con un reborde (lo
+                // pidió Marcos el 26/11: no se veía dónde empezaba): arranca
+                // justo arriba del lunes.
+                Box(
+                    Modifier
+                        .offset(x = (cell + gap) * (weeks - 1) - WEEK_PAD, y = -WEEK_PAD)
+                        .size(width = cell + WEEK_PAD * 2, height = cell * 7 + gap * 6 + WEEK_PAD * 2)
+                        .border(1.5.dp, WEEK_OUTLINE, RoundedCornerShape(4.dp)),
+                )
+                }
             }
         }
     }
 }
+
+/** Lo que el reborde de la semana de ahora se separa de los cuadraditos. */
+private val WEEK_PAD = 2.dp
+
+/** El reborde de la semana de ahora: el ámbar del logo. */
+private val WEEK_OUTLINE = Color(0xFFFFA21A)
 
 @Composable
 private fun Cell(done: Boolean, today: Boolean, size: Dp, modifier: Modifier = Modifier) {
